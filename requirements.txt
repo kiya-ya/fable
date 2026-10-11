@@ -6,3 +6,4 @@ ddddocr>=1.4.0
 
 # web backend (trainer system)
 flask>=3.0
+openpyxl>=3.1

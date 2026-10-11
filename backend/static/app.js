@@ -31,10 +31,23 @@ function toast(msg, isError = false) {
 
 const TRAINER_STATUS = { active: '在职', inactive: '离职' };
 const TRAINEE_STATUS = { active: '在读', graduated: '毕业', inactive: '退出' };
+const BIND_TYPE = { trainer: '培训师', sister: '姐妹团' };
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// 分页控件：pagerEl 内渲染，onGo(page) 回调
+function renderPager(pagerSel, page, pageSize, total, onGo) {
+  const el = $(pagerSel);
+  const pages = Math.max(Math.ceil(total / pageSize), 1);
+  el.innerHTML = `
+    <button class="btn small" ${page <= 1 ? 'disabled' : ''} data-go="${page - 1}">上一页</button>
+    <span class="muted">${page} / ${pages} 页 · 共 ${total} 条</span>
+    <button class="btn small" ${page >= pages ? 'disabled' : ''} data-go="${page + 1}">下一页</button>`;
+  el.querySelectorAll('button[data-go]').forEach((b) =>
+    b.addEventListener('click', () => onGo(+b.dataset.go)));
 }
 
 // ────────────── Tab 切换 ──────────────
@@ -43,12 +56,11 @@ $$('#tabs .tab').forEach((btn) => {
     $$('#tabs .tab').forEach((b) => b.classList.toggle('active', b === btn));
     $$('.panel').forEach((p) => p.classList.remove('active'));
     $(`#tab-${btn.dataset.tab}`).classList.add('active');
-    if (btn.dataset.tab === 'trainers') { loadTrainers(); loadTrainees(); }
     if (btn.dataset.tab === 'bindings') loadBindingsTab();
   });
 });
 
-// ────────────── UID 速查（首页） ──────────────
+// ────────────── UID 速查 ──────────────
 const COMPARE_LABELS = {
   week_level: '当周等级',
   week_schedule_days: '排档天数',
@@ -169,14 +181,18 @@ const REWARD_STATUS = {
 };
 
 function renderRewardsPanel(p) {
-  $('#rewards-window').textContent = `（${esc(p.trainee.nickname)} · 绑定起 ${p.window_days} 天内有效）`;
+  $('#rewards-window').textContent = `（${esc(p.trainee.nickname)} · 奖励窗口 ${p.window_weeks} 周）`;
   if (p.binding) {
+    const statusText = {
+      not_started: `<span class="tag graduated">未开始（${esc(p.window_start)} 起）</span>`,
+      in_window: `剩余 <b>${p.days_left}</b> 天`,
+      expired: '<span class="tag over">已过奖励有效期</span>',
+    }[p.window_status];
     $('#rewards-binding').innerHTML =
       `当前绑定：培训师 <b>${esc(p.binding.trainer_nickname)}</b>（${esc(p.binding.trainer_uid)}）｜ ` +
-      `绑定时间 ${esc(p.binding.bound_at)} ｜ 截止 ${esc(p.window_end)} ｜ ` +
-      (p.in_window ? `剩余 <b>${p.days_left}</b> 天` : '<span class="tag over">已过奖励有效期</span>');
+      `绑定时间 ${esc(p.binding.bound_at)} ｜ 奖励窗口 ${esc(p.window_start)} ~ ${esc(p.window_end)} ｜ ${statusText}`;
   } else {
-    $('#rewards-binding').textContent = '当前无生效绑定，无法产生奖励';
+    $('#rewards-binding').textContent = '当前无生效的培训师绑定，无法产生奖励';
   }
   $('#rewards-table tbody').innerHTML = p.rewards.map((r) => {
     const st = REWARD_STATUS[r.status];
@@ -227,138 +243,87 @@ async function refreshRewardsPanel() {
   renderRewardsPanel(r.rewards_panel);
 }
 
-// ────────────── 绑定关系 ──────────────
-let bindingsActiveView = true;
+// ────────────── 新建绑定（输 UID 自动查询建档） ──────────────
+const bindState = { trainer: null, trainee: null };
+let bindType = 'trainer';
 
-async function loadBindingsTab() {
-  await Promise.all([loadBindSelects(), loadBindings()]);
-}
-
-async function loadBindSelects() {
-  const keepTrainer = $('#bind-trainer').value;
-  const keepTrainee = $('#bind-trainee').value;
-  const [trainers, trainees] = await Promise.all([
-    api('/api/trainers'), api('/api/trainees?status=active'),
-  ]);
-  $('#bind-trainer').innerHTML = trainers.items
-    .filter((t) => t.status === 'active')
-    .map((t) => `<option value="${t.id}">${esc(t.nickname)}（${esc(t.uid)}）名额 ${t.active_trainee_count}/${t.total_slots}</option>`)
-    .join('') || '<option value="">（无在职培训师）</option>';
-  $('#bind-trainee').innerHTML = trainees.items
-    .map((t) => {
-      const bound = t.trainer_nickname ? `｜已绑定:${esc(t.trainer_nickname)}` : '';
-      return `<option value="${t.id}">${esc(t.nickname)}（${esc(t.uid)}）${bound}</option>`;
-    })
-    .join('') || '<option value="">（无在读妹妹）</option>';
-  if (keepTrainer) $('#bind-trainer').value = keepTrainer;
-  if (keepTrainee) $('#bind-trainee').value = keepTrainee;
-}
-
-// ────────────── 绑定页内联快捷建档 ──────────────
-function toggleQuickAdd(kind, show) {
-  $(`#${kind}-select-wrap`).classList.toggle('hidden', show);
-  $(`#${kind}-add-wrap`).classList.toggle('hidden', !show);
-  $(`#bind-add-${kind}`).style.display = show ? 'none' : '';
-  if (show) {
-    $(`#qa-${kind}-uid`).value = '';
-    $(`#qa-${kind}-nickname`).value = '';
-    $(`#qa-${kind}-hall`).value = '';
-    if (kind === 'trainer') $('#qa-trainer-slots').value = 2;
-    $(`#qa-${kind}-uid`).focus();
-  }
-}
-
-['trainer', 'trainee'].forEach((kind) => {
-  $(`#bind-add-${kind}`).addEventListener('click', () => toggleQuickAdd(kind, true));
-  $(`#qa-${kind}-cancel`).addEventListener('click', () => toggleQuickAdd(kind, false));
-
-  $(`#qa-${kind}-autofill`).addEventListener('click', async () => {
-    const uid = $(`#qa-${kind}-uid`).value.trim();
-    if (!uid) return toast('请先输入 UID', true);
-    const btn = $(`#qa-${kind}-autofill`);
-    btn.disabled = true;
-    try {
-      const r = await api(`/api/uid-lookup?uid=${encodeURIComponent(uid)}`);
-      if (!r.found) return toast(r.msg || '未找到该 UID', true);
-      if (r.info.nickname) $(`#qa-${kind}-nickname`).value = r.info.nickname;
-      if (r.info.hall_name) $(`#qa-${kind}-hall`).value = r.info.hall_name;
-      toast(`已回填：${r.info.nickname}${r.info.week_level ? `（${r.info.week_level}）` : ''}`);
-    } catch (e) {
-      toast(e.message, true);
-    } finally {
-      btn.disabled = false;
-    }
-  });
-
-  $(`#qa-${kind}-save`).addEventListener('click', async () => {
-    const body = {
-      uid: $(`#qa-${kind}-uid`).value.trim(),
-      nickname: $(`#qa-${kind}-nickname`).value.trim(),
-      hall_name: $(`#qa-${kind}-hall`).value.trim(),
-    };
-    if (kind === 'trainer') body.base_slots = +$('#qa-trainer-slots').value;
-    try {
-      const r = await api(PERSON_CONF[`${kind}s`].url, { method: 'POST', body });
-      toast('建档成功，已选用');
-      toggleQuickAdd(kind, false);
-      await loadBindSelects();
-      $(`#bind-${kind}`).value = r.id;
-    } catch (e) {
-      toast(e.message, true);
-    }
+$$('#bind-type-seg .seg-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    $$('#bind-type-seg .seg-btn').forEach((b) => b.classList.toggle('active', b === btn));
+    bindType = btn.dataset.btype;
+    $('#bind-left-label').textContent = bindType === 'sister' ? '姐姐 UID' : '培训师 UID';
+    bindState.trainer = null;
+    $('#bind-trainer-uid').value = '';
+    $('#bind-trainer-info').innerHTML = '';
   });
 });
 
-async function loadBindings() {
-  const data = await api(`/api/bindings?active=${bindingsActiveView ? 1 : 0}`);
-  const tbody = $('#bindings-table tbody');
-  $$('.col-unbound').forEach((el) => (el.style.display = bindingsActiveView ? 'none' : ''));
-  if (!data.items.length) {
-    tbody.innerHTML = `<tr><td colspan="9" class="empty">暂无${bindingsActiveView ? '生效绑定' : '历史记录'}</td></tr>`;
-    return;
+async function lookupBindSide(kind) {
+  const uid = $(`#bind-${kind}-uid`).value.trim();
+  const info = $(`#bind-${kind}-info`);
+  if (!uid) return toast('请输入 UID', true);
+  const btn = $(`#bind-${kind}-lookup`);
+  btn.disabled = true;
+  btn.textContent = '查询中…';
+  bindState[kind] = null;
+  try {
+    const r = await api(`/api/uid-lookup?uid=${encodeURIComponent(uid)}`);
+    if (!r.found) {
+      info.innerHTML = '<span class="tag over">未找到该 UID</span>';
+      return toast(r.msg || '未找到该 UID', true);
+    }
+    // 查本地是否已建档（培训师侧 role=all 覆盖姐姐记录）
+    const list = await api(`/api/${kind}s?kw=${encodeURIComponent(uid)}${kind === 'trainer' ? '&role=all' : ''}`);
+    const existing = list.items.find((x) => x.uid === uid);
+    bindState[kind] = { uid, nickname: r.info.nickname, hall: r.info.hall_name, existing: !!existing };
+    info.innerHTML =
+      `<b>${esc(r.info.nickname)}</b>（${esc(uid)}）` +
+      `${r.info.hall_name ? ` ｜ ${esc(r.info.hall_name)}` : ''}` +
+      `${r.info.week_level ? ` ｜ ${esc(r.info.week_level)}` : ''} ｜ ` +
+      (existing
+        ? '<span class="tag active">已建档</span>'
+        : '<span class="tag graduated">绑定时自动建档</span>');
+  } catch (e) {
+    info.innerHTML = '';
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '查询';
   }
-  tbody.innerHTML = data.items.map((b) => `
-    <tr>
-      <td>${esc(b.trainer_nickname)}</td>
-      <td>${esc(b.trainer_uid)}</td>
-      <td>${esc(b.trainee_nickname)}</td>
-      <td>${esc(b.trainee_uid)}</td>
-      <td>${esc(b.hall_name || '')}</td>
-      <td>${esc(b.bound_at)}</td>
-      <td class="col-unbound" style="display:${bindingsActiveView ? 'none' : ''}">${esc(b.unbound_at || '')}</td>
-      <td>${esc(b.note || '')}</td>
-      <td>
-        ${bindingsActiveView ? `<button class="btn small danger" onclick="unbind(${b.id})">解绑</button>` : ''}
-        <button class="btn small" onclick="gotoUidQuery('${esc(b.trainee_uid)}')">速查</button>
-      </td>
-    </tr>`).join('');
 }
 
-$('#seg-active').addEventListener('click', () => {
-  bindingsActiveView = true;
-  $('#seg-active').classList.add('active');
-  $('#seg-history').classList.remove('active');
-  loadBindings();
-});
-$('#seg-history').addEventListener('click', () => {
-  bindingsActiveView = false;
-  $('#seg-history').classList.add('active');
-  $('#seg-active').classList.remove('active');
-  loadBindings();
-});
+$('#bind-trainer-lookup').addEventListener('click', () => lookupBindSide('trainer'));
+$('#bind-trainee-lookup').addEventListener('click', () => lookupBindSide('trainee'));
+$('#bind-trainer-uid').addEventListener('input', () => { bindState.trainer = null; $('#bind-trainer-info').innerHTML = ''; });
+$('#bind-trainee-uid').addEventListener('input', () => { bindState.trainee = null; $('#bind-trainee-info').innerHTML = ''; });
+$('#bind-trainer-uid').addEventListener('keydown', (e) => { if (e.key === 'Enter') lookupBindSide('trainer'); });
+$('#bind-trainee-uid').addEventListener('keydown', (e) => { if (e.key === 'Enter') lookupBindSide('trainee'); });
 
 $('#bind-submit').addEventListener('click', async () => {
-  const trainer_id = $('#bind-trainer').value;
-  const trainee_id = $('#bind-trainee').value;
-  const note = $('#bind-note').value;
-  if (!trainer_id || !trainee_id) return toast('请选择培训师和妹妹', true);
-  await doBind({ trainer_id: +trainer_id, trainee_id: +trainee_id, note });
+  if (!bindState.trainer) return toast(`请先查询${bindType === 'sister' ? '姐姐' : '培训师'} UID`, true);
+  if (!bindState.trainee) return toast('请先查询妹妹 UID', true);
+  await doBind({
+    bind_type: bindType,
+    trainer_uid: bindState.trainer.uid,
+    trainer_nickname: bindState.trainer.nickname,
+    trainer_hall: bindState.trainer.hall,
+    trainee_uid: bindState.trainee.uid,
+    trainee_nickname: bindState.trainee.nickname,
+    trainee_hall: bindState.trainee.hall,
+    note: $('#bind-note').value,
+  });
 });
 
 async function doBind(payload) {
   try {
-    const r = await api('/api/bindings', { method: 'POST', body: payload });
-    toast(r.rebound ? '换绑成功' : '绑定成功');
+    const r = await api('/api/bindings/by-uid', { method: 'POST', body: payload });
+    const created = [r.trainer_created && '左侧', r.trainee_created && '妹妹'].filter(Boolean);
+    toast(`${r.rebound ? '换绑' : '绑定'}成功（${BIND_TYPE[r.bind_type]}）${created.length ? `，自动建档：${created.join('、')}` : ''}`);
+    bindState.trainer = bindState.trainee = null;
+    $('#bind-trainer-uid').value = '';
+    $('#bind-trainee-uid').value = '';
+    $('#bind-trainer-info').innerHTML = '';
+    $('#bind-trainee-info').innerHTML = '';
     $('#bind-note').value = '';
     loadBindingsTab();
   } catch (e) {
@@ -371,6 +336,67 @@ async function doBind(payload) {
     }
   }
 }
+
+// ────────────── 绑定列表（底部分页） ──────────────
+let bindingsActiveView = true;
+let bindingsTypeFilter = '';
+let bindingsPage = 1;
+
+async function loadBindings(page) {
+  if (page) bindingsPage = page;
+  const params = new URLSearchParams({
+    active: bindingsActiveView ? 1 : 0,
+    page: bindingsPage,
+  });
+  if (bindingsTypeFilter) params.set('bind_type', bindingsTypeFilter);
+  const data = await api(`/api/bindings?${params}`);
+  const tbody = $('#bindings-table tbody');
+  $$('.col-unbound').forEach((el) => (el.style.display = bindingsActiveView ? 'none' : ''));
+  if (!data.items.length) {
+    tbody.innerHTML = `<tr><td colspan="10" class="empty">暂无${bindingsActiveView ? '生效绑定' : '历史记录'}</td></tr>`;
+  } else {
+    tbody.innerHTML = data.items.map((b) => `
+      <tr>
+        <td><span class="tag ${b.bind_type === 'sister' ? 'graduated' : 'active'}">${BIND_TYPE[b.bind_type] || b.bind_type}</span></td>
+        <td>${esc(b.trainer_nickname)}</td>
+        <td>${esc(b.trainer_uid)}</td>
+        <td>${esc(b.trainee_nickname)}</td>
+        <td>${esc(b.trainee_uid)}</td>
+        <td>${esc(b.hall_name || '')}</td>
+        <td>${esc(b.bound_at)}</td>
+        <td class="col-unbound" style="display:${bindingsActiveView ? 'none' : ''}">${esc(b.unbound_at || '')}</td>
+        <td>${esc(b.note || '')}</td>
+        <td>
+          ${bindingsActiveView ? `<button class="btn small danger" onclick="unbind(${b.id})">解绑</button>` : ''}
+          <button class="btn small" onclick="gotoUidQuery('${esc(b.trainee_uid)}')">速查</button>
+        </td>
+      </tr>`).join('');
+  }
+  renderPager('#bindings-pager', data.page, data.page_size, data.total, (p) => loadBindings(p));
+}
+
+$('#seg-active').addEventListener('click', () => {
+  bindingsActiveView = true;
+  bindingsPage = 1;
+  $('#seg-active').classList.add('active');
+  $('#seg-history').classList.remove('active');
+  loadBindings();
+});
+$('#seg-history').addEventListener('click', () => {
+  bindingsActiveView = false;
+  bindingsPage = 1;
+  $('#seg-history').classList.add('active');
+  $('#seg-active').classList.remove('active');
+  loadBindings();
+});
+$$('#bindings-type-seg .seg-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    $$('#bindings-type-seg .seg-btn').forEach((b) => b.classList.toggle('active', b === btn));
+    bindingsTypeFilter = btn.dataset.filter;
+    bindingsPage = 1;
+    loadBindings();
+  });
+});
 
 async function unbind(id) {
   if (!confirm('确认解绑？')) return;
@@ -389,76 +415,115 @@ function gotoUidQuery(uid) {
   $('#uq-submit').click();
 }
 
-// ────────────── 档案管理（培训师/妹妹共用） ──────────────
+// ────────────── 档案管理（折叠卡片 + 分页） ──────────────
 const PERSON_CONF = {
   trainers: { url: '/api/trainers', kw: '#trainer-kw', table: '#trainers-table', statuses: TRAINER_STATUS },
   trainees: { url: '/api/trainees', kw: '#trainee-kw', table: '#trainees-table', statuses: TRAINEE_STATUS },
 };
+const listState = { trainers: { page: 1, loaded: false }, trainees: { page: 1, loaded: false } };
 
-async function loadTrainers() {
-  const conf = PERSON_CONF.trainers;
-  const kw = $(conf.kw).value.trim();
-  const data = await api(`${conf.url}${kw ? `?kw=${encodeURIComponent(kw)}` : ''}`);
-  const tbody = $(`${conf.table} tbody`);
-  if (!data.items.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty">暂无数据</td></tr>';
-    return;
-  }
-  tbody.innerHTML = data.items.map((t) => `
-    <tr>
-      <td>${esc(t.uid)}</td>
-      <td>${esc(t.nickname)}</td>
-      <td>${esc(t.hall_name || '')}</td>
-      <td><span class="tag ${t.status}">${conf.statuses[t.status] || t.status}</span></td>
-      <td>${t.active_trainee_count} / ${t.total_slots}${t.active_trainee_count > t.total_slots ? ' <span class="tag over">超</span>' : ''}</td>
-      <td>${esc(t.note || '')}</td>
-      <td>
-        <button class="btn small" onclick="gotoUidQuery('${esc(t.uid)}')">速查</button>
-        <button class="btn small" onclick='openPersonModal("trainers", ${JSON.stringify(t)})'>编辑</button>
-        <button class="btn small danger" onclick="delPerson('trainers', ${t.id})">删除</button>
-      </td>
-    </tr>`).join('');
+async function refreshTotals() {
+  try {
+    const [t, s] = await Promise.all([
+      api('/api/trainers?page_size=1'), api('/api/trainees?page_size=1'),
+    ]);
+    $('#trainers-total').textContent = `（共 ${t.total} 人）`;
+    $('#trainees-total').textContent = `（共 ${s.total} 人）`;
+  } catch (e) { /* 计数失败不影响使用 */ }
 }
 
-async function loadTrainees() {
+function setupCollapsible(kind) {
+  $(`#${kind}-toggle`).addEventListener('click', () => {
+    const card = $(`#card-${kind}`);
+    const body = card.querySelector('.collapse-body');
+    const arrow = card.querySelector('.collapse-arrow');
+    const opening = body.classList.contains('hidden');
+    body.classList.toggle('hidden');
+    arrow.textContent = opening ? '▾ 收起' : '▸ 展开';
+    if (opening && !listState[kind].loaded) {
+      listState[kind].loaded = true;
+      kind === 'trainers' ? loadTrainers() : loadTrainees();
+    }
+  });
+}
+setupCollapsible('trainers');
+setupCollapsible('trainees');
+
+async function loadTrainers(page) {
+  if (page) listState.trainers.page = page;
+  const conf = PERSON_CONF.trainers;
+  const kw = $(conf.kw).value.trim();
+  const params = new URLSearchParams({ page: listState.trainers.page });
+  if (kw) params.set('kw', kw);
+  const data = await api(`${conf.url}?${params}`);
+  const tbody = $(`${conf.table} tbody`);
+  if (!data.items.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">暂无数据</td></tr>';
+  } else {
+    tbody.innerHTML = data.items.map((t) => `
+      <tr>
+        <td>${esc(t.uid)}</td>
+        <td>${esc(t.nickname)}</td>
+        <td>${esc(t.hall_name || '')}</td>
+        <td><span class="tag ${t.status}">${conf.statuses[t.status] || t.status}</span></td>
+        <td>${t.active_trainee_count} / ${t.total_slots}${t.active_trainee_count > t.total_slots ? ' <span class="tag over">超</span>' : ''}</td>
+        <td>
+          <button class="btn small" onclick="gotoUidQuery('${esc(t.uid)}')">速查</button>
+          <button class="btn small" onclick='openPersonModal("trainers", ${JSON.stringify(t)})'>编辑</button>
+          <button class="btn small danger" onclick="delPerson('trainers', ${t.id})">删除</button>
+        </td>
+      </tr>`).join('');
+  }
+  renderPager('#trainers-pager', data.page, data.page_size, data.total, (p) => loadTrainers(p));
+}
+
+async function loadTrainees(page) {
+  if (page) listState.trainees.page = page;
   const conf = PERSON_CONF.trainees;
   const kw = $(conf.kw).value.trim();
   const status = $('#trainee-status-filter').value;
-  const params = new URLSearchParams();
+  const params = new URLSearchParams({ page: listState.trainees.page });
   if (kw) params.set('kw', kw);
   if (status) params.set('status', status);
   const data = await api(`${conf.url}?${params}`);
   const tbody = $(`${conf.table} tbody`);
   if (!data.items.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty">暂无数据</td></tr>';
-    return;
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">暂无数据</td></tr>';
+  } else {
+    tbody.innerHTML = data.items.map((t) => `
+      <tr>
+        <td>${esc(t.uid)}</td>
+        <td>${esc(t.nickname)}</td>
+        <td><span class="tag ${t.status}">${conf.statuses[t.status] || t.status}</span></td>
+        <td>${t.trainer_nickname ? `${esc(t.trainer_nickname)}（${esc(t.trainer_uid)}）` : '<span class="muted">—</span>'}</td>
+        <td>${t.sister_nickname ? `${esc(t.sister_nickname)}（${esc(t.sister_uid)}）` : '<span class="muted">—</span>'}</td>
+        <td>
+          <button class="btn small" onclick="gotoUidQuery('${esc(t.uid)}')">速查</button>
+          <button class="btn small" onclick='openPersonModal("trainees", ${JSON.stringify(t)})'>编辑</button>
+          <button class="btn small danger" onclick="delPerson('trainees', ${t.id})">删除</button>
+        </td>
+      </tr>`).join('');
   }
-  tbody.innerHTML = data.items.map((t) => `
-    <tr>
-      <td>${esc(t.uid)}</td>
-      <td>${esc(t.nickname)}</td>
-      <td>${esc(t.hall_name || '')}</td>
-      <td><span class="tag ${t.status}">${conf.statuses[t.status] || t.status}</span></td>
-      <td>${t.trainer_nickname ? `${esc(t.trainer_nickname)}（${esc(t.trainer_uid)}）` : '<span class="muted">未绑定</span>'}</td>
-      <td>${esc(t.note || '')}</td>
-      <td>
-        <button class="btn small" onclick="gotoUidQuery('${esc(t.uid)}')">速查</button>
-        <button class="btn small" onclick='openPersonModal("trainees", ${JSON.stringify(t)})'>编辑</button>
-        <button class="btn small danger" onclick="delPerson('trainees', ${t.id})">删除</button>
-      </td>
-    </tr>`).join('');
+  renderPager('#trainees-pager', data.page, data.page_size, data.total, (p) => loadTrainees(p));
+}
+
+async function loadBindingsTab() {
+  await Promise.all([loadBindings(1), refreshTotals()]);
+  // 已展开的档案卡同步刷新
+  if (listState.trainers.loaded && !$('#card-trainers .collapse-body').classList.contains('hidden')) loadTrainers();
+  if (listState.trainees.loaded && !$('#card-trainees .collapse-body').classList.contains('hidden')) loadTrainees();
 }
 
 let searchTimer = null;
 $('#trainer-kw').addEventListener('input', () => {
   clearTimeout(searchTimer);
-  searchTimer = setTimeout(loadTrainers, 300);
+  searchTimer = setTimeout(() => loadTrainers(1), 300);
 });
 $('#trainee-kw').addEventListener('input', () => {
   clearTimeout(searchTimer);
-  searchTimer = setTimeout(loadTrainees, 300);
+  searchTimer = setTimeout(() => loadTrainees(1), 300);
 });
-$('#trainee-status-filter').addEventListener('change', loadTrainees);
+$('#trainee-status-filter').addEventListener('change', () => loadTrainees(1));
 
 async function delPerson(kind, id) {
   if (!confirm('确认删除？历史绑定记录会保留。')) return;
@@ -466,6 +531,7 @@ async function delPerson(kind, id) {
     await api(`${PERSON_CONF[kind].url}/${id}`, { method: 'DELETE' });
     toast('已删除');
     kind === 'trainers' ? loadTrainers() : loadTrainees();
+    refreshTotals();
   } catch (e) {
     toast(e.message, true);
   }
@@ -533,6 +599,7 @@ $('#pm-save').addEventListener('click', async () => {
     toast('已保存');
     $('#person-modal').classList.add('hidden');
     kind === 'trainers' ? loadTrainers() : loadTrainees();
+    refreshTotals();
   } catch (e) {
     toast(e.message, true);
   }
@@ -580,12 +647,56 @@ $('#import-submit').addEventListener('click', async () => {
     toast(`导入 ${r.imported} 人${r.skipped.length ? `，跳过 ${r.skipped.length} 人` : ''}`);
     $('#import-modal').classList.add('hidden');
     loadTrainees();
+    refreshTotals();
   } catch (e) {
     toast(e.message, true);
   }
 });
 
-// ────────────── 启动（默认首页 = 培训师管理） ──────────────
+// ────────────── 周奖励导出 ──────────────
+$('#exp-date').value = new Date().toLocaleDateString('sv-SE');  // 本地 YYYY-MM-DD
+
+async function exportRewards(bindType, btn) {
+  const date = $('#exp-date').value;
+  if (!date) return toast('请选择开始时间', true);
+  btn.disabled = true;
+  const oldText = btn.textContent;
+  btn.textContent = '生成中…';
+  $('#exp-status').textContent = '正在逐人实时查询（每人约 2 次请求），请稍候…';
+  try {
+    const resp = await fetch('/api/export/rewards', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bind_type: bindType, date }),
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      throw new Error(data.msg || `导出失败 (${resp.status})`);
+    }
+    const blob = await resp.blob();
+    const cd = resp.headers.get('Content-Disposition') || '';
+    const m = cd.match(/filename\*=UTF-8''([^;]+)/);
+    const filename = m ? decodeURIComponent(m[1]) : `${date.replaceAll('-', '')}奖励.xlsx`;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    const warn = resp.headers.get('X-Export-Errors');
+    $('#exp-status').textContent = warn ? `已生成，但部分学员查询失败：${warn}` : `已生成：${filename}`;
+    toast('导出成功');
+  } catch (e) {
+    $('#exp-status').textContent = '';
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = oldText;
+  }
+}
+
+$('#exp-trainer').addEventListener('click', (e) => exportRewards('trainer', e.target));
+$('#exp-sister').addEventListener('click', (e) => exportRewards('sister', e.target));
+
+// ────────────── 启动（默认首页 = 绑定关系） ──────────────
 initUidQuery();
-loadTrainers();
-loadTrainees();
+loadBindingsTab();

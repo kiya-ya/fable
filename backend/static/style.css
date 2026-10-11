@@ -67,12 +67,21 @@ input:focus, select:focus { border-color: #3b82f6; }
   display: flex; flex-direction: column; gap: 8px; min-width: 160px;
   align-self: flex-end;
 }
-.quick-add {
-  border: 1px dashed #d1d5db; border-radius: 8px; padding: 10px;
-  display: flex; flex-direction: column; gap: 8px;
+.lookup-info { margin-top: 6px; font-size: 13px; min-height: 20px; }
+
+/* 档案折叠卡（左培训师右妹妹） */
+.duplex { display: flex; gap: 16px; align-items: flex-start; }
+.duplex .card { flex: 1; min-width: 0; }
+.card-head.clickable { cursor: pointer; user-select: none; }
+.card-head.clickable:hover h2 { color: #3b82f6; }
+.collapse-arrow { color: #9ca3af; font-size: 13px; }
+.toolbar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+
+/* 分页 */
+.pager {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 10px; margin-top: 10px;
 }
-.quick-add .uid-row { display: flex; gap: 6px; }
-.quick-add .uid-row input { flex: 1; min-width: 0; }
 
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #e5e7eb; }

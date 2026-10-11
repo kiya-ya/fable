@@ -1,0 +1,10 @@
+services:
+  trainer:
+    build: .
+    container_name: trainer-system
+    ports:
+      - "5000:5000"
+    volumes:
+      # 数据库、Cookie、凭据持久化（cookie/credentials 需先按 README 准备好）
+      - ./data:/app/data
+    restart: unless-stopped

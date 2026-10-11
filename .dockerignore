@@ -1,0 +1,11 @@
+.git
+.venv
+.deep-copilot
+__pycache__
+**/__pycache__
+data/
+logs/
+*.db
+Dockerfile
+docker-compose.yml
+.dockerignore

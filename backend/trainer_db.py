@@ -34,13 +34,13 @@ CREATE TABLE IF NOT EXISTS bindings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     trainer_id INTEGER NOT NULL REFERENCES trainers(id),
     trainee_id INTEGER NOT NULL REFERENCES trainees(id),
+    bind_type TEXT NOT NULL DEFAULT 'trainer',   -- trainer(培训师) / sister(姐妹团三胎)
     bound_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     unbound_at TIMESTAMP,
     note TEXT
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_bindings_active_trainee
-    ON bindings(trainee_id) WHERE unbound_at IS NULL;
+-- 生效绑定的唯一索引在 _migrate 中建（兼容老库先补 bind_type 列）
 
 CREATE INDEX IF NOT EXISTS idx_bindings_trainer ON bindings(trainer_id, unbound_at);
 
@@ -75,10 +75,22 @@ CREATE TABLE IF NOT EXISTS reward_grants (
 
 
 def _migrate(conn):
-    """老库补列：trainers.base_slots（基础带徒名额，默认 2）"""
+    """老库补列/改索引"""
     cols = {r[1] for r in conn.execute('PRAGMA table_info(trainers)').fetchall()}
     if 'base_slots' not in cols:
         conn.execute('ALTER TABLE trainers ADD COLUMN base_slots INTEGER NOT NULL DEFAULT 2')
+    if 'role' not in cols:
+        # role: trainer(培训师) / sister(姐妹团姐姐)
+        conn.execute("ALTER TABLE trainers ADD COLUMN role TEXT NOT NULL DEFAULT 'trainer'")
+    bcols = {r[1] for r in conn.execute('PRAGMA table_info(bindings)').fetchall()}
+    if 'bind_type' not in bcols:
+        conn.execute("ALTER TABLE bindings ADD COLUMN bind_type TEXT NOT NULL DEFAULT 'trainer'")
+    # 唯一索引从「每妹妹一条生效」升级为「每妹妹每类型一条生效」
+    idx = {r[1] for r in conn.execute("PRAGMA index_list(bindings)").fetchall()}
+    if 'idx_bindings_active_trainee' in idx:
+        conn.execute('DROP INDEX idx_bindings_active_trainee')
+    conn.execute('''CREATE UNIQUE INDEX IF NOT EXISTS idx_bindings_active
+                    ON bindings(trainee_id, bind_type) WHERE unbound_at IS NULL''')
 
 
 def init_trainer_db():

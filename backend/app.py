@@ -11,7 +11,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_file
 
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BACKEND_DIR)
@@ -31,7 +31,7 @@ TRAINEE_STATUSES = ('active', 'graduated', 'inactive')
 # 等级序列（判定用当周等级）
 LEVEL_ORDER = {'': 0, '无': 0, '铜牌': 1, '初级银牌': 2, '银牌': 3, '金牌': 4, '王牌': 5, '大神': 6}
 SLOT_CAP = 5                # 总名额上限
-REWARD_WINDOW_DAYS = 28     # 奖励有效期：绑定起四周
+REWARD_WINDOW_WEEKS = 4     # 奖励有效期：绑定次周周一起，整四周
 
 # 奖励档位（金额为单人份，实际发放 ×2，培训师和新人各一）
 REWARD_TIERS = [
@@ -86,14 +86,34 @@ def _parse_ts(s):
     return datetime.strptime(s, '%Y-%m-%d %H:%M:%S')
 
 
+def reward_window(bound_at_str):
+    """奖励窗口（本地时间）：绑定次周周一 00:00 起，整四周（到第四周后的周一 00:00 止，不含）"""
+    local_bound = _parse_ts(bound_at_str) + timedelta(hours=8)
+    days_to_next_monday = (7 - local_bound.weekday()) % 7 or 7
+    start = (local_bound + timedelta(days=days_to_next_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(weeks=REWARD_WINDOW_WEEKS)
+    return start, end
+
+
+def reward_window_status(bound_at_str):
+    """返回 (start, end, status)，status: not_started / in_window / expired"""
+    start, end = reward_window(bound_at_str)
+    now = datetime.now()
+    if now < start:
+        return start, end, 'not_started'
+    if now >= end:
+        return start, end, 'expired'
+    return start, end, 'in_window'
+
+
 def sync_pending_rewards(conn, trainee_id):
-    """为生效绑定生成 pending 奖励（绑定起 28 天内；已存在则跳过）"""
+    """为生效绑定生成 pending 奖励（奖励窗口内；已存在则跳过）"""
     b = conn.execute(
         '''SELECT b.*, t.uid AS trainee_uid FROM bindings b JOIN trainees t ON t.id=b.trainee_id
-           WHERE b.trainee_id=? AND b.unbound_at IS NULL''', (trainee_id,)).fetchone()
+           WHERE b.trainee_id=? AND b.bind_type='trainer' AND b.unbound_at IS NULL''', (trainee_id,)).fetchone()
     if not b:
         return
-    if datetime.utcnow() > _parse_ts(b['bound_at']) + timedelta(days=REWARD_WINDOW_DAYS):
+    if reward_window_status(b['bound_at'])[2] != 'in_window':
         return
     rec = conn.execute(
         'SELECT * FROM trainee_level_monthly WHERE trainee_uid=? AND month=?',
@@ -124,7 +144,7 @@ def build_slots_panel(conn, trainer_id):
                   m.best_level, m.best_rank, m.last_queried_at
            FROM bindings b JOIN trainees t ON t.id = b.trainee_id
            LEFT JOIN trainee_level_monthly m ON m.trainee_uid = t.uid AND m.month = ?
-           WHERE b.trainer_id = ? AND b.unbound_at IS NULL
+           WHERE b.trainer_id = ? AND b.bind_type='trainer' AND b.unbound_at IS NULL
            ORDER BY b.bound_at''', (month, trainer_id)).fetchall()
     trainees = []
     extra = 0
@@ -157,27 +177,29 @@ def build_rewards_panel(conn, trainee_id):
     b = conn.execute(
         '''SELECT b.*, tr.nickname AS trainer_nickname, tr.uid AS trainer_uid
            FROM bindings b JOIN trainers tr ON tr.id = b.trainer_id
-           WHERE b.trainee_id=? AND b.unbound_at IS NULL''', (trainee_id,)).fetchone()
+           WHERE b.trainee_id=? AND b.bind_type='trainer' AND b.unbound_at IS NULL''', (trainee_id,)).fetchone()
     grants = {g['reward_key']: g for g in conn.execute(
         'SELECT * FROM reward_grants WHERE trainee_uid=? ORDER BY id', (t['uid'],)).fetchall()}
 
     panel = {
         'trainee': {'id': t['id'], 'uid': t['uid'], 'nickname': t['nickname']},
-        'window_days': REWARD_WINDOW_DAYS,
-        'binding': None, 'in_window': False, 'window_end': None, 'days_left': None,
+        'window_weeks': REWARD_WINDOW_WEEKS,
+        'binding': None, 'window_status': None,
+        'window_start': None, 'window_end': None, 'days_left': None,
         'rewards': [],
     }
     if b:
-        window_end = _parse_ts(b['bound_at']) + timedelta(days=REWARD_WINDOW_DAYS)
-        days_left = (window_end - datetime.utcnow()).days
+        start, end, status = reward_window_status(b['bound_at'])
         panel.update({
             'binding': {
                 'id': b['id'], 'bound_at': b['bound_at'],
                 'trainer_nickname': b['trainer_nickname'], 'trainer_uid': b['trainer_uid'],
             },
-            'in_window': days_left >= 0,
-            'window_end': window_end.strftime('%Y-%m-%d'),
-            'days_left': max(days_left, 0),
+            'window_status': status,
+            'in_window': status == 'in_window',
+            'window_start': start.strftime('%Y-%m-%d'),
+            'window_end': end.strftime('%Y-%m-%d'),
+            'days_left': max((end - datetime.now()).days, 0) if status == 'in_window' else None,
         })
     for tier in REWARD_TIERS:
         g = grants.get(tier['key'])
@@ -214,6 +236,19 @@ def rows_to_dicts(rows):
     return [dict(r) for r in rows]
 
 
+def _page_args():
+    """分页参数：page 从 1 开始，page_size 默认 20，上限 100"""
+    try:
+        page = max(int(request.args.get('page', 1)), 1)
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        page_size = min(max(int(request.args.get('page_size', 20)), 1), 100)
+    except (TypeError, ValueError):
+        page_size = 20
+    return page, page_size
+
+
 def _validate_person(data, statuses, with_slots=False):
     uid = str(data.get('uid', '')).strip()
     nickname = str(data.get('nickname', '')).strip()
@@ -247,24 +282,31 @@ def _validate_person(data, statuses, with_slots=False):
 @app.get('/api/trainers')
 def list_trainers():
     kw = request.args.get('kw', '').strip()
+    role = request.args.get('role', 'trainer').strip()  # trainer(默认) / sister / all
+    page, page_size = _page_args()
     conn = get_db()
+    where = 'WHERE 1=1'
+    params = []
+    if role != 'all':
+        where += ' AND role = ?'
+        params.append(role)
     if kw:
-        like = f'%{kw}%'
-        rows = conn.execute(
-            'SELECT * FROM trainers WHERE uid LIKE ? OR nickname LIKE ? ORDER BY id DESC',
-            (like, like)).fetchall()
-    else:
-        rows = conn.execute('SELECT * FROM trainers ORDER BY id DESC').fetchall()
-    # 附带当前带的妹妹数与名额（当月等级贡献）
+        where += ' AND (uid LIKE ? OR nickname LIKE ?)'
+        params += [f'%{kw}%', f'%{kw}%']
+    total = conn.execute(f'SELECT COUNT(*) FROM trainers {where}', params).fetchone()[0]
+    rows = conn.execute(
+        f'SELECT * FROM trainers {where} ORDER BY id DESC LIMIT ? OFFSET ?',
+        params + [page_size, (page - 1) * page_size]).fetchall()
+    # 附带当前带的妹妹数与名额（只统计培训师类型绑定；当月等级贡献）
     counts = dict(conn.execute(
-        'SELECT trainer_id, COUNT(*) FROM bindings WHERE unbound_at IS NULL GROUP BY trainer_id'
+        "SELECT trainer_id, COUNT(*) FROM bindings WHERE unbound_at IS NULL AND bind_type='trainer' GROUP BY trainer_id"
     ).fetchall())
     month = _current_month()
     plus_rows = conn.execute(
         '''SELECT b.trainer_id, m.best_rank FROM bindings b
            JOIN trainees t ON t.id = b.trainee_id
            LEFT JOIN trainee_level_monthly m ON m.trainee_uid = t.uid AND m.month = ?
-           WHERE b.unbound_at IS NULL''', (month,)).fetchall()
+           WHERE b.unbound_at IS NULL AND b.bind_type='trainer' ''', (month,)).fetchall()
     extras = {}
     for r in plus_rows:
         extras[r['trainer_id']] = extras.get(r['trainer_id'], 0) + slot_plus(r['best_rank'] or 0)
@@ -273,7 +315,7 @@ def list_trainers():
     for it in items:
         it['active_trainee_count'] = counts.get(it['id'], 0)
         it['total_slots'] = min(it['base_slots'] + extras.get(it['id'], 0), SLOT_CAP)
-    return ok({'items': items})
+    return ok({'items': items, 'total': total, 'page': page, 'page_size': page_size})
 
 
 @app.post('/api/trainers')
@@ -340,7 +382,7 @@ def trainer_trainees(tid):
     rows = conn.execute(
         '''SELECT t.*, b.id AS binding_id, b.bound_at, b.note AS binding_note
            FROM bindings b JOIN trainees t ON t.id = b.trainee_id
-           WHERE b.trainer_id=? AND b.unbound_at IS NULL
+           WHERE b.trainer_id=? AND b.bind_type='trainer' AND b.unbound_at IS NULL
            ORDER BY b.bound_at DESC''', (tid,)).fetchall()
     conn.close()
     return ok({'items': rows_to_dicts(rows)})
@@ -352,29 +394,39 @@ def trainer_trainees(tid):
 def list_trainees():
     kw = request.args.get('kw', '').strip()
     status = request.args.get('status', '').strip()
-    sql = 'SELECT * FROM trainees WHERE 1=1'
+    page, page_size = _page_args()
+    where = 'WHERE 1=1'
     params = []
     if kw:
-        sql += ' AND (uid LIKE ? OR nickname LIKE ?)'
+        where += ' AND (uid LIKE ? OR nickname LIKE ?)'
         params += [f'%{kw}%', f'%{kw}%']
     if status:
-        sql += ' AND status = ?'
+        where += ' AND status = ?'
         params.append(status)
-    sql += ' ORDER BY id DESC'
     conn = get_db()
-    rows = conn.execute(sql, params).fetchall()
-    # 附带当前绑定的培训师
-    bound = {r['trainee_id']: r for r in conn.execute(
-        '''SELECT b.trainee_id, b.id AS binding_id, tr.id AS trainer_id, tr.nickname AS trainer_nickname, tr.uid AS trainer_uid
+    total = conn.execute(f'SELECT COUNT(*) FROM trainees {where}', params).fetchone()[0]
+    rows = conn.execute(
+        f'SELECT * FROM trainees {where} ORDER BY id DESC LIMIT ? OFFSET ?',
+        params + [page_size, (page - 1) * page_size]).fetchall()
+    # 附带当前绑定（培训师 + 姐妹团姐姐）
+    bound_rows = conn.execute(
+        '''SELECT b.trainee_id, b.bind_type, tr.nickname AS side_nickname, tr.uid AS side_uid
            FROM bindings b JOIN trainers tr ON tr.id = b.trainer_id
-           WHERE b.unbound_at IS NULL''').fetchall()}
+           WHERE b.unbound_at IS NULL''').fetchall()
     conn.close()
+    bound = {}
+    for r in bound_rows:
+        bound.setdefault(r['trainee_id'], {})[r['bind_type']] = r
     items = rows_to_dicts(rows)
     for it in items:
-        b = bound.get(it['id'])
-        it['trainer_nickname'] = b['trainer_nickname'] if b else None
-        it['trainer_uid'] = b['trainer_uid'] if b else None
-    return ok({'items': items})
+        bs = bound.get(it['id'], {})
+        tr_b = bs.get('trainer')
+        it['trainer_nickname'] = tr_b['side_nickname'] if tr_b else None
+        it['trainer_uid'] = tr_b['side_uid'] if tr_b else None
+        st_b = bs.get('sister')
+        it['sister_nickname'] = st_b['side_nickname'] if st_b else None
+        it['sister_uid'] = st_b['side_uid'] if st_b else None
+    return ok({'items': items, 'total': total, 'page': page, 'page_size': page_size})
 
 
 @app.post('/api/trainees')
@@ -502,16 +554,74 @@ def list_bindings():
     active = request.args.get('active', '1') != '0'
     conn = get_db()
     rows = conn.execute(
-        '''SELECT b.id, b.bound_at, b.unbound_at, b.note,
-                  tr.id AS trainer_id, tr.uid AS trainer_uid, tr.nickname AS trainer_nickname,
+        '''SELECT b.id, b.bind_type, b.bound_at, b.unbound_at, b.note,
+                  tr.id AS trainer_id, tr.uid AS trainer_uid, tr.nickname AS trainer_nickname, tr.role AS side_role,
                   te.id AS trainee_id, te.uid AS trainee_uid, te.nickname AS trainee_nickname, te.hall_name
            FROM bindings b
            JOIN trainers tr ON tr.id = b.trainer_id
            JOIN trainees te ON te.id = b.trainee_id
            WHERE b.unbound_at IS {} NULL
            ORDER BY b.id DESC'''.format('' if active else 'NOT')).fetchall()
+    items = rows_to_dicts(rows)
+    btype = request.args.get('bind_type', '').strip()
+    if btype in BIND_TYPES:
+        items = [b for b in items if b['bind_type'] == btype]
+    total = len(items)
+    page, page_size = _page_args()
     conn.close()
-    return ok({'items': rows_to_dicts(rows)})
+    return ok({'items': items[(page - 1) * page_size: page * page_size],
+               'total': total, 'page': page, 'page_size': page_size})
+
+
+BIND_TYPES = {'trainer': '培训师', 'sister': '姐妹团三胎'}
+
+
+def _bind_core(conn, trainer_id, trainee_id, note, force, bind_type='trainer'):
+    """绑定核心逻辑（调用方负责 commit/rollback）。返回 (payload, http_code)"""
+    side_label = BIND_TYPES.get(bind_type)
+    if not side_label:
+        return {'ok': False, 'msg': 'bind_type 必须是 trainer / sister'}, 400
+    trainer = conn.execute('SELECT id, nickname FROM trainers WHERE id=?', (trainer_id,)).fetchone()
+    trainee = conn.execute('SELECT id, nickname FROM trainees WHERE id=?', (trainee_id,)).fetchone()
+    if not trainer:
+        return {'ok': False, 'msg': '左侧人员（培训师/姐姐）不存在'}, 404
+    if not trainee:
+        return {'ok': False, 'msg': '妹妹不存在'}, 404
+
+    rebound = False
+    # 姐妹团三胎：一个姐姐同时只能绑一个妹妹
+    if bind_type == 'sister':
+        busy = conn.execute(
+            '''SELECT b.id, t.nickname FROM bindings b JOIN trainees t ON t.id=b.trainee_id
+               WHERE b.trainer_id=? AND b.bind_type='sister' AND b.unbound_at IS NULL''',
+            (trainer_id,)).fetchone()
+        if busy:
+            if not force:
+                return {
+                    'ok': False, 'conflict': True,
+                    'msg': f"姐姐「{trainer['nickname']}」已绑定妹妹「{busy['nickname']}」（三胎只能一对一），确认换绑？",
+                }, 409
+            conn.execute('UPDATE bindings SET unbound_at=CURRENT_TIMESTAMP WHERE id=?', (busy['id'],))
+            rebound = True
+
+    # 同一妹妹同类型最多一条生效绑定（培训师与姐妹团相互独立，可各有一条）
+    current = conn.execute(
+        '''SELECT b.id, tr.nickname FROM bindings b JOIN trainers tr ON tr.id=b.trainer_id
+           WHERE b.trainee_id=? AND b.bind_type=? AND b.unbound_at IS NULL''',
+        (trainee_id, bind_type)).fetchone()
+    if current:
+        if not force:
+            return {
+                'ok': False, 'conflict': True,
+                'msg': f"「{trainee['nickname']}」当前已有{side_label}绑定（{current['nickname']}），确认换绑？",
+            }, 409
+        conn.execute('UPDATE bindings SET unbound_at=CURRENT_TIMESTAMP WHERE id=?', (current['id'],))
+        rebound = True
+
+    cur = conn.execute(
+        'INSERT INTO bindings (trainer_id, trainee_id, bind_type, note) VALUES (?, ?, ?, ?)',
+        (trainer_id, trainee_id, bind_type, note))
+    return {'ok': True, 'id': cur.lastrowid, 'rebound': rebound, 'bind_type': bind_type}, 200
 
 
 @app.post('/api/bindings')
@@ -521,34 +631,72 @@ def create_binding():
     trainee_id = data.get('trainee_id')
     note = str(data.get('note', '') or '').strip()
     force = bool(data.get('force'))
+    bind_type = data.get('bind_type', 'trainer')
     if not trainer_id or not trainee_id:
         return err('trainer_id 和 trainee_id 不能为空')
 
     conn = get_db()
     try:
-        trainer = conn.execute('SELECT id, nickname FROM trainers WHERE id=?', (trainer_id,)).fetchone()
-        trainee = conn.execute('SELECT id, nickname FROM trainees WHERE id=?', (trainee_id,)).fetchone()
-        if not trainer:
-            return err('培训师不存在', 404)
-        if not trainee:
-            return err('妹妹不存在', 404)
+        payload, code = _bind_core(conn, trainer_id, trainee_id, note, force, bind_type)
+        if code == 200:
+            conn.commit()
+        return jsonify(payload), code
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
-        current = conn.execute(
-            '''SELECT b.id, tr.nickname FROM bindings b JOIN trainers tr ON tr.id=b.trainer_id
-               WHERE b.trainee_id=? AND b.unbound_at IS NULL''', (trainee_id,)).fetchone()
-        if current:
-            if current['id'] and not force:
-                return jsonify({
-                    'ok': False, 'conflict': True,
-                    'msg': f"「{trainee['nickname']}」当前已绑定培训师「{current['nickname']}」，确认换绑？",
-                }), 409
-            conn.execute('UPDATE bindings SET unbound_at=CURRENT_TIMESTAMP WHERE id=?', (current['id'],))
 
+def _upsert_person(conn, table, uid, nickname, hall_name, role=None):
+    """按 UID 查档案，不存在则用速查回填的信息自动建档。返回 (id, created)"""
+    row = conn.execute(f'SELECT id FROM {table} WHERE uid=?', (uid,)).fetchone()
+    if row:
+        return row['id'], False
+    if table == 'trainers':
         cur = conn.execute(
-            'INSERT INTO bindings (trainer_id, trainee_id, note) VALUES (?, ?, ?)',
-            (trainer_id, trainee_id, note))
-        conn.commit()
-        return ok({'id': cur.lastrowid, 'rebound': bool(current)})
+            'INSERT INTO trainers (uid, nickname, hall_name, role) VALUES (?, ?, ?, ?)',
+            (uid, nickname or uid, hall_name or '', role or 'trainer'))
+    else:
+        cur = conn.execute(
+            'INSERT INTO trainees (uid, nickname, hall_name) VALUES (?, ?, ?)',
+            (uid, nickname or uid, hall_name or ''))
+    return cur.lastrowid, True
+
+
+@app.post('/api/bindings/by-uid')
+def create_binding_by_uid():
+    """输 UID 直接绑定：未建档的培训师/姐姐/妹妹用前端速查回填的昵称/大厅自动建档"""
+    data = request.get_json(force=True)
+    bind_type = data.get('bind_type', 'trainer')
+    if bind_type not in BIND_TYPES:
+        return err('bind_type 必须是 trainer / sister')
+    trainer_uid = str(data.get('trainer_uid', '')).strip()
+    trainee_uid = str(data.get('trainee_uid', '')).strip()
+    note = str(data.get('note', '') or '').strip()
+    force = bool(data.get('force'))
+    if not trainer_uid or not trainee_uid:
+        return err('trainer_uid 和 trainee_uid 不能为空')
+    if trainer_uid == trainee_uid:
+        return err('两侧不能是同一人')
+
+    conn = get_db()
+    try:
+        trainer_id, trainer_created = _upsert_person(
+            conn, 'trainers', trainer_uid,
+            str(data.get('trainer_nickname', '') or '').strip(),
+            str(data.get('trainer_hall', '') or '').strip(),
+            role='sister' if bind_type == 'sister' else 'trainer')
+        trainee_id, trainee_created = _upsert_person(
+            conn, 'trainees', trainee_uid,
+            str(data.get('trainee_nickname', '') or '').strip(),
+            str(data.get('trainee_hall', '') or '').strip())
+        payload, code = _bind_core(conn, trainer_id, trainee_id, note, force, bind_type)
+        if code == 200:
+            payload['trainer_created'] = trainer_created
+            payload['trainee_created'] = trainee_created
+            conn.commit()
+        return jsonify(payload), code
     except Exception:
         conn.rollback()
         raise
@@ -566,6 +714,111 @@ def unbind(bid):
     if cur.rowcount == 0:
         return err('绑定不存在或已解绑', 404)
     return ok()
+
+
+# ────────────────────────────────────────────── 周奖励导出（XLSX）
+
+# 导出金额口径（与参考文件一致）：任务奖固定 12.8（周任务≥6次且当周铜牌及以上）；等级奖按牌子
+TASK_REWARD_MIN = 6
+TASK_REWARD_AMOUNT = 12.8
+LEVEL_REWARD = {'初级银牌': 12.8, '银牌': 23.3, '金牌': 52.0, '王牌': 131.4}
+
+
+@app.post('/api/export/rewards')
+def export_rewards():
+    """导出周奖励 XLSX：任务次数/礼物流水 = 所选日期的上一周，牌子 = 所选日期当周"""
+    data = request.get_json(force=True)
+    bind_type = data.get('bind_type', 'trainer')
+    if bind_type not in BIND_TYPES:
+        return err('bind_type 必须是 trainer / sister')
+    try:
+        d = datetime.strptime(str(data.get('date', '')).strip(), '%Y-%m-%d')
+    except ValueError:
+        return err('date 格式应为 YYYY-MM-DD')
+
+    this_monday = d - timedelta(days=d.weekday())
+    last_monday = this_monday - timedelta(days=7)
+    fmt = '%Y-%m-%d'
+    this_range = (this_monday.strftime(fmt), (this_monday + timedelta(days=6)).strftime(fmt))
+    last_range = (last_monday.strftime(fmt), (last_monday + timedelta(days=6)).strftime(fmt))
+
+    conn = get_db()
+    bindings = conn.execute(
+        '''SELECT b.id, tr.uid AS side_uid, tr.nickname AS side_nickname,
+                  te.uid AS trainee_uid, te.nickname AS trainee_nickname, te.hall_name
+           FROM bindings b
+           JOIN trainers tr ON tr.id = b.trainer_id
+           JOIN trainees te ON te.id = b.trainee_id
+           WHERE b.bind_type=? AND b.unbound_at IS NULL
+           ORDER BY b.bound_at''', (bind_type,)).fetchall()
+    conn.close()
+
+    crawler = UIDCrawler()
+    healed = False
+    rows, errors = [], []
+    for i, b in enumerate(bindings):
+        if i:
+            time.sleep(0.6)  # server1 会话 TTL 短，控制频率
+        try:
+            cur = crawler.query(b['trainee_uid'], 'game', *this_range)
+            last = crawler.query(b['trainee_uid'], 'game', *last_range)
+        except CookieExpiredError:
+            if healed:
+                return err(f'导出到第 {i + 1} 行时 Cookie 再次过期，请稍后重试', 401)
+            healed = True
+            try:
+                _heal_uid_cookie()
+                crawler = UIDCrawler()
+                cur = crawler.query(b['trainee_uid'], 'game', *this_range)
+                last = crawler.query(b['trainee_uid'], 'game', *last_range)
+            except Exception as e:
+                return err(f'自动重登后查询仍失败: {e}', 502)
+        except Exception as e:
+            errors.append(f"{b['trainee_nickname']}({b['trainee_uid']}): {e}")
+            continue
+
+        level = (cur.get('week_level') or '').strip() if cur.get('found') else ''
+        tasks = int(last.get('daily_task_count') or 0) if last.get('found') else 0
+        revenue = float(last.get('week_revenue') or 0) if last.get('found') else 0
+        hall = (cur.get('schedule_hall') or cur.get('auth_hall')
+                or last.get('schedule_hall') or last.get('auth_hall') or b['hall_name'] or '')
+        task_reward = TASK_REWARD_AMOUNT if (tasks >= TASK_REWARD_MIN and level_rank(level) >= 1) else '无'
+        level_reward = LEVEL_REWARD.get(level, '无')
+        rows.append([
+            int(b['side_uid']) if str(b['side_uid']).isdigit() else b['side_uid'],
+            b['side_nickname'],
+            int(b['trainee_uid']) if str(b['trainee_uid']).isdigit() else b['trainee_uid'],
+            b['trainee_nickname'], hall, tasks, task_reward, revenue, level, level_reward,
+        ])
+
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.utils import get_column_letter
+
+    side = '姐姐' if bind_type == 'sister' else '培训师'
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Sheet1'
+    ws.append([])  # 与参考文件一致：前两行留空，表头在第 3 行
+    ws.append([])
+    ws.append([f'{side}UID', f'{side}昵称', '妹妹UID', '妹妹昵称', '所属大厅',
+               '完成任务次数(上周)', '奖励', '礼物流水(上周)', '牌子(当周)', '奖励'])
+    ws.append([])
+    for row in rows:
+        ws.append(row)
+    widths = [15.5, 21.8, 14, 17.2, 27.5, 13.3, 9, 13.3, 12, 9]
+    for idx, w in enumerate(widths, start=1):
+        ws.column_dimensions[get_column_letter(idx)].width = w
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    filename = f"{d.strftime('%Y%m%d')}{'三胎' if bind_type == 'sister' else '培训师'}奖励.xlsx"
+    resp = send_file(buf, as_attachment=True, download_name=filename,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    if errors:
+        resp.headers['X-Export-Errors'] = '; '.join(errors)[:500]
+    return resp
 
 
 # ────────────────────────────────────────────── 名额与奖励
@@ -596,7 +849,7 @@ def refresh_trainees(tid):
         return err('培训师不存在', 404)
     bindings = conn.execute(
         '''SELECT b.trainee_id, t.uid, t.nickname FROM bindings b JOIN trainees t ON t.id=b.trainee_id
-           WHERE b.trainer_id=? AND b.unbound_at IS NULL ORDER BY b.bound_at''', (tid,)).fetchall()
+           WHERE b.trainer_id=? AND b.bind_type='trainer' AND b.unbound_at IS NULL ORDER BY b.bound_at''', (tid,)).fetchall()
     conn.close()
 
     crawler = UIDCrawler()
@@ -769,4 +1022,8 @@ init_trainer_db()
 threading.Thread(target=_keepalive_loop, daemon=True).start()
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5000, debug=False)
+    app.run(
+        host=os.environ.get('FLASK_HOST', '127.0.0.1'),
+        port=int(os.environ.get('FLASK_PORT', '5000')),
+        debug=False,
+    )
