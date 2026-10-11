@@ -163,3 +163,58 @@ tr:hover td { background: #f9fafb; }
 }
 #toast.error { background: #dc2626; }
 #toast.hidden { display: none; }
+
+/* ────────────── 手机端适配（≤768px） ────────────── */
+@media (max-width: 768px) {
+  body { font-size: 15px; }
+  header {
+    flex-direction: column; align-items: flex-start; gap: 0;
+    height: auto; padding: 8px 12px 0;
+  }
+  header h1 { font-size: 16px; margin-bottom: 4px; }
+  #tabs { width: 100%; }
+  .tab { flex: 1; padding: 10px 0; text-align: center; }
+
+  main { margin: 10px auto; padding: 0 8px; }
+  .card { padding: 12px; border-radius: 10px; }
+
+  /* 表格横向滑动 */
+  .card { overflow-x: auto; }
+  table { white-space: nowrap; }
+  th, td { padding: 8px 12px; }
+
+  /* 新建绑定：纵向堆叠 */
+  .bind-grid { flex-direction: column; }
+  .bind-side { width: 100%; }
+  .bind-arrow { align-self: center; transform: rotate(90deg); }
+  .bind-action { width: 100%; align-self: stretch; }
+  .bind-action .btn { width: 100%; padding: 10px; }
+  .uid-row .btn { padding: 6px 14px; }
+
+  /* 档案入口卡：纵向 */
+  .duplex { flex-direction: column; }
+  .entry-card { padding: 20px; }
+
+  /* 卡片头按钮组换行 */
+  .card-head { flex-wrap: wrap; gap: 8px; }
+  .toolbar input, .toolbar select { flex: 1; min-width: 120px; }
+
+  /* 弹窗全宽 */
+  .modal, .modal.wide, .modal.xwide {
+    width: 96vw; max-width: 96vw; max-height: 88vh; padding: 14px 16px;
+  }
+
+  /* 速查对比卡片两列 */
+  .uq-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+
+  /* 名额 chips 缩小 */
+  .slot-chip { padding: 5px 10px; font-size: 13px; }
+
+  /* 分页/筛选控件可换行 */
+  .pager { flex-wrap: wrap; justify-content: center; }
+
+  /* 触控目标加大 */
+  .btn { padding: 8px 14px; }
+  .btn.small { padding: 6px 12px; }
+  input, select { padding: 8px 10px; font-size: 15px; }
+}
