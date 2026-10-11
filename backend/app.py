@@ -24,7 +24,7 @@ from trainer_db import init_trainer_db  # noqa: E402
 app = Flask(__name__, static_folder='static', static_url_path='')
 
 TRAINER_STATUSES = ('active', 'inactive')
-TRAINEE_STATUSES = ('active', 'graduated', 'inactive')
+TRAINEE_STATUSES = ('active', 'inactive')
 
 # ────────────────────────────────────────────── 名额与奖励政策
 
@@ -566,6 +566,18 @@ def list_bindings():
     btype = request.args.get('bind_type', '').strip()
     if btype in BIND_TYPES:
         items = [b for b in items if b['bind_type'] == btype]
+    # 每行附奖励窗口信息：结束日期 / 状态 / 剩余周数
+    for b in items:
+        start, end, status = reward_window_status(b['bound_at'])
+        b['window_start'] = start.strftime('%Y-%m-%d')
+        b['window_end'] = end.strftime('%Y-%m-%d')
+        b['window_status'] = status
+        if status == 'in_window':
+            b['weeks_left'] = min(max(-(-(end - datetime.now()).days // 7), 0), REWARD_WINDOW_WEEKS)
+        elif status == 'not_started':
+            b['weeks_left'] = REWARD_WINDOW_WEEKS
+        else:
+            b['weeks_left'] = 0
     total = len(items)
     page, page_size = _page_args()
     conn.close()

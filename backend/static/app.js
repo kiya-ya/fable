@@ -29,8 +29,8 @@ function toast(msg, isError = false) {
   toastTimer = setTimeout(() => el.classList.add('hidden'), 3000);
 }
 
-const TRAINER_STATUS = { active: '在职', inactive: '离职' };
-const TRAINEE_STATUS = { active: '在读', graduated: '毕业', inactive: '退出' };
+const TRAINER_STATUS = { active: '活跃', inactive: '退出' };
+const TRAINEE_STATUS = { active: '活跃', inactive: '退出' };
 const BIND_TYPE = { trainer: '培训师', sister: '姐妹团' };
 
 function esc(s) {
@@ -353,9 +353,16 @@ async function loadBindings(page) {
   const tbody = $('#bindings-table tbody');
   $$('.col-unbound').forEach((el) => (el.style.display = bindingsActiveView ? 'none' : ''));
   if (!data.items.length) {
-    tbody.innerHTML = `<tr><td colspan="10" class="empty">暂无${bindingsActiveView ? '生效绑定' : '历史记录'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" class="empty">暂无${bindingsActiveView ? '生效绑定' : '历史记录'}</td></tr>`;
   } else {
-    tbody.innerHTML = data.items.map((b) => `
+    tbody.innerHTML = data.items.map((b) => {
+      const sideLabel = b.bind_type === 'sister' ? '姐姐' : '培训师';
+      const weeksTag = b.window_status === 'in_window'
+        ? `<span class="tag plus">剩 ${b.weeks_left}/4 周</span>`
+        : b.window_status === 'not_started'
+          ? `<span class="tag graduated">未开始</span>`
+          : '<span class="tag inactive">已结束</span>';
+      return `
       <tr>
         <td><span class="tag ${b.bind_type === 'sister' ? 'graduated' : 'active'}">${BIND_TYPE[b.bind_type] || b.bind_type}</span></td>
         <td>${esc(b.trainer_nickname)}</td>
@@ -364,13 +371,18 @@ async function loadBindings(page) {
         <td>${esc(b.trainee_uid)}</td>
         <td>${esc(b.hall_name || '')}</td>
         <td>${esc(b.bound_at)}</td>
+        <td>${esc(b.window_end)}</td>
+        <td>${weeksTag}</td>
         <td class="col-unbound" style="display:${bindingsActiveView ? 'none' : ''}">${esc(b.unbound_at || '')}</td>
         <td>${esc(b.note || '')}</td>
-        <td>
+        <td style="white-space:nowrap">
+          <button class="btn small" onclick="editPersonByUid('trainers', '${esc(b.trainer_uid)}')">编辑${sideLabel}</button>
+          <button class="btn small" onclick="editPersonByUid('trainees', '${esc(b.trainee_uid)}')">编辑妹妹</button>
           ${bindingsActiveView ? `<button class="btn small danger" onclick="unbind(${b.id})">解绑</button>` : ''}
           <button class="btn small" onclick="gotoUidQuery('${esc(b.trainee_uid)}')">速查</button>
         </td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
   }
   renderPager('#bindings-pager', data.page, data.page_size, data.total, (p) => loadBindings(p));
 }
@@ -537,6 +549,21 @@ async function delPerson(kind, id) {
   }
 }
 
+// 从绑定列表直接编辑：按 UID 取档案后打开弹窗
+async function editPersonByUid(kind, uid) {
+  try {
+    const url = kind === 'trainers'
+      ? `/api/trainers?role=all&kw=${encodeURIComponent(uid)}`
+      : `/api/trainees?kw=${encodeURIComponent(uid)}`;
+    const r = await api(url);
+    const p = r.items.find((x) => x.uid === uid);
+    if (!p) return toast('档案不存在', true);
+    openPersonModal(kind, p);
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
 // ────────────── 档案弹窗 ──────────────
 function openPersonModal(kind, person) {
   const conf = PERSON_CONF[kind];
@@ -599,6 +626,7 @@ $('#pm-save').addEventListener('click', async () => {
     toast('已保存');
     $('#person-modal').classList.add('hidden');
     kind === 'trainers' ? loadTrainers() : loadTrainees();
+    loadBindings();   // 昵称/大厅可能变了，绑定列表同步
     refreshTotals();
   } catch (e) {
     toast(e.message, true);

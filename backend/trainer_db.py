@@ -85,6 +85,8 @@ def _migrate(conn):
     bcols = {r[1] for r in conn.execute('PRAGMA table_info(bindings)').fetchall()}
     if 'bind_type' not in bcols:
         conn.execute("ALTER TABLE bindings ADD COLUMN bind_type TEXT NOT NULL DEFAULT 'trainer'")
+    # 状态简化为 active(活跃)/inactive(退出)，老的 graduated 并入 inactive
+    conn.execute("UPDATE trainees SET status='inactive' WHERE status='graduated'")
     # 唯一索引从「每妹妹一条生效」升级为「每妹妹每类型一条生效」
     idx = {r[1] for r in conn.execute("PRAGMA index_list(bindings)").fetchall()}
     if 'idx_bindings_active_trainee' in idx:

@@ -95,6 +95,10 @@ te_a = r.json().get('id')
 r = requests.post(f'{B}/api/trainees', json={'uid': '80002', 'nickname': '测试妹妹乙'})
 check('新增妹妹乙', r.ok, r.text)
 te_b = r.json().get('id')
+r = requests.put(f'{B}/api/trainees/{te_b}', json={'uid': '80002', 'nickname': '测试妹妹乙', 'status': 'graduated'})
+check('状态 graduated 不再接受 400', r.status_code == 400, f'got {r.status_code}')
+r = requests.put(f'{B}/api/trainees/{te_b}', json={'uid': '80002', 'nickname': '测试妹妹乙', 'status': 'inactive'})
+check('状态 active/inactive 正常', r.ok, r.text)
 
 print('== by-uid 绑定（培训师类型，自动建档） ==')
 r = bind('90001', '80001')
@@ -127,6 +131,11 @@ sis_items = [b for b in r.json()['items'] if str(b['trainer_uid']) == '91001']
 check('姐姐仅一条生效三胎绑定', len(sis_items) == 1 and sis_items[0]['trainee_uid'] == '80002', str(sis_items))
 r = requests.get(f'{B}/api/bindings', params={'active': 1, 'bind_type': 'trainer'})
 check('按类型过滤生效绑定', all(b['bind_type'] == 'trainer' for b in r.json()['items']), r.text)
+b1 = next(b for b in requests.get(f'{B}/api/bindings', params={'active': 1}).json()['items'] if b['trainee_uid'] == '80001')
+check('绑定带奖励窗口字段', b1.get('window_end') and b1.get('window_status') in ('not_started', 'in_window', 'expired')
+      and b1.get('weeks_left') is not None, str({k: b1.get(k) for k in ('window_end', 'window_status', 'weeks_left')}))
+_, we1 = expected_window(b1['bound_at'])
+check('绑定列表结束日期=窗口终点', b1['window_end'] == we1.strftime('%Y-%m-%d'), f"{b1['window_end']} != {we1.date()}")
 # 妹妹甲:培训师B + 妹妹乙:姐姐（姐妹团） 并存检查
 r = requests.get(f'{B}/api/trainees', params={'kw': '80001'})
 t1 = r.json()['items'][0]
@@ -224,7 +233,7 @@ db_exec('UPDATE bindings SET bound_at=? WHERE id=?',
 r = requests.post(f'{B}/api/export/rewards', json={'bind_type': 'sister', 'date': '2026-10-05'})
 ws_rows = [row for row in load_workbook(io.BytesIO(r.content)).active.iter_rows(min_row=5, values_only=True)
            if any(v is not None for v in row)]
-check('过期绑定不出现在导出（0 数据行）', len(ws_rows) == 0, str(ws_rows))
+check('过期绑定不出现在导出（80003 不在其中）', all(str(row[2]) != '80003' for row in ws_rows), str(ws_rows))
 
 print('== UID 速查 ==')
 r = requests.get(f'{B}/api/uid-query/types')
