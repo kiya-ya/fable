@@ -7,6 +7,7 @@
 """
 import os
 import sys
+import json
 import threading
 import time
 from datetime import datetime, timedelta
@@ -1017,6 +1018,88 @@ def uid_lookup():
     }})
 
 
+@app.post('/api/admin/refresh-all-trainees')
+def refresh_all_trainees_api():
+    """手动触发：刷新全部生效绑定学员的当周等级（名额/奖励判定用）"""
+    queried, errors = refresh_all_bound_trainees()
+    return ok({'queried': len(queried), 'errors': errors})
+
+
+# ────────────────────────────────────────────── 每周自动刷新（周一统计用）
+
+WEEKLY_REFRESH_DAY = 0       # 周一
+WEEKLY_REFRESH_HOUR = 9      # 09:00 后执行
+WEEKLY_REFRESH_STATE = os.path.join(PROJECT_ROOT, 'data', 'weekly_refresh_status.json')
+
+
+def refresh_all_bound_trainees():
+    """逐个实时查询所有生效绑定的学员（两类绑定都刷），落库当月等级并重算奖励"""
+    conn = get_db()
+    rows = conn.execute(
+        '''SELECT DISTINCT t.id AS trainee_id, t.uid, t.nickname
+           FROM bindings b JOIN trainees t ON t.id = b.trainee_id
+           WHERE b.unbound_at IS NULL ORDER BY t.uid''').fetchall()
+    conn.close()
+
+    crawler = UIDCrawler()
+    healed = False
+    queried, errors = [], []
+    for i, b in enumerate(rows):
+        if i:
+            time.sleep(0.6)  # server1 会话 TTL 短，控制频率
+        try:
+            r = crawler.query(b['uid'], 'game')
+        except CookieExpiredError:
+            if healed:
+                errors.append({'uid': b['uid'], 'msg': 'Cookie 再次过期，中止'})
+                break
+            healed = True
+            try:
+                _heal_uid_cookie()
+                crawler = UIDCrawler()
+                r = crawler.query(b['uid'], 'game')
+            except Exception as e:
+                errors.append({'uid': b['uid'], 'msg': f'自动重登失败: {e}'})
+                break
+        except Exception as e:
+            errors.append({'uid': b['uid'], 'nickname': b['nickname'], 'msg': str(e)})
+            continue
+        conn = get_db()
+        record_trainee_query(conn, b['uid'], r)
+        if r.get('found'):
+            sync_pending_rewards(conn, b['trainee_id'])
+            queried.append({'uid': b['uid'], 'nickname': b['nickname'], 'week_level': r.get('week_level', '')})
+        else:
+            errors.append({'uid': b['uid'], 'nickname': b['nickname'], 'msg': r.get('msg', '未查到数据')})
+        conn.close()
+    return queried, errors
+
+
+def _weekly_refresh_loop():
+    """每周一 09:00 后自动刷新全部生效绑定学员（每周只跑一次，状态落盘防重启重复）"""
+    while True:
+        try:
+            now = datetime.now()
+            if now.weekday() == WEEKLY_REFRESH_DAY and now.hour >= WEEKLY_REFRESH_HOUR:
+                week_key = (now - timedelta(days=now.weekday())).strftime('%Y-%m-%d')
+                state = {}
+                try:
+                    with open(WEEKLY_REFRESH_STATE, 'r', encoding='utf-8') as f:
+                        state = json.load(f)
+                except Exception:
+                    pass
+                if state.get('last_week') != week_key:
+                    print(f'[WeeklyRefresh] 开始本周({week_key})学员刷新…', flush=True)
+                    queried, errors = refresh_all_bound_trainees()
+                    with open(WEEKLY_REFRESH_STATE, 'w', encoding='utf-8') as f:
+                        json.dump({'last_week': week_key, 'ran_at': now.strftime('%Y-%m-%d %H:%M:%S'),
+                                   'queried': len(queried), 'errors': len(errors)}, f, ensure_ascii=False)
+                    print(f'[WeeklyRefresh] 完成: {len(queried)} 人, 失败 {len(errors)}', flush=True)
+        except Exception as e:
+            print(f'[WeeklyRefresh-ERROR] {e}', flush=True)
+        time.sleep(1800)
+
+
 # ────────────────────────────────────────────── Cookie 保活后台线程
 
 def _keepalive_loop():
@@ -1035,6 +1118,7 @@ def _keepalive_loop():
 
 init_trainer_db()
 threading.Thread(target=_keepalive_loop, daemon=True).start()
+threading.Thread(target=_weekly_refresh_loop, daemon=True).start()
 
 if __name__ == '__main__':
     app.run(

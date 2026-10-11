@@ -26,7 +26,7 @@ python -m venv .venv
 # 打开 http://127.0.0.1:5000
 ```
 
-启动时自动：建培训师相关 5 张表（含老库迁移）→ 60 秒后挂 Cookie 保活后台线程（30 分钟/轮，失效自动 OCR 重登）。
+启动时自动：建培训师相关 5 张表（含老库迁移）→ 60 秒后挂 Cookie 保活后台线程（30 分钟/轮，失效自动 OCR 重登）→ 每周一 09:00 自动刷新全部生效绑定学员的当周等级（名额/奖励判定数据源，状态见 `data/weekly_refresh_status.json`；也可手动 `POST /api/admin/refresh-all-trainees`）。
 
 ## Docker
 
