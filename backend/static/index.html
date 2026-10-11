@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>培训师系统</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>培训师系统</h1>
+  <nav id="tabs">
+    <button class="tab active" data-tab="trainers">培训师管理</button>
+    <button class="tab" data-tab="bindings">绑定关系</button>
+    <button class="tab" data-tab="uidquery">UID 速查</button>
+  </nav>
+</header>
+
+<main>
+  <!-- 培训师管理（首页）：培训师档案 + 妹妹档案 -->
+  <section id="tab-trainers" class="panel active">
+    <div class="card">
+      <div class="card-head">
+        <h2>培训师档案</h2>
+        <div>
+          <input id="trainer-kw" type="text" placeholder="搜索 UID / 昵称">
+          <button id="trainer-add" class="btn primary">新增培训师</button>
+        </div>
+      </div>
+      <table id="trainers-table">
+        <thead><tr>
+          <th>UID</th><th>昵称</th><th>大厅</th><th>状态</th><th>名额(用/总)</th><th>备注</th><th>操作</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>妹妹档案</h2>
+        <div>
+          <input id="trainee-kw" type="text" placeholder="搜索 UID / 昵称">
+          <select id="trainee-status-filter">
+            <option value="">全部状态</option>
+            <option value="active">在读</option>
+            <option value="graduated">毕业</option>
+            <option value="inactive">退出</option>
+          </select>
+          <button id="trainee-import" class="btn">从历史数据导入</button>
+          <button id="trainee-add" class="btn primary">新增妹妹</button>
+        </div>
+      </div>
+      <table id="trainees-table">
+        <thead><tr>
+          <th>UID</th><th>昵称</th><th>大厅</th><th>状态</th><th>当前培训师</th><th>备注</th><th>操作</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 绑定关系：加培训师 + 加妹妹 + 绑定，一页完成 -->
+  <section id="tab-bindings" class="panel">
+    <div class="card">
+      <h2>新建绑定</h2>
+      <div class="bind-grid">
+        <!-- 培训师侧 -->
+        <div class="bind-side">
+          <div class="bind-side-head">
+            <span>培训师</span>
+            <button id="bind-add-trainer" class="btn small" type="button">+ 新增培训师</button>
+          </div>
+          <div id="trainer-select-wrap">
+            <select id="bind-trainer"></select>
+          </div>
+          <div id="trainer-add-wrap" class="quick-add hidden">
+            <div class="uid-row">
+              <input id="qa-trainer-uid" type="text" placeholder="UID">
+              <button id="qa-trainer-autofill" class="btn small" type="button">回填</button>
+            </div>
+            <input id="qa-trainer-nickname" type="text" placeholder="昵称">
+            <input id="qa-trainer-hall" type="text" placeholder="大厅（可选）">
+            <div class="uid-row">
+              <input id="qa-trainer-slots" type="number" min="0" max="5" value="2" title="基础名额">
+              <button id="qa-trainer-save" class="btn small primary" type="button">保存并选用</button>
+              <button id="qa-trainer-cancel" class="btn small" type="button">取消</button>
+            </div>
+            <div class="muted">基础名额：通过考试 = 2</div>
+          </div>
+        </div>
+        <div class="bind-arrow">⟶</div>
+        <!-- 妹妹侧 -->
+        <div class="bind-side">
+          <div class="bind-side-head">
+            <span>妹妹</span>
+            <button id="bind-add-trainee" class="btn small" type="button">+ 新增妹妹</button>
+          </div>
+          <div id="trainee-select-wrap">
+            <select id="bind-trainee"></select>
+          </div>
+          <div id="trainee-add-wrap" class="quick-add hidden">
+            <div class="uid-row">
+              <input id="qa-trainee-uid" type="text" placeholder="UID">
+              <button id="qa-trainee-autofill" class="btn small" type="button">回填</button>
+            </div>
+            <input id="qa-trainee-nickname" type="text" placeholder="昵称">
+            <input id="qa-trainee-hall" type="text" placeholder="大厅（可选）">
+            <div class="uid-row">
+              <button id="qa-trainee-save" class="btn small primary" type="button">保存并选用</button>
+              <button id="qa-trainee-cancel" class="btn small" type="button">取消</button>
+            </div>
+          </div>
+        </div>
+        <!-- 绑定动作 -->
+        <div class="bind-action">
+          <input id="bind-note" type="text" placeholder="备注（可选）">
+          <button id="bind-submit" class="btn primary">绑定</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <h2>绑定列表</h2>
+        <div class="seg">
+          <button id="seg-active" class="seg-btn active">当前生效</button>
+          <button id="seg-history" class="seg-btn">历史记录</button>
+        </div>
+      </div>
+      <table id="bindings-table">
+        <thead><tr>
+          <th>培训师</th><th>培训师UID</th><th>妹妹</th><th>妹妹UID</th><th>大厅</th>
+          <th>绑定时间</th><th class="col-unbound">解绑时间</th><th>备注</th><th>操作</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- UID 速查 -->
+  <section id="tab-uidquery" class="panel">
+    <div class="card">
+      <h2>UID 数据速查（本周 vs 上周）</h2>
+      <div class="bind-form">
+        <label>UID
+          <input id="uq-uid" type="text" placeholder="输入培训师或妹妹的 UID">
+        </label>
+        <label>类型
+          <select id="uq-type"></select>
+        </label>
+        <button id="uq-submit" class="btn primary">查询</button>
+      </div>
+      <div class="muted" style="margin-top:8px">
+        查培训师 UID → 显示名额面板；查妹妹 UID → 显示奖励面板（需已建档）
+      </div>
+    </div>
+
+    <!-- 名额面板（查培训师时显示） -->
+    <div id="slots-panel" class="card hidden">
+      <div class="card-head">
+        <h2>名额面板 <span id="slots-month" class="muted"></span></h2>
+        <button id="slots-refresh" class="btn">刷新全部学员数据</button>
+      </div>
+      <div id="slots-summary" class="slot-summary"></div>
+      <table id="slots-table">
+        <thead><tr>
+          <th>学员</th><th>UID</th><th>绑定时间</th><th>当月最高等级</th><th>贡献名额</th><th>最后查询</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+      <div id="slots-refresh-result" class="muted" style="margin-top:8px"></div>
+    </div>
+
+    <!-- 奖励面板（查妹妹时显示） -->
+    <div id="rewards-panel" class="card hidden">
+      <h2>奖励面板 <span id="rewards-window" class="muted"></span></h2>
+      <div id="rewards-binding" class="muted" style="margin-bottom:10px"></div>
+      <table id="rewards-table">
+        <thead><tr>
+          <th>奖励档位</th><th>金额（×2 双人份）</th><th>状态</th><th>发放时间</th><th>操作</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div id="uq-result"></div>
+    </div>
+  </section>
+</main>
+
+<!-- 档案编辑弹窗 -->
+<div id="person-modal" class="modal-mask hidden">
+  <div class="modal">
+    <h3 id="pm-title"></h3>
+    <input type="hidden" id="pm-id">
+    <input type="hidden" id="pm-kind">
+    <label>UID
+      <span class="uid-row">
+        <input id="pm-uid" type="text">
+        <button id="pm-autofill" class="btn small" type="button">自动回填</button>
+      </span>
+    </label>
+    <label>昵称 <input id="pm-nickname" type="text"></label>
+    <label>大厅 <input id="pm-hall" type="text"></label>
+    <label id="pm-slots-row">基础名额（通过考试 = 2） <input id="pm-slots" type="number" min="0" max="5" value="2"></label>
+    <label>状态
+      <select id="pm-status"></select>
+    </label>
+    <label>备注 <input id="pm-note" type="text"></label>
+    <div class="modal-actions">
+      <button id="pm-cancel" class="btn">取消</button>
+      <button id="pm-save" class="btn primary">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 导入弹窗 -->
+<div id="import-modal" class="modal-mask hidden">
+  <div class="modal wide">
+    <h3>从历史团数据导入妹妹 <span id="import-snap" class="muted"></span></h3>
+    <div class="import-toolbar">
+      <button id="import-all" class="btn small" type="button">全选未建档</button>
+      <span id="import-count" class="muted"></span>
+    </div>
+    <div id="import-list" class="import-list"></div>
+    <div class="modal-actions">
+      <button id="import-cancel" class="btn">取消</button>
+      <button id="import-submit" class="btn primary">导入选中</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="hidden"></div>
+<script src="/app.js"></script>
+</body>
+</html>
