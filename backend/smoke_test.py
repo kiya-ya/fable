@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-"""API 冒烟测试（自清理测试数据）。运行: .venv/Scripts/python.exe -X utf8 backend/smoke_test.py"""
+"""API 冒烟测试（自清理测试数据；只用 9000x/8000x/9100x 测试 UID，绝不碰真实数据）。
+运行: .venv/Scripts/python.exe -X utf8 backend/smoke_test.py"""
 import os
 import sqlite3
 import sys
@@ -51,6 +52,20 @@ def bind(uid_a, uid_b, **kw):
     payload = {'trainer_uid': uid_a, 'trainee_uid': uid_b}
     payload.update(kw)
     return requests.post(f'{B}/api/bindings/by-uid', json=payload)
+
+
+# 预清理：上次异常退出可能残留的测试档案（按 UID 精确匹配）
+for b in requests.get(f'{B}/api/bindings', params={'active': 1, 'page_size': 100}).json().get('items', []):
+    if str(b['trainee_uid']) in ('80001', '80002', '80003') or str(b['trainer_uid']) in ('90001', '90002', '90003', '91001'):
+        requests.post(f"{B}/api/bindings/{b['id']}/unbind")
+for uid in ('90001', '90002', '90003', '91001'):
+    for t in requests.get(f'{B}/api/trainers', params={'role': 'all', 'kw': uid}).json().get('items', []):
+        if t['uid'] == uid:
+            requests.delete(f"{B}/api/trainers/{t['id']}")
+for uid in ('80001', '80002', '80003'):
+    for t in requests.get(f'{B}/api/trainees', params={'kw': uid}).json().get('items', []):
+        if t['uid'] == uid:
+            requests.delete(f"{B}/api/trainees/{t['id']}")
 
 
 print('== 培训师 CRUD ==')
@@ -185,6 +200,8 @@ r = requests.get(f'{B}/api/trainees/import-candidates')
 check('导入候选接口', r.ok and 'snapshot_date' in r.json(), r.text[:200])
 
 print('== 奖励导出 ==')
+# 先解绑测试绑定（只动本测试创建的数据！）：导出测试不打网络
+db_exec(f"UPDATE bindings SET unbound_at=CURRENT_TIMESTAMP WHERE unbound_at IS NULL AND trainee_id IN ({te_a},{te_b},{te_c})")
 r = requests.post(f'{B}/api/export/rewards', json={'bind_type': 'x', 'date': '2026-10-05'})
 check('非法类型 400', r.status_code == 400, f'got {r.status_code}')
 r = requests.post(f'{B}/api/export/rewards', json={'bind_type': 'trainer', 'date': 'bad'})
@@ -195,10 +212,19 @@ from openpyxl import load_workbook
 import io
 wb = load_workbook(io.BytesIO(r.content))
 hdr = [c.value for c in wb.active[3]]
-check('三胎表头为姐姐UID', hdr[0] == '姐姐UID' and hdr[5] == '完成任务次数(上周)', str(hdr))
+check('三胎表头为姐姐UID', hdr[0] == '姐姐UID' and hdr[5] == '完成任务次数' and hdr[7] == '礼物流水' and hdr[8] == '牌子', str(hdr))
 r = requests.post(f'{B}/api/export/rewards', json={'bind_type': 'trainer', 'date': '2026-10-05'})
 hdr = [c.value for c in load_workbook(io.BytesIO(r.content)).active[3]]
 check('培训师表头为培训师UID', hdr[0] == '培训师UID', str(hdr))
+# 过期窗口的绑定不出现在导出里（新建一条再把绑定时间改到 60 天前）
+r = bind('91001', '80003', bind_type='sister', force=True)
+exp_bid = r.json()['id']
+db_exec('UPDATE bindings SET bound_at=? WHERE id=?',
+        ((datetime.utcnow() - timedelta(days=60)).strftime('%Y-%m-%d %H:%M:%S'), exp_bid))
+r = requests.post(f'{B}/api/export/rewards', json={'bind_type': 'sister', 'date': '2026-10-05'})
+ws_rows = [row for row in load_workbook(io.BytesIO(r.content)).active.iter_rows(min_row=5, values_only=True)
+           if any(v is not None for v in row)]
+check('过期绑定不出现在导出（0 数据行）', len(ws_rows) == 0, str(ws_rows))
 
 print('== UID 速查 ==')
 r = requests.get(f'{B}/api/uid-query/types')
@@ -206,16 +232,22 @@ check('类型列表', r.ok and len(r.json()['items']) == 4, r.text)
 
 print(f'\n结果: {passed} passed, {failed} failed')
 
-# 清理测试数据
+# 清理测试数据（一律按测试 UID 精确匹配，绝不用可能错位的 id）
+TEST_TRAINER_UIDS = ('90001', '90002', '90003', '91001')
+TEST_TRAINEE_UIDS = ('80001', '80002', '80003')
 rows = requests.get(f'{B}/api/bindings', params={'active': 1, 'page_size': 100}).json()['items']
 for b in rows:
-    if str(b['trainee_uid']) in ('80001', '80002', '80003'):
+    if str(b['trainee_uid']) in TEST_TRAINEE_UIDS or str(b['trainer_uid']) in TEST_TRAINER_UIDS:
         requests.post(f"{B}/api/bindings/{b['id']}/unbind")
-for tid in (tr_a, tr_b, tr_c, sis_a[0]):
-    requests.delete(f'{B}/api/trainers/{tid}')
-for tid in (te_a, te_b, te_c):
-    requests.delete(f'{B}/api/trainees/{tid}')
-for uid in ('80001', '80002', '80003'):
+for uid in TEST_TRAINER_UIDS:
+    for t in requests.get(f'{B}/api/trainers', params={'role': 'all', 'kw': uid}).json()['items']:
+        if t['uid'] == uid:
+            requests.delete(f"{B}/api/trainers/{t['id']}")
+for uid in TEST_TRAINEE_UIDS:
+    for t in requests.get(f'{B}/api/trainees', params={'kw': uid}).json()['items']:
+        if t['uid'] == uid:
+            requests.delete(f"{B}/api/trainees/{t['id']}")
+for uid in TEST_TRAINEE_UIDS:
     db_exec('DELETE FROM trainee_level_monthly WHERE trainee_uid=?', (uid,))
     db_exec('DELETE FROM reward_grants WHERE trainee_uid=?', (uid,))
 print('测试数据已清理')

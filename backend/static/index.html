@@ -11,7 +11,7 @@
   <h1>培训师系统</h1>
   <nav id="tabs">
     <button class="tab active" data-tab="bindings">绑定关系</button>
-    <button class="tab" data-tab="uidquery">UID 速查</button>
+    <button class="tab" data-tab="uidquery">结果统计</button>
   </nav>
 </header>
 
@@ -53,53 +53,15 @@
       </div>
     </div>
 
-    <!-- 中间：档案（默认折叠，左培训师右妹妹） -->
+    <!-- 中间：档案入口卡（点击弹窗管理） -->
     <div class="duplex">
-      <div class="card collapsible" id="card-trainers">
-        <div class="card-head clickable" id="trainers-toggle">
-          <h2>培训师档案 <span class="muted" id="trainers-total"></span></h2>
-          <span class="collapse-arrow">▸ 展开</span>
-        </div>
-        <div class="collapse-body hidden">
-          <div class="toolbar">
-            <input id="trainer-kw" type="text" placeholder="搜索 UID / 昵称">
-            <button id="trainer-add" class="btn primary">新增培训师</button>
-          </div>
-          <table id="trainers-table">
-            <thead><tr>
-              <th>UID</th><th>昵称</th><th>大厅</th><th>状态</th><th>名额(用/总)</th><th>操作</th>
-            </tr></thead>
-            <tbody></tbody>
-          </table>
-          <div class="pager" id="trainers-pager"></div>
-        </div>
+      <div class="card entry-card" id="entry-trainers">
+        <h2>培训师档案 <span class="muted" id="trainers-total"></span></h2>
+        <div class="entry-hint">点击查看 / 搜索 / 新增 / 编辑</div>
       </div>
-
-      <div class="card collapsible" id="card-trainees">
-        <div class="card-head clickable" id="trainees-toggle">
-          <h2>妹妹档案 <span class="muted" id="trainees-total"></span></h2>
-          <span class="collapse-arrow">▸ 展开</span>
-        </div>
-        <div class="collapse-body hidden">
-          <div class="toolbar">
-            <input id="trainee-kw" type="text" placeholder="搜索 UID / 昵称">
-            <select id="trainee-status-filter">
-              <option value="">全部状态</option>
-              <option value="active">在读</option>
-              <option value="graduated">毕业</option>
-              <option value="inactive">退出</option>
-            </select>
-            <button id="trainee-import" class="btn">从历史数据导入</button>
-            <button id="trainee-add" class="btn primary">新增妹妹</button>
-          </div>
-          <table id="trainees-table">
-            <thead><tr>
-              <th>UID</th><th>昵称</th><th>状态</th><th>培训师</th><th>姐妹团姐姐</th><th>操作</th>
-            </tr></thead>
-            <tbody></tbody>
-          </table>
-          <div class="pager" id="trainees-pager"></div>
-        </div>
+      <div class="card entry-card" id="entry-trainees">
+        <h2>妹妹档案 <span class="muted" id="trainees-total"></span></h2>
+        <div class="entry-hint">点击查看 / 搜索 / 新增 / 历史导入</div>
       </div>
     </div>
 
@@ -130,10 +92,10 @@
     </div>
   </section>
 
-  <!-- UID 速查 -->
+  <!-- 结果统计 -->
   <section id="tab-uidquery" class="panel">
     <div class="card">
-      <h2>UID 数据速查（本周 vs 上周）</h2>
+      <h2>单人 UID 速查（本周 vs 上周）</h2>
       <div class="bind-form">
         <label>UID
           <input id="uq-uid" type="text" placeholder="输入培训师或妹妹的 UID">
@@ -144,26 +106,11 @@
         <button id="uq-submit" class="btn primary">查询</button>
       </div>
       <div class="muted" style="margin-top:8px">
-        查培训师 UID → 显示名额面板；查妹妹 UID → 显示奖励面板（需已建档）
+        只查这一个人的数据：查培训师 UID → 显示名额面板；查妹妹 UID → 显示奖励面板（需已建档）
       </div>
     </div>
 
-    <!-- 周奖励导出 -->
-    <div class="card">
-      <h2>周奖励导出（XLSX）</h2>
-      <div class="bind-form">
-        <label>开始时间
-          <input id="exp-date" type="date">
-        </label>
-        <button id="exp-trainer" class="btn primary">导出培训师奖励</button>
-        <button id="exp-sister" class="btn">导出三胎奖励</button>
-      </div>
-      <div class="muted" style="margin-top:8px">
-        统计口径：完成任务次数/礼物流水 = 所选日期的<b>上一周</b>，牌子 = 所选日期<b>当周</b>；按当前生效绑定逐人实时查询
-      </div>
-      <div id="exp-status" class="muted" style="margin-top:6px"></div>
-    </div>
-
+    <!-- 名额面板（查培训师时显示） -->
     <div id="slots-panel" class="card hidden">
       <div class="card-head">
         <h2>名额面板 <span id="slots-month" class="muted"></span></h2>
@@ -179,6 +126,7 @@
       <div id="slots-refresh-result" class="muted" style="margin-top:8px"></div>
     </div>
 
+    <!-- 奖励面板（查妹妹时显示） -->
     <div id="rewards-panel" class="card hidden">
       <h2>奖励面板 <span id="rewards-window" class="muted"></span></h2>
       <div id="rewards-binding" class="muted" style="margin-bottom:10px"></div>
@@ -193,8 +141,74 @@
     <div class="card">
       <div id="uq-result"></div>
     </div>
+
+    <!-- 周奖励批量导出 -->
+    <div class="card export-card">
+      <h2>周奖励批量导出（XLSX）</h2>
+      <div class="muted" style="margin-bottom:10px">
+        与上方单人查询无关 —— 导出范围是所选类型下<b>所有当前生效（在档）且奖励窗口未过期</b>的绑定，
+        逐人实时查询后生成表格（每人约 2 次请求，人越多越慢）
+      </div>
+      <div class="bind-form">
+        <label>开始时间
+          <input id="exp-date" type="date">
+        </label>
+        <button id="exp-trainer" class="btn primary">导出培训师奖励</button>
+        <button id="exp-sister" class="btn">导出三胎奖励</button>
+      </div>
+      <div id="exp-status" class="muted" style="margin-top:6px"></div>
+    </div>
   </section>
 </main>
+
+<!-- 培训师档案弹窗 -->
+<div id="trainers-modal" class="modal-mask hidden">
+  <div class="modal xwide">
+    <div class="card-head">
+      <h3>培训师档案 <span class="muted" id="trainers-modal-total"></span></h3>
+      <button class="btn small" data-close="trainers-modal">关闭</button>
+    </div>
+    <div class="toolbar">
+      <input id="trainer-kw" type="text" placeholder="搜索 UID / 昵称">
+      <button id="trainer-add" class="btn primary">新增培训师</button>
+    </div>
+    <table id="trainers-table">
+      <thead><tr>
+        <th>UID</th><th>昵称</th><th>大厅</th><th>状态</th><th>名额(用/总)</th><th>备注</th><th>操作</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="pager" id="trainers-pager"></div>
+  </div>
+</div>
+
+<!-- 妹妹档案弹窗 -->
+<div id="trainees-modal" class="modal-mask hidden">
+  <div class="modal xwide">
+    <div class="card-head">
+      <h3>妹妹档案 <span class="muted" id="trainees-modal-total"></span></h3>
+      <button class="btn small" data-close="trainees-modal">关闭</button>
+    </div>
+    <div class="toolbar">
+      <input id="trainee-kw" type="text" placeholder="搜索 UID / 昵称">
+      <select id="trainee-status-filter">
+        <option value="">全部状态</option>
+        <option value="active">在读</option>
+        <option value="graduated">毕业</option>
+        <option value="inactive">退出</option>
+      </select>
+      <button id="trainee-import" class="btn">从历史数据导入</button>
+      <button id="trainee-add" class="btn primary">新增妹妹</button>
+    </div>
+    <table id="trainees-table">
+      <thead><tr>
+        <th>UID</th><th>昵称</th><th>大厅</th><th>状态</th><th>培训师</th><th>姐妹团姐姐</th><th>备注</th><th>操作</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="pager" id="trainees-pager"></div>
+  </div>
+</div>
 
 <!-- 档案编辑弹窗 -->
 <div id="person-modal" class="modal-mask hidden">

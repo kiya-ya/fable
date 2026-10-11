@@ -743,8 +743,8 @@ def export_rewards():
     last_range = (last_monday.strftime(fmt), (last_monday + timedelta(days=6)).strftime(fmt))
 
     conn = get_db()
-    bindings = conn.execute(
-        '''SELECT b.id, tr.uid AS side_uid, tr.nickname AS side_nickname,
+    all_bindings = conn.execute(
+        '''SELECT b.id, b.bound_at, tr.uid AS side_uid, tr.nickname AS side_nickname,
                   te.uid AS trainee_uid, te.nickname AS trainee_nickname, te.hall_name
            FROM bindings b
            JOIN trainers tr ON tr.id = b.trainer_id
@@ -752,6 +752,9 @@ def export_rewards():
            WHERE b.bind_type=? AND b.unbound_at IS NULL
            ORDER BY b.bound_at''', (bind_type,)).fetchall()
     conn.close()
+    # 只导「在档且奖励窗口未过期」的绑定（窗口 = 绑定次周周一起整四周）
+    bindings = [b for b in all_bindings
+                if reward_window_status(b['bound_at'])[2] != 'expired']
 
     crawler = UIDCrawler()
     healed = False
@@ -802,7 +805,7 @@ def export_rewards():
     ws.append([])  # 与参考文件一致：前两行留空，表头在第 3 行
     ws.append([])
     ws.append([f'{side}UID', f'{side}昵称', '妹妹UID', '妹妹昵称', '所属大厅',
-               '完成任务次数(上周)', '奖励', '礼物流水(上周)', '牌子(当周)', '奖励'])
+               '完成任务次数', '奖励', '礼物流水', '牌子', '奖励'])
     ws.append([])
     for row in rows:
         ws.append(row)

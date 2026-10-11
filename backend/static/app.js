@@ -420,7 +420,7 @@ const PERSON_CONF = {
   trainers: { url: '/api/trainers', kw: '#trainer-kw', table: '#trainers-table', statuses: TRAINER_STATUS },
   trainees: { url: '/api/trainees', kw: '#trainee-kw', table: '#trainees-table', statuses: TRAINEE_STATUS },
 };
-const listState = { trainers: { page: 1, loaded: false }, trainees: { page: 1, loaded: false } };
+const listState = { trainers: { page: 1 }, trainees: { page: 1 } };
 
 async function refreshTotals() {
   try {
@@ -429,25 +429,22 @@ async function refreshTotals() {
     ]);
     $('#trainers-total').textContent = `（共 ${t.total} 人）`;
     $('#trainees-total').textContent = `（共 ${s.total} 人）`;
+    $('#trainers-modal-total').textContent = `（共 ${t.total} 人）`;
+    $('#trainees-modal-total').textContent = `（共 ${s.total} 人）`;
   } catch (e) { /* 计数失败不影响使用 */ }
 }
 
-function setupCollapsible(kind) {
-  $(`#${kind}-toggle`).addEventListener('click', () => {
-    const card = $(`#card-${kind}`);
-    const body = card.querySelector('.collapse-body');
-    const arrow = card.querySelector('.collapse-arrow');
-    const opening = body.classList.contains('hidden');
-    body.classList.toggle('hidden');
-    arrow.textContent = opening ? '▾ 收起' : '▸ 展开';
-    if (opening && !listState[kind].loaded) {
-      listState[kind].loaded = true;
-      kind === 'trainers' ? loadTrainers() : loadTrainees();
-    }
-  });
-}
-setupCollapsible('trainers');
-setupCollapsible('trainees');
+// 档案弹窗开关（悬浮于一级界面之上）
+$('#entry-trainers').addEventListener('click', () => {
+  $('#trainers-modal').classList.remove('hidden');
+  loadTrainers(1);
+});
+$('#entry-trainees').addEventListener('click', () => {
+  $('#trainees-modal').classList.remove('hidden');
+  loadTrainees(1);
+});
+$$('[data-close]').forEach((btn) =>
+  btn.addEventListener('click', () => $(`#${btn.dataset.close}`).classList.add('hidden')));
 
 async function loadTrainers(page) {
   if (page) listState.trainers.page = page;
@@ -458,7 +455,7 @@ async function loadTrainers(page) {
   const data = await api(`${conf.url}?${params}`);
   const tbody = $(`${conf.table} tbody`);
   if (!data.items.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty">暂无数据</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">暂无数据</td></tr>';
   } else {
     tbody.innerHTML = data.items.map((t) => `
       <tr>
@@ -467,6 +464,7 @@ async function loadTrainers(page) {
         <td>${esc(t.hall_name || '')}</td>
         <td><span class="tag ${t.status}">${conf.statuses[t.status] || t.status}</span></td>
         <td>${t.active_trainee_count} / ${t.total_slots}${t.active_trainee_count > t.total_slots ? ' <span class="tag over">超</span>' : ''}</td>
+        <td>${esc(t.note || '')}</td>
         <td>
           <button class="btn small" onclick="gotoUidQuery('${esc(t.uid)}')">速查</button>
           <button class="btn small" onclick='openPersonModal("trainers", ${JSON.stringify(t)})'>编辑</button>
@@ -488,15 +486,17 @@ async function loadTrainees(page) {
   const data = await api(`${conf.url}?${params}`);
   const tbody = $(`${conf.table} tbody`);
   if (!data.items.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty">暂无数据</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">暂无数据</td></tr>';
   } else {
     tbody.innerHTML = data.items.map((t) => `
       <tr>
         <td>${esc(t.uid)}</td>
         <td>${esc(t.nickname)}</td>
+        <td>${esc(t.hall_name || '')}</td>
         <td><span class="tag ${t.status}">${conf.statuses[t.status] || t.status}</span></td>
         <td>${t.trainer_nickname ? `${esc(t.trainer_nickname)}（${esc(t.trainer_uid)}）` : '<span class="muted">—</span>'}</td>
         <td>${t.sister_nickname ? `${esc(t.sister_nickname)}（${esc(t.sister_uid)}）` : '<span class="muted">—</span>'}</td>
+        <td>${esc(t.note || '')}</td>
         <td>
           <button class="btn small" onclick="gotoUidQuery('${esc(t.uid)}')">速查</button>
           <button class="btn small" onclick='openPersonModal("trainees", ${JSON.stringify(t)})'>编辑</button>
@@ -509,9 +509,9 @@ async function loadTrainees(page) {
 
 async function loadBindingsTab() {
   await Promise.all([loadBindings(1), refreshTotals()]);
-  // 已展开的档案卡同步刷新
-  if (listState.trainers.loaded && !$('#card-trainers .collapse-body').classList.contains('hidden')) loadTrainers();
-  if (listState.trainees.loaded && !$('#card-trainees .collapse-body').classList.contains('hidden')) loadTrainees();
+  // 已打开的档案弹窗同步刷新
+  if (!$('#trainers-modal').classList.contains('hidden')) loadTrainers();
+  if (!$('#trainees-modal').classList.contains('hidden')) loadTrainees();
 }
 
 let searchTimer = null;
