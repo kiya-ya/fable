@@ -85,6 +85,10 @@ input:focus, select:focus { border-color: #3b82f6; }
   gap: 10px; margin-top: 10px;
 }
 
+/* 奖励面板多绑定分组 */
+.reward-block { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 14px; margin-top: 12px; }
+.reward-block-head { font-size: 13px; color: #4b5563; margin-bottom: 8px; }
+
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #e5e7eb; }
 th { color: #6b7280; font-weight: 500; font-size: 13px; background: #f9fafb; }

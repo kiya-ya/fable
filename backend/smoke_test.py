@@ -164,7 +164,9 @@ print('== 奖励窗口（次周周一起整四周） ==')
 bound_at = db_one("SELECT bound_at FROM bindings WHERE trainee_id=? AND bind_type='trainer' AND unbound_at IS NULL", (te_a,))[0]
 ws, we = expected_window(bound_at)
 r = requests.get(f'{B}/api/trainees/{te_a}/rewards')
-rw = r.json()['rewards_panel']
+pa = r.json()['rewards_panel']['panels']
+check('甲的奖励面板=培训师绑定', len(pa) == 1 and pa[0]['bind_type'] == 'trainer' and pa[0]['side_label'] == '培训师', str(pa))
+rw = pa[0]
 check('窗口起点=次周周一', rw['window_start'] == ws.strftime('%Y-%m-%d'), f"{rw['window_start']} != {ws.date()}")
 check('窗口终点=起点+28天', rw['window_end'] == we.strftime('%Y-%m-%d'), f"{rw['window_end']} != {we.date()}")
 if datetime.now() < ws:
@@ -172,8 +174,7 @@ if datetime.now() < ws:
           and all(x['status'] != 'pending' for x in rw['rewards']), str(rw['window_status']))
     db_exec("UPDATE bindings SET bound_at=? WHERE trainee_id=? AND bind_type='trainer' AND unbound_at IS NULL",
             ((datetime.utcnow() - timedelta(days=10)).strftime('%Y-%m-%d %H:%M:%S'), te_a))
-    r = requests.get(f'{B}/api/trainees/{te_a}/rewards')
-    rw = r.json()['rewards_panel']
+    rw = requests.get(f'{B}/api/trainees/{te_a}/rewards').json()['rewards_panel']['panels'][0]
 check('进窗口后 in_window', rw['window_status'] == 'in_window' and rw['days_left'] is not None, str(rw['window_status']))
 st = {x['key']: x['status'] for x in rw['rewards']}
 check('金牌+任务7次 → 四档待发放', st.get('task6_bronze') == 'pending' and st.get('lv_junior_silver') == 'pending'
@@ -185,16 +186,28 @@ check('标记已发', r.ok, r.text)
 r = requests.post(f'{B}/api/rewards/{grant_id}/grant')
 check('重复标记 404', r.status_code == 404, f'got {r.status_code}')
 r = requests.get(f'{B}/api/trainees/{te_a}/rewards')
-st = {x['key']: x['status'] for x in r.json()['rewards_panel']['rewards']}
+st = {x['key']: x['status'] for x in r.json()['rewards_panel']['panels'][0]['rewards']}
 check('金牌档已发放且不重生成', st.get('lv_gold') == 'granted', str(st))
 r = requests.post(f'{B}/api/rewards/{grant_id}/revoke')
 check('撤销发放', r.ok, r.text)
+
+print('== 姐妹团绑定同样产生奖励 ==')
+db_exec('''INSERT INTO trainee_level_monthly (trainee_uid, month, best_level, best_rank, last_week_level, last_daily_task_count, last_queried_at)
+           VALUES ('80002', ?, '银牌', 3, '银牌', 7, ?)''', (MONTH, NOW_S))
+db_exec("UPDATE bindings SET bound_at=? WHERE trainee_id=? AND bind_type='sister' AND unbound_at IS NULL",
+        ((datetime.utcnow() - timedelta(days=10)).strftime('%Y-%m-%d %H:%M:%S'), te_b))
+r = requests.get(f'{B}/api/trainees/{te_b}/rewards')
+pb = r.json()['rewards_panel']['panels']
+check('乙的奖励面板=姐妹团绑定', len(pb) == 1 and pb[0]['bind_type'] == 'sister' and pb[0]['side_label'] == '姐姐', str(pb))
+stb = {x['key']: x['status'] for x in pb[0]['rewards']}
+check('姐妹团银牌+任务7次 → 三档待发放', stb.get('task6_bronze') == 'pending' and stb.get('lv_junior_silver') == 'pending'
+      and stb.get('lv_silver') == 'pending' and stb.get('lv_gold') == 'ineligible', str(stb))
 
 print('== 窗口过期不生成 pending ==')
 db_exec("UPDATE bindings SET bound_at=? WHERE trainee_id=? AND unbound_at IS NULL",
         ((datetime.utcnow() - timedelta(days=60)).strftime('%Y-%m-%d %H:%M:%S'), te_c))
 r = requests.get(f'{B}/api/trainees/{te_c}/rewards')
-rw = r.json()['rewards_panel']
+rw = r.json()['rewards_panel']['panels'][0]
 check('丙窗口已过期 expired', rw['window_status'] == 'expired', str(rw['window_status']))
 check('过期后无 pending 生成', all(x['status'] != 'pending' for x in rw['rewards']), str([x['status'] for x in rw['rewards']]))
 

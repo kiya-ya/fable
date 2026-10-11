@@ -107,29 +107,28 @@ def reward_window_status(bound_at_str):
 
 
 def sync_pending_rewards(conn, trainee_id):
-    """为生效绑定生成 pending 奖励（奖励窗口内；已存在则跳过）"""
-    b = conn.execute(
+    """为每条生效绑定（培训师/姐妹团均可）生成 pending 奖励（奖励窗口内；已存在则跳过）"""
+    bindings = conn.execute(
         '''SELECT b.*, t.uid AS trainee_uid FROM bindings b JOIN trainees t ON t.id=b.trainee_id
-           WHERE b.trainee_id=? AND b.bind_type='trainer' AND b.unbound_at IS NULL''', (trainee_id,)).fetchone()
-    if not b:
-        return
-    if reward_window_status(b['bound_at'])[2] != 'in_window':
-        return
-    rec = conn.execute(
-        'SELECT * FROM trainee_level_monthly WHERE trainee_uid=? AND month=?',
-        (b['trainee_uid'], _current_month())).fetchone()
-    best_rank = rec['best_rank'] if rec else 0
-    tasks = rec['last_daily_task_count'] if rec else 0
-    for tier in REWARD_TIERS:
-        eligible = best_rank >= tier['min_rank']
-        if tier.get('need_tasks'):
-            eligible = eligible and tasks >= 6
-        if eligible:
-            conn.execute(
-                '''INSERT OR IGNORE INTO reward_grants
-                   (binding_id, trainee_uid, trainer_id, reward_key, reward_label, amount)
-                   VALUES (?, ?, ?, ?, ?, ?)''',
-                (b['id'], b['trainee_uid'], b['trainer_id'], tier['key'], tier['label'], tier['amount']))
+           WHERE b.trainee_id=? AND b.unbound_at IS NULL''', (trainee_id,)).fetchall()
+    for b in bindings:
+        if reward_window_status(b['bound_at'])[2] != 'in_window':
+            continue
+        rec = conn.execute(
+            'SELECT * FROM trainee_level_monthly WHERE trainee_uid=? AND month=?',
+            (b['trainee_uid'], _current_month())).fetchone()
+        best_rank = rec['best_rank'] if rec else 0
+        tasks = rec['last_daily_task_count'] if rec else 0
+        for tier in REWARD_TIERS:
+            eligible = best_rank >= tier['min_rank']
+            if tier.get('need_tasks'):
+                eligible = eligible and tasks >= 6
+            if eligible:
+                conn.execute(
+                    '''INSERT OR IGNORE INTO reward_grants
+                       (binding_id, trainee_uid, trainer_id, reward_key, reward_label, amount)
+                       VALUES (?, ?, ?, ?, ?, ?)''',
+                    (b['id'], b['trainee_uid'], b['trainer_id'], tier['key'], tier['label'], tier['amount']))
     conn.commit()
 
 
@@ -170,46 +169,47 @@ def build_slots_panel(conn, trainer_id):
 
 
 def build_rewards_panel(conn, trainee_id):
-    """奖励面板：绑定窗口 + 五档奖励状态（未达标/待发放/已发放）"""
+    """奖励面板：每条生效绑定（培训师/姐妹团）各一组窗口 + 五档奖励状态"""
     t = conn.execute('SELECT * FROM trainees WHERE id=?', (trainee_id,)).fetchone()
     if not t:
         return None
-    b = conn.execute(
-        '''SELECT b.*, tr.nickname AS trainer_nickname, tr.uid AS trainer_uid
+    bindings = conn.execute(
+        '''SELECT b.*, tr.nickname AS side_nickname, tr.uid AS side_uid
            FROM bindings b JOIN trainers tr ON tr.id = b.trainer_id
-           WHERE b.trainee_id=? AND b.bind_type='trainer' AND b.unbound_at IS NULL''', (trainee_id,)).fetchone()
-    grants = {g['reward_key']: g for g in conn.execute(
-        'SELECT * FROM reward_grants WHERE trainee_uid=? ORDER BY id', (t['uid'],)).fetchall()}
+           WHERE b.trainee_id=? AND b.unbound_at IS NULL
+           ORDER BY b.bind_type, b.bound_at''', (trainee_id,)).fetchall()
+    grants = conn.execute(
+        'SELECT * FROM reward_grants WHERE trainee_uid=? ORDER BY id', (t['uid'],)).fetchall()
 
-    panel = {
-        'trainee': {'id': t['id'], 'uid': t['uid'], 'nickname': t['nickname']},
-        'window_weeks': REWARD_WINDOW_WEEKS,
-        'binding': None, 'window_status': None,
-        'window_start': None, 'window_end': None, 'days_left': None,
-        'rewards': [],
-    }
-    if b:
+    panels = []
+    for b in bindings:
         start, end, status = reward_window_status(b['bound_at'])
-        panel.update({
+        bg = {g['reward_key']: g for g in grants if g['binding_id'] == b['id']}
+        panels.append({
+            'bind_type': b['bind_type'],
+            'type_label': '姐妹团三胎' if b['bind_type'] == 'sister' else '培训师',
+            'side_label': '姐姐' if b['bind_type'] == 'sister' else '培训师',
             'binding': {
                 'id': b['id'], 'bound_at': b['bound_at'],
-                'trainer_nickname': b['trainer_nickname'], 'trainer_uid': b['trainer_uid'],
+                'side_nickname': b['side_nickname'], 'side_uid': b['side_uid'],
             },
             'window_status': status,
             'in_window': status == 'in_window',
             'window_start': start.strftime('%Y-%m-%d'),
             'window_end': end.strftime('%Y-%m-%d'),
             'days_left': max((end - datetime.now()).days, 0) if status == 'in_window' else None,
+            'rewards': [{
+                'key': tier['key'], 'label': tier['label'], 'amount': tier['amount'],
+                'status': bg[tier['key']]['status'] if tier['key'] in bg else 'ineligible',
+                'grant_id': bg[tier['key']]['id'] if tier['key'] in bg else None,
+                'granted_at': bg[tier['key']]['granted_at'] if tier['key'] in bg else None,
+            } for tier in REWARD_TIERS],
         })
-    for tier in REWARD_TIERS:
-        g = grants.get(tier['key'])
-        panel['rewards'].append({
-            'key': tier['key'], 'label': tier['label'], 'amount': tier['amount'],
-            'status': g['status'] if g else 'ineligible',   # granted / pending / ineligible
-            'grant_id': g['id'] if g else None,
-            'granted_at': g['granted_at'] if g else None,
-        })
-    return panel
+    return {
+        'trainee': {'id': t['id'], 'uid': t['uid'], 'nickname': t['nickname']},
+        'window_weeks': REWARD_WINDOW_WEEKS,
+        'panels': panels,
+    }
 
 
 # ────────────────────────────────────────────── 工具

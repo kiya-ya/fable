@@ -182,19 +182,22 @@ const REWARD_STATUS = {
 
 function renderRewardsPanel(p) {
   $('#rewards-window').textContent = `（${esc(p.trainee.nickname)} · 奖励窗口 ${p.window_weeks} 周）`;
-  if (p.binding) {
-    const statusText = {
-      not_started: `<span class="tag graduated">未开始（${esc(p.window_start)} 起）</span>`,
-      in_window: `剩余 <b>${p.days_left}</b> 天`,
-      expired: '<span class="tag over">已过奖励有效期</span>',
-    }[p.window_status];
-    $('#rewards-binding').innerHTML =
-      `当前绑定：培训师 <b>${esc(p.binding.trainer_nickname)}</b>（${esc(p.binding.trainer_uid)}）｜ ` +
-      `绑定时间 ${esc(p.binding.bound_at)} ｜ 奖励窗口 ${esc(p.window_start)} ~ ${esc(p.window_end)} ｜ ${statusText}`;
+  const box = $('#rewards-blocks');
+  if (!p.panels.length) {
+    box.innerHTML = '<div class="empty">当前无生效绑定（培训师或姐妹团三胎均可产生奖励）</div>';
   } else {
-    $('#rewards-binding').textContent = '当前无生效的培训师绑定，无法产生奖励';
+    box.innerHTML = p.panels.map(renderRewardBlock).join('');
   }
-  $('#rewards-table tbody').innerHTML = p.rewards.map((r) => {
+  $('#rewards-panel').classList.remove('hidden');
+}
+
+function renderRewardBlock(pb) {
+  const statusText = {
+    not_started: `<span class="tag graduated">未开始（${esc(pb.window_start)} 起）</span>`,
+    in_window: `剩余 <b>${pb.days_left}</b> 天`,
+    expired: '<span class="tag over">已过奖励有效期</span>',
+  }[pb.window_status];
+  const rows = pb.rewards.map((r) => {
     const st = REWARD_STATUS[r.status];
     const action = r.status === 'pending'
       ? `<button class="btn small primary" onclick="grantReward(${r.grant_id})">标记已发</button>`
@@ -209,7 +212,17 @@ function renderRewardsPanel(p) {
       <td>${action}</td>
     </tr>`;
   }).join('');
-  $('#rewards-panel').classList.remove('hidden');
+  return `<div class="reward-block">
+    <div class="reward-block-head">
+      <span class="tag ${pb.bind_type === 'sister' ? 'graduated' : 'active'}">${esc(pb.type_label)}</span>
+      ${esc(pb.side_label)} <b>${esc(pb.binding.side_nickname)}</b>（${esc(pb.binding.side_uid)}）
+      ｜ 绑定 ${esc(pb.binding.bound_at)} ｜ 窗口 ${esc(pb.window_start)} ~ ${esc(pb.window_end)} ｜ ${statusText}
+    </div>
+    <table>
+      <thead><tr><th>奖励档位</th><th>金额（×2 双人份）</th><th>状态</th><th>发放时间</th><th>操作</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
 }
 
 async function grantReward(id) {
