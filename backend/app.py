@@ -57,6 +57,43 @@ def _current_month():
     return datetime.now().strftime('%Y-%m')
 
 
+def _last_month():
+    first = datetime.now().replace(day=1)
+    return (first - timedelta(days=1)).strftime('%Y-%m')
+
+
+def get_effective_levels(conn, uids):
+    """名额用有效等级：当月有记录用当月最高；当月无记录（月初真空期）用上月最高兜底。
+    返回 {uid: {'best_level', 'best_rank', 'last_queried_at', 'from_last_month'}}"""
+    if not uids:
+        return {}
+    month, last = _current_month(), _last_month()
+    marks = ','.join('?' * len(uids))
+    rows = conn.execute(
+        f'''SELECT trainee_uid, month, best_level, best_rank, last_queried_at
+            FROM trainee_level_monthly WHERE trainee_uid IN ({marks}) AND month IN (?, ?)''',
+        (*uids, month, last)).fetchall()
+    by_uid = {}
+    for r in rows:
+        cur = by_uid.get(r['trainee_uid'], {})
+        if r['month'] == month:
+            cur['this'] = r
+        else:
+            cur['last'] = r
+        by_uid[r['trainee_uid']] = cur
+    out = {}
+    for uid in uids:
+        cur = by_uid.get(uid, {})
+        rec = cur.get('this') or cur.get('last')
+        if rec:
+            out[uid] = {
+                'best_level': rec['best_level'], 'best_rank': rec['best_rank'],
+                'last_queried_at': rec['last_queried_at'],
+                'from_last_month': 'this' not in cur,
+            }
+    return out
+
+
 def judge_retained(data):
     """留存判定：排档所属大厅 + 当周队长等级 均为空 → 未留存（可判团队解散）
     （权限所属大厅有滞后，不参与判定）空值口径：None / '' / '-'"""
@@ -185,11 +222,15 @@ def sync_pending_rewards(conn, trainee_id):
     for b in bindings:
         if reward_window_status(b['bound_at'])[2] != 'in_window':
             continue
-        rec = conn.execute(
-            'SELECT * FROM trainee_level_monthly WHERE trainee_uid=? AND month=?',
-            (b['trainee_uid'], _current_month())).fetchone()
-        best_rank = rec['best_rank'] if rec else 0
-        tasks = rec['last_daily_task_count'] if rec else 0
+        # 等级达标按「绑定当月起至今的最高」算（覆盖月末绑定、窗口跨月的情况）；
+        # 任务次数取最近一次查询值（任务按周重置）
+        bind_month = (_parse_ts(b['bound_at']) + timedelta(hours=8)).strftime('%Y-%m')
+        recs = conn.execute(
+            'SELECT best_rank, last_daily_task_count, last_queried_at FROM trainee_level_monthly WHERE trainee_uid=? AND month>=?',
+            (b['trainee_uid'], bind_month)).fetchall()
+        best_rank = max((r['best_rank'] for r in recs), default=0)
+        tasks = next((r['last_daily_task_count'] for r in sorted(
+            recs, key=lambda x: x['last_queried_at'] or '', reverse=True) if r['last_daily_task_count'] is not None), 0)
         for tier in REWARD_TIERS:
             eligible = best_rank >= tier['min_rank']
             if tier.get('need_tasks'):
@@ -204,28 +245,32 @@ def sync_pending_rewards(conn, trainee_id):
 
 
 def build_slots_panel(conn, trainer_id):
-    """名额面板：基础名额 + 生效绑定学员当月等级贡献，上限 5"""
+    """名额面板：基础名额 + 生效绑定学员有效等级贡献（当月最高，月初无记录用上月兜底），上限 5"""
     tr = conn.execute('SELECT * FROM trainers WHERE id=?', (trainer_id,)).fetchone()
     if not tr:
         return None
     month = _current_month()
     rows = conn.execute(
-        '''SELECT t.uid, t.nickname, b.bound_at,
-                  m.best_level, m.best_rank, m.last_queried_at
+        '''SELECT t.uid, t.nickname, b.bound_at
            FROM bindings b JOIN trainees t ON t.id = b.trainee_id
-           LEFT JOIN trainee_level_monthly m ON m.trainee_uid = t.uid AND m.month = ?
            WHERE b.trainer_id = ? AND b.bind_type='trainer' AND b.unbound_at IS NULL
-           ORDER BY b.bound_at''', (month, trainer_id)).fetchall()
+           ORDER BY b.bound_at''', (trainer_id,)).fetchall()
+    levels = get_effective_levels(conn, [r['uid'] for r in rows])
     trainees = []
     extra = 0
     for r in rows:
-        rank = r['best_rank'] or 0
+        lv = levels.get(r['uid'])
+        rank = lv['best_rank'] if lv else 0
         plus = slot_plus(rank)
         extra += plus
+        label = lv['best_level'] if lv else '（本月未查询）'
+        if lv and lv['from_last_month']:
+            label += '（上月兜底）'
         trainees.append({
             'uid': r['uid'], 'nickname': r['nickname'], 'bound_at': r['bound_at'],
-            'best_level': r['best_level'] or '（本月未查询）', 'slot_plus': plus,
-            'last_queried_at': r['last_queried_at'],
+            'best_level': label, 'slot_plus': plus,
+            'from_last_month': lv['from_last_month'] if lv else False,
+            'last_queried_at': lv['last_queried_at'] if lv else None,
         })
     base = tr['base_slots']
     total = min(base + extra, SLOT_CAP)
@@ -373,19 +418,19 @@ def list_trainers():
     rows = conn.execute(
         f'SELECT * FROM trainers {where} ORDER BY id DESC LIMIT ? OFFSET ?',
         params + [page_size, (page - 1) * page_size]).fetchall()
-    # 附带当前带的妹妹数与名额（只统计培训师类型绑定；当月等级贡献）
+    # 附带当前带的妹妹数与名额（只统计培训师类型绑定；有效等级 = 当月最高，月初用上月兜底）
     counts = dict(conn.execute(
         "SELECT trainer_id, COUNT(*) FROM bindings WHERE unbound_at IS NULL AND bind_type='trainer' GROUP BY trainer_id"
     ).fetchall())
-    month = _current_month()
-    plus_rows = conn.execute(
-        '''SELECT b.trainer_id, m.best_rank FROM bindings b
+    bound_rows = conn.execute(
+        '''SELECT b.trainer_id, t.uid FROM bindings b
            JOIN trainees t ON t.id = b.trainee_id
-           LEFT JOIN trainee_level_monthly m ON m.trainee_uid = t.uid AND m.month = ?
-           WHERE b.unbound_at IS NULL AND b.bind_type='trainer' ''', (month,)).fetchall()
+           WHERE b.unbound_at IS NULL AND b.bind_type='trainer' ''').fetchall()
+    levels = get_effective_levels(conn, [r['uid'] for r in bound_rows])
     extras = {}
-    for r in plus_rows:
-        extras[r['trainer_id']] = extras.get(r['trainer_id'], 0) + slot_plus(r['best_rank'] or 0)
+    for r in bound_rows:
+        lv = levels.get(r['uid'])
+        extras[r['trainer_id']] = extras.get(r['trainer_id'], 0) + slot_plus(lv['best_rank'] if lv else 0)
     conn.close()
     items = rows_to_dicts(rows)
     for it in items:

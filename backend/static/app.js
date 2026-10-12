@@ -21,12 +21,20 @@ async function api(url, options = {}) {
 }
 
 let toastTimer = null;
-function toast(msg, isError = false) {
+function toast(msg, isError = false, action = null) {
   const el = $('#toast');
-  el.textContent = msg;
+  el.innerHTML = esc(msg) + (action
+    ? ` <a href="javascript:void(0)" id="toast-action" style="color:#fff;text-decoration:underline;font-weight:600;margin-left:6px">${esc(action.label)}</a>`
+    : '');
   el.className = isError ? 'error' : '';
+  if (action) {
+    $('#toast-action').addEventListener('click', () => {
+      el.classList.add('hidden');
+      action.fn();
+    });
+  }
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.add('hidden'), 3000);
+  toastTimer = setTimeout(() => el.classList.add('hidden'), action ? 8000 : 3000);
 }
 
 const TRAINER_STATUS = { active: '活跃', inactive: '退出' };
@@ -378,7 +386,18 @@ async function doBind(payload) {
   try {
     const r = await api('/api/bindings/by-uid', { method: 'POST', body: payload });
     const created = [r.trainer_created && '左侧', r.trainee_created && '妹妹'].filter(Boolean);
-    toast(`${r.rebound ? '换绑' : '绑定'}成功（${BIND_TYPE[r.bind_type]}）${created.length ? `，自动建档：${created.join('、')}` : ''}${r.gate_warn ? `；注意：${r.gate_msg}` : ''}`, !!r.gate_warn);
+    toast(`${r.rebound ? '换绑' : '绑定'}成功（${BIND_TYPE[r.bind_type]}）${created.length ? `，自动建档：${created.join('、')}` : ''}${r.gate_warn ? `；注意：${r.gate_msg}` : ''}`, !!r.gate_warn, {
+      label: '撤销',
+      fn: async () => {
+        try {
+          await api(`/api/bindings/${r.id}/unbind`, { method: 'POST' });
+          toast('已撤销刚才的绑定');
+          loadBindingsTab();
+        } catch (e) {
+          toast(e.message, true);
+        }
+      },
+    });
     bindState.trainer = bindState.trainee = null;
     $('#bind-trainer-uid').value = '';
     $('#bind-trainee-uid').value = '';
