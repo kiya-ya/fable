@@ -207,6 +207,10 @@ function renderRewardBlock(pb) {
     in_window: `剩余 <b>${pb.days_left}</b> 天`,
     expired: '<span class="tag over">已过奖励有效期</span>',
   }[pb.window_status];
+  const pendingCount = pb.rewards.filter((r) => r.status === 'pending').length;
+  const grantAllBtn = pendingCount > 0
+    ? `<button class="btn small primary" onclick="grantAllRewards(${pb.binding.id})">全部标记已发（${pendingCount} 档）</button>`
+    : '';
   const rows = pb.rewards.map((r) => {
     const st = REWARD_STATUS[r.status];
     const action = r.status === 'pending'
@@ -227,12 +231,24 @@ function renderRewardBlock(pb) {
       <span class="tag ${pb.bind_type === 'sister' ? 'graduated' : 'active'}">${esc(pb.type_label)}</span>
       ${esc(pb.side_label)} <b>${esc(pb.binding.side_nickname)}</b>（${esc(pb.binding.side_uid)}）
       ｜ 绑定 ${esc(pb.binding.bound_at)} ｜ 窗口 ${esc(pb.window_start)} ~ ${esc(pb.window_end)} ｜ ${statusText}
+      <span style="float:right">${grantAllBtn}</span>
     </div>
     <table>
       <thead><tr><th>奖励档位</th><th>金额（×2 双人份）</th><th>状态</th><th>发放时间</th><th>操作</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
   </div>`;
+}
+
+async function grantAllRewards(bindingId) {
+  if (!confirm('确认将该绑定的全部待发放奖励标记为已发？')) return;
+  try {
+    const r = await api('/api/rewards/grant-all', { method: 'POST', body: { binding_id: bindingId } });
+    toast(`已标记 ${r.granted} 档为已发放`);
+    refreshRewardsPanel();
+  } catch (e) {
+    toast(e.message, true);
+  }
 }
 
 async function grantReward(id) {

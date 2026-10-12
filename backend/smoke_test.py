@@ -197,6 +197,16 @@ check('金牌档已发放且不重生成', st.get('lv_gold') == 'granted', str(s
 r = requests.post(f'{B}/api/rewards/{grant_id}/revoke')
 check('撤销发放', r.ok, r.text)
 
+print('== 一键全部标记已发 ==')
+bid_a = db_one("SELECT id FROM bindings WHERE trainee_id=? AND bind_type='trainer' AND unbound_at IS NULL", (te_a,))[0]
+r = requests.post(f'{B}/api/rewards/grant-all', json={'binding_id': bid_a})
+check('grant-all 返回发放数量', r.ok and r.json()['granted'] == 4, r.text)
+r = requests.get(f'{B}/api/trainees/{te_a}/rewards')
+st = {x['key']: x['status'] for x in r.json()['rewards_panel']['panels'][0]['rewards']}
+check('四档全部已发放', all(st.get(k) == 'granted' for k in ('task6_bronze', 'lv_junior_silver', 'lv_silver', 'lv_gold')), str(st))
+r = requests.post(f'{B}/api/rewards/grant-all', json={'binding_id': bid_a})
+check('重复 grant-all 幂等 0 档', r.ok and r.json()['granted'] == 0, r.text)
+
 print('== 姐妹团绑定同样产生奖励 ==')
 db_exec('''INSERT INTO trainee_level_monthly (trainee_uid, month, best_level, best_rank, last_week_level, last_daily_task_count, last_queried_at)
            VALUES ('80002', ?, '银牌', 3, '银牌', 7, ?)''', (MONTH, NOW_S))

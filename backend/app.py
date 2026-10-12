@@ -57,14 +57,13 @@ def _current_month():
 
 
 def judge_retained(data):
-    """留存判定：排档所属大厅 / 权限所属大厅 / 当周队长等级 全部为空 → 未留存（可判团队解散）
-    空值口径：None / '' / '-'"""
+    """留存判定：排档所属大厅 + 当周队长等级 均为空 → 未留存（可判团队解散）
+    （权限所属大厅有滞后，不参与判定）空值口径：None / '' / '-'"""
     if not data.get('found'):
         return None
     def empty(v):
         return v is None or str(v).strip() in ('', '-')
-    return not (empty(data.get('schedule_hall')) and empty(data.get('auth_hall'))
-                and empty(data.get('week_level')))
+    return not (empty(data.get('schedule_hall')) and empty(data.get('week_level')))
 
 
 def auto_dissolve_trainee(conn, trainee_uid):
@@ -959,6 +958,22 @@ def trainee_rewards(tid):
     return ok({'rewards_panel': panel})
 
 
+@app.post('/api/rewards/grant-all')
+def grant_all_rewards():
+    """一键标记某条绑定的全部待发放奖励为已发"""
+    data = request.get_json(force=True)
+    binding_id = data.get('binding_id')
+    if not binding_id:
+        return err('binding_id 不能为空')
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE reward_grants SET status='granted', granted_at=CURRENT_TIMESTAMP WHERE binding_id=? AND status='pending'",
+        (binding_id,))
+    conn.commit()
+    conn.close()
+    return ok({'granted': cur.rowcount})
+
+
 @app.post('/api/rewards/<int:rid>/grant')
 def grant_reward(rid):
     conn = get_db()
@@ -1019,7 +1034,7 @@ def uid_query():
         retained = judge_retained(week_data)
         payload['retention'] = {
             'retained': retained,
-            'msg': '留存正常' if retained else '未留存：排档大厅 / 权限大厅 / 当周等级均为空，可判定团队解散',
+            'msg': '留存正常' if retained else '未留存：排档大厅 / 当周等级均为空，可判定团队解散',
         }
     conn = get_db()
     try:
