@@ -3,6 +3,7 @@ data/login_credentials.json
 data/cookie.json
 data/cookie_bigdata.json
 data/keepalive_status.json
+data/weekly_refresh_status.json
 
 # 数据库与日志
 *.db
