@@ -267,6 +267,8 @@ check('过期绑定不出现在导出（80003 不在其中）', all(str(row[2]) 
 print('== UID 速查 ==')
 r = requests.get(f'{B}/api/uid-query/types')
 check('类型列表', r.ok and len(r.json()['items']) == 4, r.text)
+r = requests.post(f'{B}/api/trainees/999999/refresh')
+check('刷新不存在学员 404（不打网络）', r.status_code == 404, f'got {r.status_code}')
 
 print(f'\n结果: {passed} passed, {failed} failed')
 

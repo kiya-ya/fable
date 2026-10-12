@@ -85,9 +85,10 @@ def auto_dissolve_trainee(conn, trainee_uid):
 
 
 def record_trainee_query(conn, uid, data):
-    """速查成功后落库当月等级记录（best = 当月最高周等级；含留存判定）"""
+    """速查成功后落库当月等级记录（best = 当月最高周等级；含留存判定）。
+    返回 (retained, prev_retained)：本次判定与上次记录（None=首次查询）"""
     if not data.get('found'):
-        return
+        return None, None
     month = _current_month()
     lvl = (data.get('week_level') or '').strip()
     rank = level_rank(lvl)
@@ -96,6 +97,7 @@ def record_trainee_query(conn, uid, data):
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     row = conn.execute(
         'SELECT * FROM trainee_level_monthly WHERE trainee_uid=? AND month=?', (uid, month)).fetchone()
+    prev = row['last_retained'] if row else None
     if row:
         best_lvl = lvl if rank > row['best_rank'] else row['best_level']
         best_rk = max(rank, row['best_rank'])
@@ -109,6 +111,14 @@ def record_trainee_query(conn, uid, data):
                (trainee_uid, month, best_level, best_rank, last_week_level, last_daily_task_count, last_queried_at, last_retained)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', (uid, month, lvl, rank, lvl, tasks, now, retained))
     conn.commit()
+    return retained, prev
+
+
+def maybe_auto_dissolve(conn, uid, retained, prev):
+    """自动解散仅在「之前留存、本次变空」时触发；从未进厅的新人（首次即空）不误判"""
+    if retained is False and prev == 1:
+        return auto_dissolve_trainee(conn, uid)
+    return 0
 
 
 def _parse_ts(s):
@@ -930,11 +940,9 @@ def refresh_trainees(tid):
             errors.append({'uid': b['uid'], 'nickname': b['nickname'], 'msg': str(e)})
             continue
         conn = get_db()
-        record_trainee_query(conn, b['uid'], r)
+        retained, prev = record_trainee_query(conn, b['uid'], r)
         if r.get('found'):
-            if judge_retained(r) is False:
-                auto_dissolve_trainee(conn, b['uid'])
-            else:
+            if maybe_auto_dissolve(conn, b['uid'], retained, prev) == 0:
                 sync_pending_rewards(conn, b['trainee_id'])
             queried.append({'uid': b['uid'], 'nickname': b['nickname'], 'week_level': r.get('week_level', '')})
         else:
@@ -956,6 +964,51 @@ def trainee_rewards(tid):
     if not panel:
         return err('妹妹不存在', 404)
     return ok({'rewards_panel': panel})
+
+
+@app.post('/api/trainees/<int:tid>/refresh')
+def refresh_trainee(tid):
+    """实时查询该学员并更新档案（大厅/昵称）+ 当月等级记录 + 留存判定"""
+    conn = get_db()
+    t = conn.execute('SELECT * FROM trainees WHERE id=?', (tid,)).fetchone()
+    conn.close()
+    if not t:
+        return err('妹妹不存在', 404)
+    try:
+        r = UIDCrawler().query(t['uid'], 'game')
+    except CookieExpiredError:
+        try:
+            _heal_uid_cookie()
+            r = UIDCrawler().query(t['uid'], 'game')
+        except CookieExpiredError as e:
+            return err(str(e), 401)
+        except Exception as e:
+            return err(f'自动重登后查询仍失败: {e}', 502)
+    except Exception as e:
+        return err(f'查询失败: {e}', 502)
+    if not r.get('found'):
+        return err(r.get('msg', '未查到数据'), 502)
+
+    hall = (r.get('schedule_hall') or '').strip()
+    if hall in ('', '-'):
+        hall = (r.get('auth_hall') or '').strip()
+    if hall == '-':
+        hall = ''
+    nick = (r.get('nickname') or '').strip()
+    conn = get_db()
+    if hall or nick:
+        conn.execute(
+            """UPDATE trainees SET hall_name=COALESCE(NULLIF(?, ''), hall_name),
+               nickname=COALESCE(NULLIF(?, ''), nickname), updated_at=CURRENT_TIMESTAMP WHERE id=?""",
+            (hall, nick, tid))
+    retained, prev = record_trainee_query(conn, t['uid'], r)
+    dissolved = maybe_auto_dissolve(conn, t['uid'], retained, prev)
+    if not dissolved:
+        sync_pending_rewards(conn, tid)
+    conn.commit()
+    conn.close()
+    return ok({'info': {'nickname': nick, 'hall_name': hall, 'week_level': r.get('week_level', '')},
+               'retained': retained, 'dissolved': bool(dissolved)})
 
 
 @app.post('/api/rewards/grant-all')
@@ -1044,10 +1097,8 @@ def uid_query():
         te = conn.execute('SELECT id FROM trainees WHERE uid=?', (uid,)).fetchone()
         if te:
             if week_data.get('found'):
-                record_trainee_query(conn, uid, week_data)
-                if judge_retained(week_data) is False:
-                    auto_dissolve_trainee(conn, uid)
-                else:
+                retained, prev = record_trainee_query(conn, uid, week_data)
+                if maybe_auto_dissolve(conn, uid, retained, prev) == 0:
                     sync_pending_rewards(conn, te['id'])
             payload['rewards_panel'] = build_rewards_panel(conn, te['id'])
     finally:
@@ -1131,11 +1182,9 @@ def refresh_all_bound_trainees():
             errors.append({'uid': b['uid'], 'nickname': b['nickname'], 'msg': str(e)})
             continue
         conn = get_db()
-        record_trainee_query(conn, b['uid'], r)
+        retained, prev = record_trainee_query(conn, b['uid'], r)
         if r.get('found'):
-            if judge_retained(r) is False:
-                auto_dissolve_trainee(conn, b['uid'])
-            else:
+            if maybe_auto_dissolve(conn, b['uid'], retained, prev) == 0:
                 sync_pending_rewards(conn, b['trainee_id'])
             queried.append({'uid': b['uid'], 'nickname': b['nickname'], 'week_level': r.get('week_level', '')})
         else:

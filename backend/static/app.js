@@ -423,6 +423,7 @@ async function loadBindings(page) {
         <td style="white-space:nowrap">
           <button class="btn small" onclick="editPersonByUid('trainers', '${esc(b.trainer_uid)}')">编辑${sideLabel}</button>
           <button class="btn small" onclick="editPersonByUid('trainees', '${esc(b.trainee_uid)}')">编辑妹妹</button>
+          <button class="btn small" onclick="refreshTraineeRow(${b.trainee_id}, this)">刷新</button>
           ${bindingsActiveView ? `<button class="btn small danger" onclick="unbind(${b.id})">解绑</button>` : ''}
           <button class="btn small" onclick="gotoUidQuery('${esc(b.trainee_uid)}')">速查</button>
         </td>
@@ -465,6 +466,43 @@ async function unbind(id) {
     toast(e.message, true);
   }
 }
+
+// 行内刷新：实时更新该妹妹的档案大厅/昵称/等级/留存
+async function refreshTraineeRow(traineeId, btn) {
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const r = await api(`/api/trainees/${traineeId}/refresh`, { method: 'POST' });
+    if (r.dissolved) {
+      toast('该妹妹留存字段为空，已自动解散绑定', true);
+    } else {
+      const info = r.info;
+      toast(`已刷新：${info.hall_name || '大厅为空'}${info.week_level ? ` / ${info.week_level}` : ''}${r.retained === false ? ' / 疑似解散（首次为空不自动解散）' : ''}`);
+    }
+    loadBindingsTab();
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '刷新';
+  }
+}
+
+$('#bindings-refresh').addEventListener('click', async (e) => {
+  const btn = e.target;
+  btn.disabled = true;
+  btn.textContent = '刷新中…';
+  try {
+    const r = await api('/api/admin/refresh-all-trainees', { method: 'POST' });
+    toast(`已刷新 ${r.queried} 人${r.errors.length ? `，${r.errors.length} 人失败` : ''}`);
+    loadBindingsTab();
+  } catch (e2) {
+    toast(e2.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '刷新全部数据';
+  }
+});
 
 function gotoUidQuery(uid) {
   $('[data-tab="uidquery"]').click();
