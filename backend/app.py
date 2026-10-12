@@ -67,6 +67,24 @@ def judge_retained(data):
                 and empty(data.get('week_level')))
 
 
+def auto_dissolve_trainee(conn, trainee_uid):
+    """留存字段全空的学员：所有生效绑定标记解散（置 unbound_at + 备注），档案置为退出。
+    返回解散的绑定数。"""
+    rows = conn.execute(
+        '''SELECT b.id, b.note, b.trainee_id FROM bindings b JOIN trainees t ON t.id=b.trainee_id
+           WHERE t.uid=? AND b.unbound_at IS NULL''', (trainee_uid,)).fetchall()
+    for r in rows:
+        note = ((r['note'] or '') + ' [系统判定解散：留存字段为空]').strip()
+        conn.execute('UPDATE bindings SET unbound_at=CURRENT_TIMESTAMP, note=? WHERE id=?',
+                     (note, r['id']))
+        conn.execute("UPDATE trainees SET status='inactive', updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                     (r['trainee_id'],))
+    if rows:
+        conn.commit()
+        print(f'[AutoDissolve] 学员 {trainee_uid} 未留存，解散 {len(rows)} 条绑定', flush=True)
+    return len(rows)
+
+
 def record_trainee_query(conn, uid, data):
     """速查成功后落库当月等级记录（best = 当月最高周等级；含留存判定）"""
     if not data.get('found'):
@@ -915,7 +933,10 @@ def refresh_trainees(tid):
         conn = get_db()
         record_trainee_query(conn, b['uid'], r)
         if r.get('found'):
-            sync_pending_rewards(conn, b['trainee_id'])
+            if judge_retained(r) is False:
+                auto_dissolve_trainee(conn, b['uid'])
+            else:
+                sync_pending_rewards(conn, b['trainee_id'])
             queried.append({'uid': b['uid'], 'nickname': b['nickname'], 'week_level': r.get('week_level', '')})
         else:
             errors.append({'uid': b['uid'], 'nickname': b['nickname'], 'msg': r.get('msg', '未查到数据')})
@@ -1009,7 +1030,10 @@ def uid_query():
         if te:
             if week_data.get('found'):
                 record_trainee_query(conn, uid, week_data)
-                sync_pending_rewards(conn, te['id'])
+                if judge_retained(week_data) is False:
+                    auto_dissolve_trainee(conn, uid)
+                else:
+                    sync_pending_rewards(conn, te['id'])
             payload['rewards_panel'] = build_rewards_panel(conn, te['id'])
     finally:
         conn.close()
@@ -1094,7 +1118,10 @@ def refresh_all_bound_trainees():
         conn = get_db()
         record_trainee_query(conn, b['uid'], r)
         if r.get('found'):
-            sync_pending_rewards(conn, b['trainee_id'])
+            if judge_retained(r) is False:
+                auto_dissolve_trainee(conn, b['uid'])
+            else:
+                sync_pending_rewards(conn, b['trainee_id'])
             queried.append({'uid': b['uid'], 'nickname': b['nickname'], 'week_level': r.get('week_level', '')})
         else:
             errors.append({'uid': b['uid'], 'nickname': b['nickname'], 'msg': r.get('msg', '未查到数据')})
