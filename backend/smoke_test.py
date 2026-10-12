@@ -40,6 +40,16 @@ def db_one(sql, params=()):
     return row
 
 
+def insert_monthly(uid, month, level, rank, tasks=7, retained=1, active=True):
+    """插入月度等级记录；active=True 表示排档周等级（名额贡献口径）"""
+    db_exec('''INSERT INTO trainee_level_monthly
+               (trainee_uid, month, best_level, best_rank, last_week_level, last_daily_task_count, last_queried_at,
+                last_retained, best_rank_active, best_level_active)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (uid, month, level, rank, level, tasks, NOW_S, retained,
+             rank if active else 0, level if active else ''))
+
+
 def expected_window(bound_at_utc):
     """与后端同口径：绑定次周周一(本地) 起整四周"""
     local = datetime.strptime(bound_at_utc, '%Y-%m-%d %H:%M:%S') + timedelta(hours=8)
@@ -155,11 +165,17 @@ print('== 名额判定（只算培训师绑定） ==')
 r = requests.get(f'{B}/api/trainers/{tr_a}/slots')
 s = r.json()['slots']
 check('A 无生效绑定 总名额=基础2', s['total_slots'] == 2 and s['used_slots'] == 0, str(s))
-db_exec('''INSERT INTO trainee_level_monthly (trainee_uid, month, best_level, best_rank, last_week_level, last_daily_task_count, last_queried_at, last_retained)
-           VALUES ('80001', ?, '金牌', 4, '金牌', 7, ?, 1)''', (MONTH, NOW_S))
+insert_monthly('80001', MONTH, '金牌', 4, tasks=7)
 r = requests.get(f'{B}/api/trainers/{tr_b}/slots')
 s = r.json()['slots']
-check('金牌学员 +3 → B 总名额 min(3+3,5)=5', s['extra_slots'] == 3 and s['total_slots'] == 5, str(s))
+check('金牌学员（有排档）+3 → B 总名额 min(3+3,5)=5', s['extra_slots'] == 3 and s['total_slots'] == 5, str(s))
+print('== 名额排档门槛 ==')
+db_exec("UPDATE trainee_level_monthly SET best_rank_active=0, best_level_active='' WHERE trainee_uid='80001' AND month=?", (MONTH,))
+r = requests.get(f'{B}/api/trainers/{tr_b}/slots')
+check('金牌但当周无排档 → 不贡献名额', r.json()['slots']['extra_slots'] == 0, str(r.json()['slots']['trainees']))
+db_exec("UPDATE trainee_level_monthly SET best_rank_active=4, best_level_active='金牌' WHERE trainee_uid='80001' AND month=?", (MONTH,))
+r = requests.get(f'{B}/api/trainers/{tr_b}/slots')
+check('恢复排档后重新 +3', r.json()['slots']['extra_slots'] == 3, str(r.json()['slots']['extra_slots']))
 b1r = next(b for b in requests.get(f'{B}/api/bindings', params={'active': 1}).json()['items'] if b['trainee_uid'] == '80001')
 check('绑定列表带留存标记 retained=1', b1r.get('retained') == 1, str(b1r.get('retained')))
 db_exec("UPDATE trainee_level_monthly SET last_retained=0 WHERE trainee_uid='80001' AND month=?", (MONTH,))
@@ -170,21 +186,18 @@ db_exec("UPDATE trainee_level_monthly SET last_retained=1 WHERE trainee_uid='800
 print('== 名额月初兜底（上月记录） ==')
 LAST_MONTH = (datetime.now().replace(day=1) - timedelta(days=1)).strftime('%Y-%m')
 db_exec("DELETE FROM trainee_level_monthly WHERE trainee_uid='80001' AND month=?", (MONTH,))
-db_exec('''INSERT INTO trainee_level_monthly (trainee_uid, month, best_level, best_rank, last_week_level, last_daily_task_count, last_queried_at)
-           VALUES ('80001', ?, '金牌', 4, '金牌', 7, ?)''', (LAST_MONTH, NOW_S))
+insert_monthly('80001', LAST_MONTH, '金牌', 4, tasks=7)
 r = requests.get(f'{B}/api/trainers/{tr_b}/slots')
 s = r.json()['slots']
 check('当月无记录 → 上月金牌兜底 +3', s['extra_slots'] == 3 and s['total_slots'] == 5, str(s))
 check('兜底行带 from_last_month 标记', s['trainees'][0].get('from_last_month') is True, str(s['trainees']))
-db_exec('''INSERT INTO trainee_level_monthly (trainee_uid, month, best_level, best_rank, last_week_level, last_daily_task_count, last_queried_at)
-           VALUES ('80001', ?, '铜牌', 1, '铜牌', 7, ?)''', (MONTH, NOW_S))
+insert_monthly('80001', MONTH, '铜牌', 1, tasks=7)
 r = requests.get(f'{B}/api/trainers/{tr_b}/slots')
 s = r.json()['slots']
 check('当月有记录则按当月（铜牌 +0，不吃兜底）', s['extra_slots'] == 0 and s['trainees'][0].get('from_last_month') is False, str(s))
 # 恢复金牌供后续奖励测试
 db_exec("DELETE FROM trainee_level_monthly WHERE trainee_uid='80001' AND month=?", (MONTH,))
-db_exec('''INSERT INTO trainee_level_monthly (trainee_uid, month, best_level, best_rank, last_week_level, last_daily_task_count, last_queried_at, last_retained)
-           VALUES ('80001', ?, '金牌', 4, '金牌', 7, ?, 1)''', (MONTH, NOW_S))
+insert_monthly('80001', MONTH, '金牌', 4, tasks=7)
 
 print('== 奖励窗口（次周周一起整四周） ==')
 bound_at = db_one("SELECT bound_at FROM bindings WHERE trainee_id=? AND bind_type='trainer' AND unbound_at IS NULL", (te_a,))[0]
@@ -228,8 +241,7 @@ r = requests.post(f'{B}/api/rewards/grant-all', json={'binding_id': bid_a})
 check('重复 grant-all 幂等 0 档', r.ok and r.json()['granted'] == 0, r.text)
 
 print('== 姐妹团绑定同样产生奖励 ==')
-db_exec('''INSERT INTO trainee_level_monthly (trainee_uid, month, best_level, best_rank, last_week_level, last_daily_task_count, last_queried_at)
-           VALUES ('80002', ?, '银牌', 3, '银牌', 7, ?)''', (MONTH, NOW_S))
+insert_monthly('80002', MONTH, '银牌', 3, tasks=7)
 db_exec("UPDATE bindings SET bound_at=? WHERE trainee_id=? AND bind_type='sister' AND unbound_at IS NULL",
         ((datetime.utcnow() - timedelta(days=10)).strftime('%Y-%m-%d %H:%M:%S'), te_b))
 r = requests.get(f'{B}/api/trainees/{te_b}/rewards')
@@ -246,8 +258,7 @@ if d20.month != datetime.utcnow().month:
     db_exec("UPDATE bindings SET bound_at=? WHERE trainee_id=? AND bind_type='sister' AND unbound_at IS NULL",
             (d20.strftime('%Y-%m-%d %H:%M:%S'), te_b))
     db_exec("DELETE FROM trainee_level_monthly WHERE trainee_uid='80002'")
-    db_exec('''INSERT INTO trainee_level_monthly (trainee_uid, month, best_level, best_rank, last_week_level, last_daily_task_count, last_queried_at)
-               VALUES ('80002', ?, '金牌', 4, '金牌', 7, ?)''', (LAST_MONTH, NOW_S))
+    insert_monthly('80002', LAST_MONTH, '金牌', 4, tasks=7)
     r = requests.get(f'{B}/api/trainees/{te_b}/rewards')
     pb = r.json()['rewards_panel']['panels']
     check('跨月绑定窗口仍有效', pb[0]['window_status'] == 'in_window', str(pb[0]['window_status']))

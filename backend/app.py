@@ -70,7 +70,7 @@ def get_effective_levels(conn, uids):
     month, last = _current_month(), _last_month()
     marks = ','.join('?' * len(uids))
     rows = conn.execute(
-        f'''SELECT trainee_uid, month, best_level, best_rank, last_queried_at
+        f'''SELECT trainee_uid, month, best_level_active, best_rank_active, last_queried_at
             FROM trainee_level_monthly WHERE trainee_uid IN ({marks}) AND month IN (?, ?)''',
         (*uids, month, last)).fetchall()
     by_uid = {}
@@ -87,7 +87,9 @@ def get_effective_levels(conn, uids):
         rec = cur.get('this') or cur.get('last')
         if rec:
             out[uid] = {
-                'best_level': rec['best_level'], 'best_rank': rec['best_rank'],
+                # 名额贡献用「排档周最高等级」（当周排档天数>0 才计入）
+                'best_level': rec['best_level_active'] or '',
+                'best_rank': rec['best_rank_active'] or 0,
                 'last_queried_at': rec['last_queried_at'],
                 'from_last_month': 'this' not in cur,
             }
@@ -157,23 +159,33 @@ def record_trainee_query(conn, uid, data):
     lvl = (data.get('week_level') or '').strip()
     rank = level_rank(lvl)
     tasks = int(data.get('daily_task_count') or 0)
+    sched_days = int(data.get('week_schedule_days') or 0)
     retained = judge_retained(data)
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     row = conn.execute(
         'SELECT * FROM trainee_level_monthly WHERE trainee_uid=? AND month=?', (uid, month)).fetchone()
     prev = row['last_retained'] if row else None
+    # 排档周等级：仅当周排档天数>0 的查询才计入名额贡献
     if row:
         best_lvl = lvl if rank > row['best_rank'] else row['best_level']
         best_rk = max(rank, row['best_rank'])
+        act_rk = row['best_rank_active'] or 0
+        act_lvl = row['best_level_active'] or ''
+        if sched_days > 0 and rank > act_rk:
+            act_rk, act_lvl = rank, lvl
         conn.execute(
             '''UPDATE trainee_level_monthly
-               SET best_level=?, best_rank=?, last_week_level=?, last_daily_task_count=?, last_queried_at=?, last_retained=?
-               WHERE id=?''', (best_lvl, best_rk, lvl, tasks, now, retained, row['id']))
+               SET best_level=?, best_rank=?, last_week_level=?, last_daily_task_count=?, last_queried_at=?, last_retained=?,
+                   best_rank_active=?, best_level_active=?
+               WHERE id=?''', (best_lvl, best_rk, lvl, tasks, now, retained, act_rk, act_lvl, row['id']))
     else:
+        act_rk, act_lvl = (rank, lvl) if sched_days > 0 else (0, '')
         conn.execute(
             '''INSERT INTO trainee_level_monthly
-               (trainee_uid, month, best_level, best_rank, last_week_level, last_daily_task_count, last_queried_at, last_retained)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', (uid, month, lvl, rank, lvl, tasks, now, retained))
+               (trainee_uid, month, best_level, best_rank, last_week_level, last_daily_task_count, last_queried_at, last_retained,
+                best_rank_active, best_level_active)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (uid, month, lvl, rank, lvl, tasks, now, retained, act_rk, act_lvl))
     # 保护期结束时间同步到档案（空值不覆盖旧值）
     prot = (data.get('protection_end') or '').strip()
     if prot and prot != '-':

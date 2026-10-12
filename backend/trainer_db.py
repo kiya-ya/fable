@@ -95,6 +95,12 @@ def _migrate(conn):
     if 'protection_end' not in tcols:
         # 保护期结束时间（查询时同步到档案，绑定列表展示用）
         conn.execute('ALTER TABLE trainees ADD COLUMN protection_end TEXT')
+    if 'best_rank_active' not in mcols:
+        # 排档周最高等级：仅当周排档天数>0 的查询才计入名额贡献
+        conn.execute('ALTER TABLE trainee_level_monthly ADD COLUMN best_rank_active INTEGER DEFAULT 0')
+        conn.execute('ALTER TABLE trainee_level_monthly ADD COLUMN best_level_active TEXT')
+        # 存量数据一次性回填：老记录没有排档天数字段，按已有等级计入
+        conn.execute('UPDATE trainee_level_monthly SET best_rank_active=best_rank, best_level_active=best_level')
     # 唯一索引从「每妹妹一条生效」升级为「每妹妹每类型一条生效」
     idx = {r[1] for r in conn.execute("PRAGMA index_list(bindings)").fetchall()}
     if 'idx_bindings_active_trainee' in idx:
