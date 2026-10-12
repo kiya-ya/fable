@@ -314,11 +314,25 @@ async function lookupBindSide(kind) {
     // 查本地是否已建档（培训师侧 role=all 覆盖姐姐记录）
     const list = await api(`/api/${kind}s?kw=${encodeURIComponent(uid)}${kind === 'trainer' ? '&role=all' : ''}`);
     const existing = list.items.find((x) => x.uid === uid);
-    bindState[kind] = { uid, nickname: r.info.nickname, hall: r.info.hall_name, existing: !!existing };
+    bindState[kind] = { uid, nickname: r.info.nickname, hall: r.info.hall_name, protection_end: r.info.protection_end || '', existing: !!existing };
+    let protTag = '';
+    if (kind === 'trainee') {
+      const pe = (r.info.protection_end || '').trim();
+      if (pe) {
+        const m = pe.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+        const inProt = m ? new Date(+m[1], +m[2] - 1, +m[3]) >= new Date(new Date().toDateString()) : false;
+        protTag = inProt
+          ? ` ｜ <span class="tag active">保护期内（至 ${m[0]}）</span>`
+          : ` ｜ <span class="tag over">保护期已于 ${m[0]} 结束</span>`;
+      } else {
+        protTag = ' ｜ <span class="tag over">无保护期记录</span>';
+      }
+    }
     info.innerHTML =
       `<b>${esc(r.info.nickname)}</b>（${esc(uid)}）` +
       `${r.info.hall_name ? ` ｜ ${esc(r.info.hall_name)}` : ''}` +
-      `${r.info.week_level ? ` ｜ ${esc(r.info.week_level)}` : ''} ｜ ` +
+      `${r.info.week_level ? ` ｜ ${esc(r.info.week_level)}` : ''}` +
+      protTag + ' ｜ ' +
       (existing
         ? '<span class="tag active">已建档</span>'
         : '<span class="tag graduated">绑定时自动建档</span>');
@@ -341,6 +355,13 @@ $('#bind-trainee-uid').addEventListener('keydown', (e) => { if (e.key === 'Enter
 $('#bind-submit').addEventListener('click', async () => {
   if (!bindState.trainer) return toast(`请先查询${bindType === 'sister' ? '姐姐' : '培训师'} UID`, true);
   if (!bindState.trainee) return toast('请先查询妹妹 UID', true);
+  // 培训师绑定：客户端先拦不在保护期的（服务端仍会再校验一次）
+  if (bindType === 'trainer') {
+    const pe = (bindState.trainee.protection_end || '').trim();
+    const m = pe.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+    const inProt = m ? new Date(+m[1], +m[2] - 1, +m[3]) >= new Date(new Date().toDateString()) : false;
+    if (!inProt) return toast('该妹妹不在保护期内，不能绑定培训师', true);
+  }
   await doBind({
     bind_type: bindType,
     trainer_uid: bindState.trainer.uid,
@@ -357,7 +378,7 @@ async function doBind(payload) {
   try {
     const r = await api('/api/bindings/by-uid', { method: 'POST', body: payload });
     const created = [r.trainer_created && '左侧', r.trainee_created && '妹妹'].filter(Boolean);
-    toast(`${r.rebound ? '换绑' : '绑定'}成功（${BIND_TYPE[r.bind_type]}）${created.length ? `，自动建档：${created.join('、')}` : ''}`);
+    toast(`${r.rebound ? '换绑' : '绑定'}成功（${BIND_TYPE[r.bind_type]}）${created.length ? `，自动建档：${created.join('、')}` : ''}${r.gate_warn ? `；注意：${r.gate_msg}` : ''}`, !!r.gate_warn);
     bindState.trainer = bindState.trainee = null;
     $('#bind-trainer-uid').value = '';
     $('#bind-trainee-uid').value = '';

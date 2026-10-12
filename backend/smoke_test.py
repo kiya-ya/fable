@@ -100,21 +100,20 @@ check('状态 graduated 不再接受 400', r.status_code == 400, f'got {r.status
 r = requests.put(f'{B}/api/trainees/{te_b}', json={'uid': '80002', 'nickname': '测试妹妹乙', 'status': 'inactive'})
 check('状态 active/inactive 正常', r.ok, r.text)
 
-print('== by-uid 绑定（培训师类型，自动建档） ==')
+print('== by-uid 绑定与保护期门槛 ==')
 r = bind('90001', '80001')
-check('by-uid 绑定 A<-甲', r.ok and not r.json().get('trainer_created'), r.text)
-r = bind('90002', '80001')
-check('同类型重复绑定冲突 409', r.status_code == 409 and r.json().get('conflict'), f'got {r.status_code}')
-r = bind('90002', '80001', force=True)
-check('强制换绑 B<-甲', r.ok and r.json().get('rebound'), r.text)
-r = bind('90003', '80003', trainer_nickname='自动建档C', trainee_nickname='自动建档丙')
+check('培训师绑定被保护期门槛拦截 422（测试 UID 无保护期记录）', r.status_code == 422 and r.json().get('gate'), r.text)
+check('门槛拦截不落库', db_one("SELECT COUNT(*) FROM bindings WHERE trainee_id=?", (te_a,))[0] == 0)
+r = bind('90001', '90001')
+check('同一人绑定 400', r.status_code == 400, f'got {r.status_code}')
+r = bind('90003', '80003', bind_type='sister', trainer_nickname='自动建档C', trainee_nickname='自动建档丙')
 d = r.json()
-check('by-uid 自动建档双方', r.ok and d.get('trainer_created') and d.get('trainee_created'), r.text)
+check('by-uid 自动建档双方（姐妹团无门槛）', r.ok and d.get('trainer_created') and d.get('trainee_created'), r.text)
 tr_c = db_one("SELECT id FROM trainers WHERE uid='90003'")[0]
 te_c = db_one("SELECT id FROM trainees WHERE uid='80003'")[0]
 check('自动建档培训师默认名额2', db_one("SELECT base_slots FROM trainers WHERE uid='90003'")[0] == 2)
-r = bind('90001', '90001')
-check('同一人绑定 400', r.status_code == 400, f'got {r.status_code}')
+# 下游逻辑（名额/奖励/窗口）需要培训师绑定：门槛已验证，直接落库构造
+db_exec("INSERT INTO bindings (trainer_id, trainee_id, bind_type, note) VALUES (?, ?, 'trainer', '测试直插')", (tr_b, te_a))
 
 print('== 姐妹团三胎绑定 ==')
 r = bind('91001', '80001', bind_type='sister', trainer_nickname='测试姐姐甲')

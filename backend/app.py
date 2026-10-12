@@ -8,6 +8,7 @@
 import os
 import sys
 import json
+import re
 import threading
 import time
 from datetime import datetime, timedelta
@@ -64,6 +65,32 @@ def judge_retained(data):
     def empty(v):
         return v is None or str(v).strip() in ('', '-')
     return not (empty(data.get('schedule_hall')) and empty(data.get('week_level')))
+
+
+def _protection_gate(uid):
+    """培训师绑定门槛：妹妹须在保护期内（UID 查询的保护期结束时间 >= 今天）。
+    返回 (allowed, msg, warn)。查到数据才强制拦截；查询失败/未找到放行但带警告
+    （前端绑定流程本就先查 UID，查不到的 UID 到不了这一步）"""
+    try:
+        r = UIDCrawler().query(uid, 'game')
+    except CookieExpiredError:
+        try:
+            _heal_uid_cookie()
+            r = UIDCrawler().query(uid, 'game')
+        except Exception as e:
+            return True, f'保护期查询失败（本次放行）: {e}', True
+    except Exception as e:
+        return True, f'保护期查询失败（本次放行）: {e}', True
+    if not r.get('found'):
+        return True, 'UID 未查到数据，跳过保护期校验', True
+    raw = (r.get('protection_end') or '').strip()
+    m = re.search(r'(\d{4})-(\d{1,2})-(\d{1,2})', raw)
+    if not m:
+        return False, f'该妹妹无保护期结束时间记录，不在保护期内，不能绑定培训师', False
+    end = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3))).date()
+    if end >= datetime.now().date():
+        return True, f'保护期内（至 {end}）', False
+    return False, f'该妹妹保护期已于 {end} 结束，不能绑定培训师', False
 
 
 def auto_dissolve_trainee(conn, trainee_uid):
@@ -741,6 +768,14 @@ def create_binding_by_uid():
     if trainer_uid == trainee_uid:
         return err('两侧不能是同一人')
 
+    # 培训师绑定门槛：妹妹须在保护期内
+    if bind_type == 'trainer':
+        allowed, gate_msg, gate_warn = _protection_gate(trainee_uid)
+        if not allowed:
+            return jsonify({'ok': False, 'msg': gate_msg, 'gate': True}), 422
+    else:
+        gate_msg, gate_warn = None, False
+
     conn = get_db()
     try:
         trainer_id, trainer_created = _upsert_person(
@@ -756,6 +791,9 @@ def create_binding_by_uid():
         if code == 200:
             payload['trainer_created'] = trainer_created
             payload['trainee_created'] = trainee_created
+            if gate_msg:
+                payload['gate_msg'] = gate_msg
+                payload['gate_warn'] = gate_warn
             conn.commit()
         return jsonify(payload), code
     except Exception:
@@ -1132,6 +1170,7 @@ def uid_lookup():
         'nickname': r.get('nickname', ''),
         'hall_name': r.get('schedule_hall', '') or r.get('auth_hall', ''),
         'week_level': r.get('week_level', ''),
+        'protection_end': (r.get('protection_end') or '').strip(),
     }})
 
 
