@@ -91,6 +91,10 @@ def _migrate(conn):
     if 'last_retained' not in mcols:
         # 留存判定：UID 查询的排档大厅/权限大厅/当周等级全空 → 0（未留存，可判解散）
         conn.execute('ALTER TABLE trainee_level_monthly ADD COLUMN last_retained INTEGER')
+    tcols = {r[1] for r in conn.execute('PRAGMA table_info(trainees)').fetchall()}
+    if 'protection_end' not in tcols:
+        # 保护期结束时间（查询时同步到档案，绑定列表展示用）
+        conn.execute('ALTER TABLE trainees ADD COLUMN protection_end TEXT')
     # 唯一索引从「每妹妹一条生效」升级为「每妹妹每类型一条生效」
     idx = {r[1] for r in conn.execute("PRAGMA index_list(bindings)").fetchall()}
     if 'idx_bindings_active_trainee' in idx:

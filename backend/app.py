@@ -137,6 +137,10 @@ def record_trainee_query(conn, uid, data):
             '''INSERT INTO trainee_level_monthly
                (trainee_uid, month, best_level, best_rank, last_week_level, last_daily_task_count, last_queried_at, last_retained)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', (uid, month, lvl, rank, lvl, tasks, now, retained))
+    # 保护期结束时间同步到档案（空值不覆盖旧值）
+    prot = (data.get('protection_end') or '').strip()
+    if prot and prot != '-':
+        conn.execute('UPDATE trainees SET protection_end=? WHERE uid=?', (prot, uid))
     conn.commit()
     return retained, prev
 
@@ -628,7 +632,7 @@ def list_bindings():
     rows = conn.execute(
         '''SELECT b.id, b.bind_type, b.bound_at, b.unbound_at, b.note,
                   tr.id AS trainer_id, tr.uid AS trainer_uid, tr.nickname AS trainer_nickname, tr.role AS side_role,
-                  te.id AS trainee_id, te.uid AS trainee_uid, te.nickname AS trainee_nickname, te.hall_name
+                  te.id AS trainee_id, te.uid AS trainee_uid, te.nickname AS trainee_nickname, te.hall_name, te.protection_end
            FROM bindings b
            JOIN trainers tr ON tr.id = b.trainer_id
            JOIN trainees te ON te.id = b.trainee_id

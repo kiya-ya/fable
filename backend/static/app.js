@@ -413,10 +413,9 @@ async function loadBindings(page) {
   const tbody = $('#bindings-table tbody');
   $$('.col-unbound').forEach((el) => (el.style.display = bindingsActiveView ? 'none' : ''));
   if (!data.items.length) {
-    tbody.innerHTML = `<tr><td colspan="13" class="empty">暂无${bindingsActiveView ? '生效绑定' : '历史记录'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="14" class="empty">暂无${bindingsActiveView ? '生效绑定' : '历史记录'}</td></tr>`;
   } else {
     tbody.innerHTML = data.items.map((b) => {
-      const sideLabel = b.bind_type === 'sister' ? '姐姐' : '培训师';
       const weeksTag = b.window_status === 'in_window'
         ? `<span class="tag plus">剩 ${b.weeks_left}/4 周</span>`
         : b.window_status === 'not_started'
@@ -427,6 +426,17 @@ async function loadBindings(page) {
         : b.retained
           ? '<span class="tag active">留存</span>'
           : '<span class="tag over">疑似解散</span>';
+      const prot = (b.protection_end || '').trim();
+      let protHtml = '<span class="muted">未查询</span>';
+      if (prot && prot !== '-') {
+        const pm = prot.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+        if (pm) {
+          const inProt = new Date(+pm[1], +pm[2] - 1, +pm[3]) >= new Date(new Date().toDateString());
+          protHtml = inProt ? `<span class="tag active">${pm[0]}</span>` : `<span class="tag inactive">${pm[0]} 已出保</span>`;
+        } else {
+          protHtml = esc(prot);
+        }
+      }
       return `
       <tr>
         <td><span class="tag ${b.bind_type === 'sister' ? 'graduated' : 'active'}">${BIND_TYPE[b.bind_type] || b.bind_type}</span></td>
@@ -435,6 +445,7 @@ async function loadBindings(page) {
         <td>${esc(b.trainee_nickname)}</td>
         <td>${esc(b.trainee_uid)}</td>
         <td>${esc(b.hall_name || '')}</td>
+        <td>${protHtml}</td>
         <td>${retainedTag}</td>
         <td>${esc(b.bound_at)}</td>
         <td>${esc(b.window_end)}</td>
@@ -442,9 +453,6 @@ async function loadBindings(page) {
         <td class="col-unbound" style="display:${bindingsActiveView ? 'none' : ''}">${esc(b.unbound_at || '')}</td>
         <td>${esc(b.note || '')}</td>
         <td style="white-space:nowrap">
-          <button class="btn small" onclick="editPersonByUid('trainers', '${esc(b.trainer_uid)}')">编辑${sideLabel}</button>
-          <button class="btn small" onclick="editPersonByUid('trainees', '${esc(b.trainee_uid)}')">编辑妹妹</button>
-          <button class="btn small" onclick="refreshTraineeRow(${b.trainee_id}, this)">刷新</button>
           ${bindingsActiveView ? `<button class="btn small danger" onclick="unbind(${b.id})">解绑</button>` : ''}
           <button class="btn small" onclick="gotoUidQuery('${esc(b.trainee_uid)}')">速查</button>
         </td>
