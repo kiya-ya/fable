@@ -98,6 +98,12 @@ $('#uq-submit').addEventListener('click', async () => {
     if (r.slots) renderSlotsPanel(r.slots);
     if (r.rewards_panel) renderRewardsPanel(r.rewards_panel);
     renderUidResult(r.result);
+    if (r.retention) {
+      const banner = r.retention.retained
+        ? `<div class="retention-banner ok">✓ ${esc(r.retention.msg)}</div>`
+        : `<div class="retention-banner bad">✗ ${esc(r.retention.msg)}</div>`;
+      $('#uq-result').insertAdjacentHTML('afterbegin', banner);
+    }
   } catch (e) {
     $('#uq-result').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
   } finally {
@@ -181,7 +187,11 @@ const REWARD_STATUS = {
 };
 
 function renderRewardsPanel(p) {
-  $('#rewards-window').textContent = `（${esc(p.trainee.nickname)} · 奖励窗口 ${p.window_weeks} 周）`;
+  const retainedTag = p.retained === 0
+    ? ' <span class="tag over">疑似解散</span>'
+    : p.retained === 1 ? ' <span class="tag active">留存</span>' : '';
+  $('#rewards-window').innerHTML =
+    `（${esc(p.trainee.nickname)} · 奖励窗口 ${p.window_weeks} 周）${retainedTag}`;
   const box = $('#rewards-blocks');
   if (!p.panels.length) {
     box.innerHTML = '<div class="empty">当前无生效绑定（培训师或姐妹团三胎均可产生奖励）</div>';
@@ -366,7 +376,7 @@ async function loadBindings(page) {
   const tbody = $('#bindings-table tbody');
   $$('.col-unbound').forEach((el) => (el.style.display = bindingsActiveView ? 'none' : ''));
   if (!data.items.length) {
-    tbody.innerHTML = `<tr><td colspan="12" class="empty">暂无${bindingsActiveView ? '生效绑定' : '历史记录'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="13" class="empty">暂无${bindingsActiveView ? '生效绑定' : '历史记录'}</td></tr>`;
   } else {
     tbody.innerHTML = data.items.map((b) => {
       const sideLabel = b.bind_type === 'sister' ? '姐姐' : '培训师';
@@ -375,6 +385,11 @@ async function loadBindings(page) {
         : b.window_status === 'not_started'
           ? `<span class="tag graduated">未开始</span>`
           : '<span class="tag inactive">已结束</span>';
+      const retainedTag = b.retained === null || b.retained === undefined
+        ? '<span class="muted">未查询</span>'
+        : b.retained
+          ? '<span class="tag active">留存</span>'
+          : '<span class="tag over">疑似解散</span>';
       return `
       <tr>
         <td><span class="tag ${b.bind_type === 'sister' ? 'graduated' : 'active'}">${BIND_TYPE[b.bind_type] || b.bind_type}</span></td>
@@ -383,6 +398,7 @@ async function loadBindings(page) {
         <td>${esc(b.trainee_nickname)}</td>
         <td>${esc(b.trainee_uid)}</td>
         <td>${esc(b.hall_name || '')}</td>
+        <td>${retainedTag}</td>
         <td>${esc(b.bound_at)}</td>
         <td>${esc(b.window_end)}</td>
         <td>${weeksTag}</td>

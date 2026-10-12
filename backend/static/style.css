@@ -89,6 +89,11 @@ input:focus, select:focus { border-color: #3b82f6; }
 .reward-block { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 14px; margin-top: 12px; }
 .reward-block-head { font-size: 13px; color: #4b5563; margin-bottom: 8px; }
 
+/* 留存判定横幅 */
+.retention-banner { border-radius: 8px; padding: 10px 14px; margin: 12px 0; font-size: 14px; }
+.retention-banner.ok { background: #dcfce7; color: #15803d; }
+.retention-banner.bad { background: #fee2e2; color: #b91c1c; font-weight: 600; }
+
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #e5e7eb; }
 th { color: #6b7280; font-weight: 500; font-size: 13px; background: #f9fafb; }

@@ -56,14 +56,26 @@ def _current_month():
     return datetime.now().strftime('%Y-%m')
 
 
+def judge_retained(data):
+    """留存判定：排档所属大厅 / 权限所属大厅 / 当周队长等级 全部为空 → 未留存（可判团队解散）
+    空值口径：None / '' / '-'"""
+    if not data.get('found'):
+        return None
+    def empty(v):
+        return v is None or str(v).strip() in ('', '-')
+    return not (empty(data.get('schedule_hall')) and empty(data.get('auth_hall'))
+                and empty(data.get('week_level')))
+
+
 def record_trainee_query(conn, uid, data):
-    """速查成功后落库当月等级记录（best = 当月最高周等级）"""
+    """速查成功后落库当月等级记录（best = 当月最高周等级；含留存判定）"""
     if not data.get('found'):
         return
     month = _current_month()
     lvl = (data.get('week_level') or '').strip()
     rank = level_rank(lvl)
     tasks = int(data.get('daily_task_count') or 0)
+    retained = judge_retained(data)
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     row = conn.execute(
         'SELECT * FROM trainee_level_monthly WHERE trainee_uid=? AND month=?', (uid, month)).fetchone()
@@ -72,13 +84,13 @@ def record_trainee_query(conn, uid, data):
         best_rk = max(rank, row['best_rank'])
         conn.execute(
             '''UPDATE trainee_level_monthly
-               SET best_level=?, best_rank=?, last_week_level=?, last_daily_task_count=?, last_queried_at=?
-               WHERE id=?''', (best_lvl, best_rk, lvl, tasks, now, row['id']))
+               SET best_level=?, best_rank=?, last_week_level=?, last_daily_task_count=?, last_queried_at=?, last_retained=?
+               WHERE id=?''', (best_lvl, best_rk, lvl, tasks, now, retained, row['id']))
     else:
         conn.execute(
             '''INSERT INTO trainee_level_monthly
-               (trainee_uid, month, best_level, best_rank, last_week_level, last_daily_task_count, last_queried_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)''', (uid, month, lvl, rank, lvl, tasks, now))
+               (trainee_uid, month, best_level, best_rank, last_week_level, last_daily_task_count, last_queried_at, last_retained)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', (uid, month, lvl, rank, lvl, tasks, now, retained))
     conn.commit()
 
 
@@ -181,6 +193,9 @@ def build_rewards_panel(conn, trainee_id):
            ORDER BY b.bind_type, b.bound_at''', (trainee_id,)).fetchall()
     grants = conn.execute(
         'SELECT * FROM reward_grants WHERE trainee_uid=? ORDER BY id', (t['uid'],)).fetchall()
+    mrec = conn.execute(
+        'SELECT last_retained, last_queried_at FROM trainee_level_monthly WHERE trainee_uid=? AND month=?',
+        (t['uid'], _current_month())).fetchone()
 
     panels = []
     for b in bindings:
@@ -206,11 +221,13 @@ def build_rewards_panel(conn, trainee_id):
                 'granted_at': bg[tier['key']]['granted_at'] if tier['key'] in bg else None,
             } for tier in REWARD_TIERS],
         })
-    return {
+    panel = {
         'trainee': {'id': t['id'], 'uid': t['uid'], 'nickname': t['nickname']},
         'window_weeks': REWARD_WINDOW_WEEKS,
+        'retained': mrec['last_retained'] if mrec else None,
         'panels': panels,
     }
+    return panel
 
 
 # ────────────────────────────────────────────── 工具
@@ -568,11 +585,15 @@ def list_bindings():
     if btype in BIND_TYPES:
         items = [b for b in items if b['bind_type'] == btype]
     # 每行附奖励窗口信息：结束日期 / 状态 / 剩余周数
+    month = _current_month()
+    retained_map = {r['trainee_uid']: r['last_retained'] for r in conn.execute(
+        'SELECT trainee_uid, last_retained FROM trainee_level_monthly WHERE month=?', (month,)).fetchall()}
     for b in items:
         start, end, status = reward_window_status(b['bound_at'])
         b['window_start'] = start.strftime('%Y-%m-%d')
         b['window_end'] = end.strftime('%Y-%m-%d')
         b['window_status'] = status
+        b['retained'] = retained_map.get(b['trainee_uid'])  # None=本月未查询
         if status == 'in_window':
             b['weeks_left'] = min(max(-(-(end - datetime.now()).days // 7), 0), REWARD_WINDOW_WEEKS)
         elif status == 'not_started':
@@ -973,6 +994,12 @@ def uid_query():
 
     payload = {'result': result}
     week_data = result.get('this_week', {}).get('data', {})
+    if week_data.get('found'):
+        retained = judge_retained(week_data)
+        payload['retention'] = {
+            'retained': retained,
+            'msg': '留存正常' if retained else '未留存：排档大厅 / 权限大厅 / 当周等级均为空，可判定团队解散',
+        }
     conn = get_db()
     try:
         tr = conn.execute('SELECT id FROM trainers WHERE uid=?', (uid,)).fetchone()

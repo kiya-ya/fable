@@ -1,8 +1,9 @@
 FROM python:3.11-slim
 
-# opencv-python（ddddocr 依赖）在 slim 镜像需要的系统库
+# 中国时区（奖励窗口/每周刷新都按本地周界计算）+ opencv（ddddocr 依赖）系统库
+ENV TZ=Asia/Shanghai
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \
+    && apt-get install -y --no-install-recommends tzdata libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
