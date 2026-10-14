@@ -215,6 +215,8 @@ function renderRewardBlock(pb) {
     in_window: `剩余 <b>${pb.days_left}</b> 天`,
     expired: '<span class="tag over">已过奖励有效期</span>',
   }[pb.window_status];
+  const sideTag = pb.side_retained === 0
+    ? ` <span class="tag over">${esc(pb.side_label)}未留存·暂停发奖</span>` : '';
   const pendingCount = pb.rewards.filter((r) => r.status === 'pending').length;
   const grantAllBtn = pendingCount > 0
     ? `<button class="btn small primary" onclick="grantAllRewards(${pb.binding.id})">全部标记已发（${pendingCount} 档）</button>`
@@ -238,7 +240,7 @@ function renderRewardBlock(pb) {
     <div class="reward-block-head">
       <span class="tag ${pb.bind_type === 'sister' ? 'graduated' : 'active'}">${esc(pb.type_label)}</span>
       ${esc(pb.side_label)} <b>${esc(pb.binding.side_nickname)}</b>（${esc(pb.binding.side_uid)}）
-      ｜ 绑定 ${esc(pb.binding.bound_at)} ｜ 窗口 ${esc(pb.window_start)} ~ ${esc(pb.window_end)} ｜ ${statusText}
+      ｜ 绑定 ${esc(pb.binding.bound_at)} ｜ 窗口 ${esc(pb.window_start)} ~ ${esc(pb.window_end)} ｜ ${statusText}${sideTag}
       <span style="float:right">${grantAllBtn}</span>
     </div>
     <table>

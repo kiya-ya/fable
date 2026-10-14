@@ -226,13 +226,25 @@ def reward_window_status(bound_at_str):
     return start, end, 'in_window'
 
 
+def side_retained(conn, side_uid):
+    """侧方（培训师/姐姐）留存状态：取最近一次月度记录的判定。None=未查询过（不拦截）"""
+    r = conn.execute(
+        'SELECT last_retained FROM trainee_level_monthly WHERE trainee_uid=? ORDER BY month DESC, last_queried_at DESC LIMIT 1',
+        (side_uid,)).fetchone()
+    return r['last_retained'] if r else None
+
+
 def sync_pending_rewards(conn, trainee_id):
-    """为每条生效绑定（培训师/姐妹团均可）生成 pending 奖励（奖励窗口内；已存在则跳过）"""
+    """为每条生效绑定（培训师/姐妹团均可）生成 pending 奖励（奖励窗口内；已存在则跳过）。
+    侧方（培训师/姐姐）已判定未留存时不生成。"""
     bindings = conn.execute(
-        '''SELECT b.*, t.uid AS trainee_uid FROM bindings b JOIN trainees t ON t.id=b.trainee_id
+        '''SELECT b.*, t.uid AS trainee_uid, tr.uid AS side_uid FROM bindings b
+           JOIN trainees t ON t.id=b.trainee_id JOIN trainers tr ON tr.id=b.trainer_id
            WHERE b.trainee_id=? AND b.unbound_at IS NULL''', (trainee_id,)).fetchall()
     for b in bindings:
         if reward_window_status(b['bound_at'])[2] != 'in_window':
+            continue
+        if side_retained(conn, b['side_uid']) == 0:
             continue
         # 等级达标按「绑定当月起至今的最高」算（覆盖月末绑定、窗口跨月的情况）；
         # 任务次数取最近一次查询值（任务按周重置）
@@ -320,6 +332,7 @@ def build_rewards_panel(conn, trainee_id):
             'bind_type': b['bind_type'],
             'type_label': '姐妹团三胎' if b['bind_type'] == 'sister' else '培训师',
             'side_label': '姐姐' if b['bind_type'] == 'sister' else '培训师',
+            'side_retained': side_retained(conn, b['side_uid']),  # 0=未留存 → 暂停发奖
             'binding': {
                 'id': b['id'], 'bound_at': b['bound_at'],
                 'side_nickname': b['side_nickname'], 'side_uid': b['side_uid'],
@@ -918,6 +931,7 @@ def export_rewards():
 
     crawler = UIDCrawler()
     healed = False
+    side_cache = {}   # 侧方留存缓存：同一培训师/姐姐只查一次
     rows, errors = [], []
     for i, b in enumerate(bindings):
         if i:
@@ -925,6 +939,8 @@ def export_rewards():
         try:
             cur = crawler.query(b['trainee_uid'], 'game', *this_range)
             last = crawler.query(b['trainee_uid'], 'game', *last_range)
+            if b['side_uid'] not in side_cache:
+                side_cache[b['side_uid']] = crawler.query(b['side_uid'], 'game', *this_range)
         except CookieExpiredError:
             if healed:
                 return err(f'导出到第 {i + 1} 行时 Cookie 再次过期，请稍后重试', 401)
@@ -934,19 +950,33 @@ def export_rewards():
                 crawler = UIDCrawler()
                 cur = crawler.query(b['trainee_uid'], 'game', *this_range)
                 last = crawler.query(b['trainee_uid'], 'game', *last_range)
+                if b['side_uid'] not in side_cache:
+                    side_cache[b['side_uid']] = crawler.query(b['side_uid'], 'game', *this_range)
             except Exception as e:
                 return err(f'自动重登后查询仍失败: {e}', 502)
         except Exception as e:
             errors.append(f"{b['trainee_nickname']}({b['trainee_uid']}): {e}")
             continue
 
+        # 侧方（培训师/姐姐）未留存 → 不发奖
+        side_ok = True
+        sc = side_cache.get(b['side_uid'])
+        if sc and sc.get('found'):
+            conn = get_db()
+            record_trainee_query(conn, b['side_uid'], sc)
+            conn.close()
+            side_ok = judge_retained(sc) is not False
+
         level = (cur.get('week_level') or '').strip() if cur.get('found') else ''
         tasks = int(last.get('daily_task_count') or 0) if last.get('found') else 0
         revenue = float(last.get('week_revenue') or 0) if last.get('found') else 0
         hall = (cur.get('schedule_hall') or cur.get('auth_hall')
                 or last.get('schedule_hall') or last.get('auth_hall') or b['hall_name'] or '')
-        task_reward = TASK_REWARD_AMOUNT if (tasks >= TASK_REWARD_MIN and level_rank(level) >= 1) else '无'
-        level_reward = LEVEL_REWARD.get(level, '无')
+        if side_ok:
+            task_reward = TASK_REWARD_AMOUNT if (tasks >= TASK_REWARD_MIN and level_rank(level) >= 1) else '无'
+            level_reward = LEVEL_REWARD.get(level, '无')
+        else:
+            task_reward = level_reward = '无'
         rows.append([
             int(b['side_uid']) if str(b['side_uid']).isdigit() else b['side_uid'],
             b['side_nickname'],
@@ -1192,6 +1222,8 @@ def uid_query():
     try:
         tr = conn.execute('SELECT id FROM trainers WHERE uid=?', (uid,)).fetchone()
         if tr:
+            if week_data.get('found'):
+                record_trainee_query(conn, uid, week_data)  # 侧方也落留存判定（未留存暂停发奖）
             payload['slots'] = build_slots_panel(conn, tr['id'])
         te = conn.execute('SELECT id FROM trainees WHERE uid=?', (uid,)).fetchone()
         if te:
@@ -1250,36 +1282,62 @@ WEEKLY_REFRESH_STATE = os.path.join(PROJECT_ROOT, 'data', 'weekly_refresh_status
 
 
 def refresh_all_bound_trainees():
-    """逐个实时查询所有生效绑定的学员（两类绑定都刷），落库当月等级并重算奖励"""
+    """逐个实时查询所有生效绑定的学员+侧方（培训师/姐姐），落库当月等级、留存并重算奖励"""
     conn = get_db()
     rows = conn.execute(
         '''SELECT DISTINCT t.id AS trainee_id, t.uid, t.nickname
            FROM bindings b JOIN trainees t ON t.id = b.trainee_id
            WHERE b.unbound_at IS NULL ORDER BY t.uid''').fetchall()
+    sides = conn.execute(
+        '''SELECT DISTINCT tr.uid, tr.nickname
+           FROM bindings b JOIN trainers tr ON tr.id = b.trainer_id
+           WHERE b.unbound_at IS NULL ORDER BY tr.uid''').fetchall()
     conn.close()
 
     crawler = UIDCrawler()
     healed = False
-    queried, errors = [], []
-    for i, b in enumerate(rows):
-        if i:
-            time.sleep(0.6)  # server1 会话 TTL 短，控制频率
+
+    def _query_with_heal(uid):
+        nonlocal crawler, healed
         try:
-            r = crawler.query(b['uid'], 'game')
+            return crawler.query(uid, 'game'), None
         except CookieExpiredError:
             if healed:
-                errors.append({'uid': b['uid'], 'msg': 'Cookie 再次过期，中止'})
-                break
+                return None, 'Cookie 再次过期，中止'
             healed = True
             try:
                 _heal_uid_cookie()
                 crawler = UIDCrawler()
-                r = crawler.query(b['uid'], 'game')
+                return crawler.query(uid, 'game'), None
             except Exception as e:
-                errors.append({'uid': b['uid'], 'msg': f'自动重登失败: {e}'})
-                break
+                return None, f'自动重登失败: {e}'
         except Exception as e:
-            errors.append({'uid': b['uid'], 'nickname': b['nickname'], 'msg': str(e)})
+            return None, str(e)
+
+    queried, errors = [], []
+
+    # 先刷侧方（留存判定供奖励拦截用）
+    for i, s in enumerate(sides):
+        if i:
+            time.sleep(0.6)
+        r, errmsg = _query_with_heal(s['uid'])
+        if r is None:
+            errors.append({'uid': s['uid'], 'nickname': s['nickname'], 'msg': errmsg})
+            if '中止' in errmsg or '重登失败' in errmsg:
+                return queried, errors
+            continue
+        conn = get_db()
+        record_trainee_query(conn, s['uid'], r)   # 落留存判定
+        conn.close()
+
+    for i, b in enumerate(rows):
+        if i or sides:
+            time.sleep(0.6)  # server1 会话 TTL 短，控制频率
+        r, errmsg = _query_with_heal(b['uid'])
+        if r is None:
+            errors.append({'uid': b['uid'], 'nickname': b['nickname'], 'msg': errmsg})
+            if '中止' in errmsg or '重登失败' in errmsg:
+                break
             continue
         conn = get_db()
         retained, prev = record_trainee_query(conn, b['uid'], r)

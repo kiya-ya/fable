@@ -251,6 +251,18 @@ stb = {x['key']: x['status'] for x in pb[0]['rewards']}
 check('姐妹团银牌+任务7次 → 三档待发放', stb.get('task6_bronze') == 'pending' and stb.get('lv_junior_silver') == 'pending'
       and stb.get('lv_silver') == 'pending' and stb.get('lv_gold') == 'ineligible', str(stb))
 
+print('== 侧方未留存暂停发奖 ==')
+sis_bid = pb[0]['binding']['id']
+db_exec('DELETE FROM reward_grants WHERE binding_id=?', (sis_bid,))
+db_exec('''INSERT INTO trainee_level_monthly (trainee_uid, month, best_level, best_rank, last_queried_at, last_retained)
+           VALUES ('91001', ?, '', 0, ?, 0)''', (MONTH, NOW_S))
+r = requests.get(f'{B}/api/trainees/{te_b}/rewards')
+pb2 = r.json()['rewards_panel']['panels']
+check('姐姐未留存 → 面板带标记', pb2[0].get('side_retained') == 0, str(pb2[0].get('side_retained')))
+st3 = {x['key']: x['status'] for x in pb2[0]['rewards']}
+check('姐姐未留存 → 不再生成待发放', all(v != 'pending' for v in st3.values()), str(st3))
+db_exec("DELETE FROM trainee_level_monthly WHERE trainee_uid='91001'")
+
 print('== 奖励跨月（按绑定当月起算） ==')
 d20 = datetime.utcnow() - timedelta(days=20)
 if d20.month != datetime.utcnow().month:
