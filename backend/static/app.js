@@ -462,9 +462,9 @@ async function loadBindings(page) {
       <tr>
         <td><span class="tag ${b.bind_type === 'sister' ? 'graduated' : 'active'}">${BIND_TYPE[b.bind_type] || b.bind_type}</span></td>
         <td>${esc(b.trainer_nickname)}</td>
-        <td>${esc(b.trainer_uid)}</td>
+        <td><a href="javascript:void(0)" class="uid-link" onclick="gotoUidQuery('${esc(b.trainer_uid)}')">${esc(b.trainer_uid)}</a></td>
         <td>${esc(b.trainee_nickname)}</td>
-        <td>${esc(b.trainee_uid)}</td>
+        <td><a href="javascript:void(0)" class="uid-link" onclick="gotoUidQuery('${esc(b.trainee_uid)}')">${esc(b.trainee_uid)}</a></td>
         <td>${esc(b.hall_name || '')}</td>
         <td>${protHtml}</td>
         <td>${retainedTag}</td>
