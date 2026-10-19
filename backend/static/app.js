@@ -476,7 +476,9 @@ async function loadBindings(page) {
         <td class="col-unbound" style="display:${bindingsActiveView ? 'none' : ''}">${esc(b.unbound_at || '')}</td>
         <td>${esc(b.note || '')}</td>
         <td style="white-space:nowrap">
-          ${bindingsActiveView ? `<button class="btn small danger" onclick="unbind(${b.id})">解绑</button>` : ''}
+          ${bindingsActiveView
+            ? `<button class="btn small danger" onclick="unbind(${b.id})">解绑</button>`
+            : `<button class="btn small primary" onclick="restoreBinding(${b.id})">恢复</button>`}
           <button class="btn small" onclick="gotoUidQuery('${esc(b.trainee_uid)}')">速查</button>
         </td>
       </tr>`;
@@ -513,6 +515,17 @@ async function unbind(id) {
   try {
     await api(`/api/bindings/${id}/unbind`, { method: 'POST' });
     toast('已解绑');
+    loadBindingsTab();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// 历史记录恢复绑定
+async function restoreBinding(id) {
+  try {
+    await api(`/api/bindings/${id}/restore`, { method: 'POST' });
+    toast('已恢复为生效绑定');
     loadBindingsTab();
   } catch (e) {
     toast(e.message, true);

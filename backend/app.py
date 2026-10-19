@@ -169,6 +169,29 @@ def auto_dissolve_trainee(conn, trainee_uid):
     return len(rows)
 
 
+def auto_dissolve_side(conn, side_uid):
+    """侧方（培训师/姐姐）未留存：其所有生效绑定解散进历史（备注原因），奖励随之中止。"""
+    rows = conn.execute(
+        '''SELECT b.id, b.note, b.bind_type FROM bindings b JOIN trainers tr ON tr.id=b.trainer_id
+           WHERE tr.uid=? AND b.unbound_at IS NULL''', (side_uid,)).fetchall()
+    for r in rows:
+        reason = '姐姐未留存' if r['bind_type'] == 'sister' else '培训师未留存'
+        note = ((r['note'] or '') + f' [系统判定解散：{reason}]').strip()
+        conn.execute('UPDATE bindings SET unbound_at=CURRENT_TIMESTAMP, note=? WHERE id=?',
+                     (note, r['id']))
+    if rows:
+        conn.commit()
+        print(f'[AutoDissolve] 侧方 {side_uid} 未留存，解散 {len(rows)} 条绑定', flush=True)
+    return len(rows)
+
+
+def maybe_auto_dissolve_side(conn, side_uid, retained, prev):
+    """侧方自动解散仅在「之前留存、本次变空」时触发"""
+    if retained is False and prev == 1:
+        return auto_dissolve_side(conn, side_uid)
+    return 0
+
+
 def record_trainee_query(conn, uid, data, last_week_data=None, side=False):
     """速查成功后落库当月等级记录（best = 当月最高周等级；含留存判定）。
     last_week_data 可选：用于任务档奖励口径「上周任务 + 当周牌子」。
@@ -967,6 +990,37 @@ def unbind(bid):
     return ok()
 
 
+@app.post('/api/bindings/<int:bid>/restore')
+def restore_binding(bid):
+    """从历史记录恢复绑定（置回生效）。与现有唯一约束冲突时 409"""
+    conn = get_db()
+    b = conn.execute('SELECT * FROM bindings WHERE id=?', (bid,)).fetchone()
+    if not b:
+        conn.close()
+        return err('绑定不存在', 404)
+    if b['unbound_at'] is None:
+        conn.close()
+        return err('该绑定已是生效状态，无需恢复', 409)
+    conflict = conn.execute(
+        'SELECT id FROM bindings WHERE trainee_id=? AND bind_type=? AND unbound_at IS NULL AND id != ?',
+        (b['trainee_id'], b['bind_type'], bid)).fetchone()
+    if conflict:
+        conn.close()
+        return err('该妹妹当前已有同类型生效绑定，请先解绑再恢复', 409)
+    if b['bind_type'] == 'sister':
+        busy = conn.execute(
+            "SELECT id FROM bindings WHERE trainer_id=? AND bind_type='sister' AND unbound_at IS NULL AND id != ?",
+            (b['trainer_id'], bid)).fetchone()
+        if busy:
+            conn.close()
+            return err('该姐姐当前已有生效的三胎绑定（一对一），请先解绑再恢复', 409)
+    conn.execute('UPDATE bindings SET unbound_at=NULL WHERE id=?', (bid,))
+    conn.execute("UPDATE trainees SET status='active', updated_at=CURRENT_TIMESTAMP WHERE id=?", (b['trainee_id'],))
+    conn.commit()
+    conn.close()
+    return ok()
+
+
 # ────────────────────────────────────────────── 周奖励导出（XLSX）
 
 # 导出金额口径（与参考文件一致）：任务奖固定 12.8（周任务≥6次且当周铜牌及以上）；等级奖按牌子
@@ -1307,7 +1361,8 @@ def uid_query():
         tr = conn.execute('SELECT id FROM trainers WHERE uid=?', (uid,)).fetchone()
         if tr:
             if week_data.get('found'):
-                record_trainee_query(conn, uid, week_data, side=True)  # 侧方也落留存判定（未留存暂停发奖）
+                retained, prev = record_trainee_query(conn, uid, week_data, side=True)  # 侧方也落留存判定
+                maybe_auto_dissolve_side(conn, uid, retained, prev)
             payload['slots'] = build_slots_panel(conn, tr['id'])
         te = conn.execute('SELECT id FROM trainees WHERE uid=?', (uid,)).fetchone()
         if te:
@@ -1413,7 +1468,8 @@ def refresh_all_bound_trainees():
                 return queried, errors
             continue
         conn = get_db()
-        record_trainee_query(conn, s['uid'], r, side=True)   # 落留存判定（宽松口径）
+        retained, prev = record_trainee_query(conn, s['uid'], r, side=True)   # 落留存判定（宽松口径）
+        maybe_auto_dissolve_side(conn, s['uid'], retained, prev)
         conn.close()
 
     for i, b in enumerate(rows):

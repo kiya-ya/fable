@@ -300,6 +300,22 @@ print('== 历史导入 ==')
 r = requests.get(f'{B}/api/trainees/import-candidates')
 check('导入候选接口', r.ok and 'snapshot_date' in r.json(), r.text[:200])
 
+print('== 历史恢复 ==')
+bid_restore = db_one("SELECT id FROM bindings WHERE trainee_id=? AND bind_type='trainer' AND unbound_at IS NULL", (te_a,))[0]
+r = requests.post(f'{B}/api/bindings/{bid_restore}/unbind')
+check('先解绑', r.ok, r.text)
+r = requests.post(f'{B}/api/bindings/{bid_restore}/restore')
+check('恢复成功', r.ok, r.text)
+r = requests.post(f'{B}/api/bindings/{bid_restore}/restore')
+check('重复恢复 409', r.status_code == 409, f'got {r.status_code}')
+r = requests.post(f'{B}/api/bindings/{bid_restore}/unbind')
+db_exec("INSERT INTO bindings (trainer_id, trainee_id, bind_type, note) VALUES (?, ?, 'trainer', '冲突测试')", (tr_a, te_a))
+r = requests.post(f'{B}/api/bindings/{bid_restore}/restore')
+check('有同类型生效绑定时恢复 409', r.status_code == 409, f'got {r.status_code}')
+db_exec("UPDATE bindings SET unbound_at=CURRENT_TIMESTAMP WHERE trainee_id=? AND note='冲突测试'", (te_a,))
+r = requests.post(f'{B}/api/bindings/{bid_restore}/restore')
+check('解掉冲突后可恢复', r.ok, r.text)
+
 print('== 奖励导出 ==')
 # 先解绑测试绑定（只动本测试创建的数据！）：导出测试不打网络
 db_exec(f"UPDATE bindings SET unbound_at=CURRENT_TIMESTAMP WHERE unbound_at IS NULL AND trainee_id IN ({te_a},{te_b},{te_c})")
