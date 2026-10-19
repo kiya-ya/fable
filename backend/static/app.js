@@ -1001,7 +1001,7 @@ function renderPieChart(reasons, pieSel = '#dash-pie', legendSel = '#dash-pie-le
           <title>${r.reason}: ${r.count}（${(frac * 100).toFixed(1)}%）</title></path>`;
     return path;
   }).join('');
-  $(pieSel).innerHTML = `<svg viewBox="0 0 200 200" style="max-width:220px">${slices}
+  $(pieSel).innerHTML = `<svg viewBox="0 0 200 200" style="width:200px;height:200px;max-width:100%">${slices}
     <circle cx="${CX}" cy="${CY}" r="34" fill="#fff"/>
     <text x="${CX}" y="${CY - 2}" text-anchor="middle" font-size="20" font-weight="600">${total}</text>
     <text x="${CX}" y="${CY + 16}" text-anchor="middle" font-size="11" fill="#6b7280">总解散</text></svg>`;
