@@ -140,6 +140,17 @@ def _protection_gate(uid):
     return False, f'该妹妹保护期已于 {end} 结束，不能绑定培训师', False
 
 
+def judge_side_retained(data):
+    """侧方（培训师/姐姐）留存判定：排档大厅 / 权限大厅 / 当周等级 任一非空即算留存。
+    侧方本人不排档很常见，不能只看排档+等级（会误判成未留存而不发奖）"""
+    if not data.get('found'):
+        return None
+    def empty(v):
+        return v is None or str(v).strip() in ('', '-')
+    return not (empty(data.get('schedule_hall')) and empty(data.get('auth_hall'))
+                and empty(data.get('week_level')))
+
+
 def auto_dissolve_trainee(conn, trainee_uid):
     """留存字段全空的学员：所有生效绑定标记解散（置 unbound_at + 备注），档案置为退出。
     返回解散的绑定数。"""
@@ -158,9 +169,10 @@ def auto_dissolve_trainee(conn, trainee_uid):
     return len(rows)
 
 
-def record_trainee_query(conn, uid, data, last_week_data=None):
+def record_trainee_query(conn, uid, data, last_week_data=None, side=False):
     """速查成功后落库当月等级记录（best = 当月最高周等级；含留存判定）。
     last_week_data 可选：用于任务档奖励口径「上周任务 + 当周牌子」。
+    side=True 表示侧方（培训师/姐姐），留存用任一非空的宽松口径。
     返回 (retained, prev_retained)：本次判定与上次记录（None=首次查询）"""
     if not data.get('found'):
         return None, None
@@ -170,7 +182,7 @@ def record_trainee_query(conn, uid, data, last_week_data=None):
     tasks = int(data.get('daily_task_count') or 0)
     sched_days = int(data.get('week_schedule_days') or 0)
     prev_tasks = int(last_week_data.get('daily_task_count') or 0) if last_week_data and last_week_data.get('found') else None
-    retained = judge_retained(data)
+    retained = judge_side_retained(data) if side else judge_retained(data)
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     row = conn.execute(
         'SELECT * FROM trainee_level_monthly WHERE trainee_uid=? AND month=?', (uid, month)).fetchone()
@@ -1029,9 +1041,9 @@ def export_rewards():
         sc = side_cache.get(b['side_uid'])
         if sc and sc.get('found'):
             conn = get_db()
-            record_trainee_query(conn, b['side_uid'], sc)
+            record_trainee_query(conn, b['side_uid'], sc, side=True)
             conn.close()
-            side_ok = judge_retained(sc) is not False
+            side_ok = judge_side_retained(sc) is not False
 
         level = (cur.get('week_level') or '').strip() if cur.get('found') else ''
         tasks = int(last.get('daily_task_count') or 0) if last.get('found') else 0
@@ -1295,7 +1307,7 @@ def uid_query():
         tr = conn.execute('SELECT id FROM trainers WHERE uid=?', (uid,)).fetchone()
         if tr:
             if week_data.get('found'):
-                record_trainee_query(conn, uid, week_data)  # 侧方也落留存判定（未留存暂停发奖）
+                record_trainee_query(conn, uid, week_data, side=True)  # 侧方也落留存判定（未留存暂停发奖）
             payload['slots'] = build_slots_panel(conn, tr['id'])
         te = conn.execute('SELECT id FROM trainees WHERE uid=?', (uid,)).fetchone()
         if te:
@@ -1401,7 +1413,7 @@ def refresh_all_bound_trainees():
                 return queried, errors
             continue
         conn = get_db()
-        record_trainee_query(conn, s['uid'], r)   # 落留存判定
+        record_trainee_query(conn, s['uid'], r, side=True)   # 落留存判定（宽松口径）
         conn.close()
 
     for i, b in enumerate(rows):
