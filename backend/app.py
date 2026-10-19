@@ -62,6 +62,14 @@ def _last_month():
     return (first - timedelta(days=1)).strftime('%Y-%m')
 
 
+def _last_week_range():
+    """上周（周一~周日）日期范围"""
+    this_monday = datetime.now() - timedelta(days=datetime.now().weekday())
+    last_monday = this_monday - timedelta(days=7)
+    fmt = '%Y-%m-%d'
+    return last_monday.strftime(fmt), (last_monday + timedelta(days=6)).strftime(fmt)
+
+
 def get_effective_levels(conn, uids):
     """名额用有效等级：当月有记录用当月最高；当月无记录（月初真空期）用上月最高兜底。
     返回 {uid: {'best_level', 'best_rank', 'last_queried_at', 'from_last_month'}}"""
@@ -150,8 +158,9 @@ def auto_dissolve_trainee(conn, trainee_uid):
     return len(rows)
 
 
-def record_trainee_query(conn, uid, data):
+def record_trainee_query(conn, uid, data, last_week_data=None):
     """速查成功后落库当月等级记录（best = 当月最高周等级；含留存判定）。
+    last_week_data 可选：用于任务档奖励口径「上周任务 + 当周牌子」。
     返回 (retained, prev_retained)：本次判定与上次记录（None=首次查询）"""
     if not data.get('found'):
         return None, None
@@ -160,6 +169,7 @@ def record_trainee_query(conn, uid, data):
     rank = level_rank(lvl)
     tasks = int(data.get('daily_task_count') or 0)
     sched_days = int(data.get('week_schedule_days') or 0)
+    prev_tasks = int(last_week_data.get('daily_task_count') or 0) if last_week_data and last_week_data.get('found') else None
     retained = judge_retained(data)
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     row = conn.execute(
@@ -176,16 +186,16 @@ def record_trainee_query(conn, uid, data):
         conn.execute(
             '''UPDATE trainee_level_monthly
                SET best_level=?, best_rank=?, last_week_level=?, last_daily_task_count=?, last_queried_at=?, last_retained=?,
-                   best_rank_active=?, best_level_active=?
-               WHERE id=?''', (best_lvl, best_rk, lvl, tasks, now, retained, act_rk, act_lvl, row['id']))
+                   best_rank_active=?, best_level_active=?, prev_week_tasks=COALESCE(?, prev_week_tasks)
+               WHERE id=?''', (best_lvl, best_rk, lvl, tasks, now, retained, act_rk, act_lvl, prev_tasks, row['id']))
     else:
         act_rk, act_lvl = (rank, lvl) if sched_days > 0 else (0, '')
         conn.execute(
             '''INSERT INTO trainee_level_monthly
                (trainee_uid, month, best_level, best_rank, last_week_level, last_daily_task_count, last_queried_at, last_retained,
-                best_rank_active, best_level_active)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-            (uid, month, lvl, rank, lvl, tasks, now, retained, act_rk, act_lvl))
+                best_rank_active, best_level_active, prev_week_tasks)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (uid, month, lvl, rank, lvl, tasks, now, retained, act_rk, act_lvl, prev_tasks))
     # 保护期结束时间同步到档案（空值不覆盖旧值）
     prot = (data.get('protection_end') or '').strip()
     if prot and prot != '-':
@@ -234,37 +244,64 @@ def side_retained(conn, side_uid):
     return r['last_retained'] if r else None
 
 
+def reward_metrics(conn, b):
+    """奖励判定指标：(绑定当月起至今的最高等级 rank, 上周任务次数)。
+    等级含跨月；任务取最近一次有上周记录的值，没有则退回当周任务数。"""
+    bind_month = (_parse_ts(b['bound_at']) + timedelta(hours=8)).strftime('%Y-%m')
+    recs = conn.execute(
+        'SELECT best_rank, last_daily_task_count, prev_week_tasks, last_queried_at FROM trainee_level_monthly WHERE trainee_uid=? AND month>=?',
+        (b['trainee_uid'], bind_month)).fetchall()
+    best_rank = max((r['best_rank'] for r in recs), default=0)
+    last_week_tasks = 0
+    for r in sorted(recs, key=lambda x: x['last_queried_at'] or '', reverse=True):
+        if r['prev_week_tasks'] is not None:
+            last_week_tasks = r['prev_week_tasks']
+            break
+        if r['last_daily_task_count'] is not None:
+            last_week_tasks = r['last_daily_task_count']
+            break
+    return best_rank, last_week_tasks
+
+
 def sync_pending_rewards(conn, trainee_id):
-    """为每条生效绑定（培训师/姐妹团均可）生成 pending 奖励（奖励窗口内；已存在则跳过）。
-    侧方（培训师/姐姐）已判定未留存时不生成。"""
+    """为每条生效绑定生成 pending 奖励（窗口内；侧方未留存不生成）。
+    晋升档只发最高达成档（不覆盖发放更低档）。"""
     bindings = conn.execute(
         '''SELECT b.*, t.uid AS trainee_uid, tr.uid AS side_uid FROM bindings b
            JOIN trainees t ON t.id=b.trainee_id JOIN trainers tr ON tr.id=b.trainer_id
            WHERE b.trainee_id=? AND b.unbound_at IS NULL''', (trainee_id,)).fetchall()
+    level_tiers = [t for t in REWARD_TIERS if not t.get('need_tasks')]
+    level_keys = tuple(t['key'] for t in level_tiers)
     for b in bindings:
         if reward_window_status(b['bound_at'])[2] != 'in_window':
             continue
         if side_retained(conn, b['side_uid']) == 0:
             continue
-        # 等级达标按「绑定当月起至今的最高」算（覆盖月末绑定、窗口跨月的情况）；
-        # 任务次数取最近一次查询值（任务按周重置）
-        bind_month = (_parse_ts(b['bound_at']) + timedelta(hours=8)).strftime('%Y-%m')
-        recs = conn.execute(
-            'SELECT best_rank, last_daily_task_count, last_queried_at FROM trainee_level_monthly WHERE trainee_uid=? AND month>=?',
-            (b['trainee_uid'], bind_month)).fetchall()
-        best_rank = max((r['best_rank'] for r in recs), default=0)
-        tasks = next((r['last_daily_task_count'] for r in sorted(
-            recs, key=lambda x: x['last_queried_at'] or '', reverse=True) if r['last_daily_task_count'] is not None), 0)
-        for tier in REWARD_TIERS:
-            eligible = best_rank >= tier['min_rank']
-            if tier.get('need_tasks'):
-                eligible = eligible and tasks >= 6
-            if eligible:
-                conn.execute(
-                    '''INSERT OR IGNORE INTO reward_grants
-                       (binding_id, trainee_uid, trainer_id, reward_key, reward_label, amount)
-                       VALUES (?, ?, ?, ?, ?, ?)''',
-                    (b['id'], b['trainee_uid'], b['trainer_id'], tier['key'], tier['label'], tier['amount']))
+        best_rank, last_week_tasks = reward_metrics(conn, b)
+        # 任务档：上周任务≥6次 + 当周铜牌及以上
+        task_tier = next(t for t in REWARD_TIERS if t.get('need_tasks'))
+        if best_rank >= 1 and last_week_tasks >= 6:
+            conn.execute(
+                '''INSERT OR IGNORE INTO reward_grants
+                   (binding_id, trainee_uid, trainer_id, reward_key, reward_label, amount)
+                   VALUES (?, ?, ?, ?, ?, ?)''',
+                (b['id'], b['trainee_uid'], b['trainer_id'], task_tier['key'], task_tier['label'], task_tier['amount']))
+        # 晋升档：只发最高达成档
+        achieved = None
+        for t in level_tiers:
+            if best_rank >= t['min_rank']:
+                achieved = t
+        if achieved:
+            conn.execute(
+                '''INSERT OR IGNORE INTO reward_grants
+                   (binding_id, trainee_uid, trainer_id, reward_key, reward_label, amount)
+                   VALUES (?, ?, ?, ?, ?, ?)''',
+                (b['id'], b['trainee_uid'], b['trainer_id'], achieved['key'], achieved['label'], achieved['amount']))
+            # 清理其它晋升档的待发放（已被更高档覆盖；已发放的不动）
+            marks = ','.join('?' * len(level_keys))
+            conn.execute(
+                f"DELETE FROM reward_grants WHERE binding_id=? AND status='pending' AND reward_key IN ({marks}) AND reward_key != ?",
+                (b['id'], *level_keys, achieved['key']))
     conn.commit()
 
 
@@ -314,8 +351,10 @@ def build_rewards_panel(conn, trainee_id):
     if not t:
         return None
     bindings = conn.execute(
-        '''SELECT b.*, tr.nickname AS side_nickname, tr.uid AS side_uid
-           FROM bindings b JOIN trainers tr ON tr.id = b.trainer_id
+        '''SELECT b.*, tr.nickname AS side_nickname, tr.uid AS side_uid, t.uid AS trainee_uid
+           FROM bindings b
+           JOIN trainers tr ON tr.id = b.trainer_id
+           JOIN trainees t ON t.id = b.trainee_id
            WHERE b.trainee_id=? AND b.unbound_at IS NULL
            ORDER BY b.bind_type, b.bound_at''', (trainee_id,)).fetchall()
     grants = conn.execute(
@@ -328,11 +367,35 @@ def build_rewards_panel(conn, trainee_id):
     for b in bindings:
         start, end, status = reward_window_status(b['bound_at'])
         bg = {g['reward_key']: g for g in grants if g['binding_id'] == b['id']}
+        best_rank, last_week_tasks = reward_metrics(conn, b)
+        rewards = []
+        for tier in REWARD_TIERS:
+            g = bg.get(tier['key'])
+            if g and g['status'] == 'granted':
+                st = 'granted'
+            elif tier.get('need_tasks'):
+                st = 'pending' if g else 'ineligible'
+            elif best_rank > tier['min_rank']:
+                st = 'achieved'      # 已被更高档覆盖，不单独发
+            elif best_rank == tier['min_rank'] and g:
+                st = 'pending'
+            elif best_rank == tier['min_rank']:
+                st = 'achieved'      # 已达但未生成（窗口未开始/已过期）
+            else:
+                st = 'ineligible'
+            rewards.append({
+                'key': tier['key'], 'label': tier['label'], 'amount': tier['amount'],
+                'status': st,
+                'grant_id': g['id'] if g else None,
+                'granted_at': g['granted_at'] if g else None,
+            })
         panels.append({
             'bind_type': b['bind_type'],
             'type_label': '姐妹团三胎' if b['bind_type'] == 'sister' else '培训师',
             'side_label': '姐姐' if b['bind_type'] == 'sister' else '培训师',
             'side_retained': side_retained(conn, b['side_uid']),  # 0=未留存 → 暂停发奖
+            'best_rank': best_rank,
+            'last_week_tasks': last_week_tasks,
             'binding': {
                 'id': b['id'], 'bound_at': b['bound_at'],
                 'side_nickname': b['side_nickname'], 'side_uid': b['side_uid'],
@@ -342,12 +405,7 @@ def build_rewards_panel(conn, trainee_id):
             'window_start': start.strftime('%Y-%m-%d'),
             'window_end': end.strftime('%Y-%m-%d'),
             'days_left': max((end - datetime.now()).days, 0) if status == 'in_window' else None,
-            'rewards': [{
-                'key': tier['key'], 'label': tier['label'], 'amount': tier['amount'],
-                'status': bg[tier['key']]['status'] if tier['key'] in bg else 'ineligible',
-                'grant_id': bg[tier['key']]['id'] if tier['key'] in bg else None,
-                'granted_at': bg[tier['key']]['granted_at'] if tier['key'] in bg else None,
-            } for tier in REWARD_TIERS],
+            'rewards': rewards,
         })
     panel = {
         'trainee': {'id': t['id'], 'uid': t['uid'], 'nickname': t['nickname']},
@@ -372,6 +430,14 @@ def ok(data=None):
 
 
 # ────────────────────────────────────────────── 首页
+
+@app.after_request
+def _no_cache_static(resp):
+    """页面/静态资源禁缓存，避免浏览器拿到旧版 JS/CSS"""
+    if request.path in ('/', '/app.js', '/style.css'):
+        resp.headers['Cache-Control'] = 'no-store'
+    return resp
+
 
 @app.get('/')
 def index():
@@ -1047,12 +1113,14 @@ def refresh_trainees(tid):
 
     crawler = UIDCrawler()
     healed = False
+    last_start, last_end = _last_week_range()
     queried, errors = [], []
     for i, b in enumerate(bindings):
         if i:
             time.sleep(0.6)  # server1 会话 TTL 短，控制频率
         try:
             r = crawler.query(b['uid'], 'game')
+            r_last = crawler.query(b['uid'], 'game', last_start, last_end)
         except CookieExpiredError as e:
             if healed:
                 return err(f'已刷新 {len(queried)}/{len(bindings)} 人时 Cookie 再次过期: {e}', 401)
@@ -1061,6 +1129,7 @@ def refresh_trainees(tid):
                 _heal_uid_cookie()
                 crawler = UIDCrawler()
                 r = crawler.query(b['uid'], 'game')
+                r_last = crawler.query(b['uid'], 'game', last_start, last_end)
             except CookieExpiredError as e2:
                 return err(f'自动重登后 Cookie 仍无效: {e2}', 401)
             except Exception as e2:
@@ -1069,7 +1138,7 @@ def refresh_trainees(tid):
             errors.append({'uid': b['uid'], 'nickname': b['nickname'], 'msg': str(e)})
             continue
         conn = get_db()
-        retained, prev = record_trainee_query(conn, b['uid'], r)
+        retained, prev = record_trainee_query(conn, b['uid'], r, r_last)
         if r.get('found'):
             if maybe_auto_dissolve(conn, b['uid'], retained, prev) == 0:
                 sync_pending_rewards(conn, b['trainee_id'])
@@ -1104,11 +1173,14 @@ def refresh_trainee(tid):
     if not t:
         return err('妹妹不存在', 404)
     try:
+        last_start, last_end = _last_week_range()
         r = UIDCrawler().query(t['uid'], 'game')
+        r_last = UIDCrawler().query(t['uid'], 'game', last_start, last_end)
     except CookieExpiredError:
         try:
             _heal_uid_cookie()
             r = UIDCrawler().query(t['uid'], 'game')
+            r_last = UIDCrawler().query(t['uid'], 'game', last_start, last_end)
         except CookieExpiredError as e:
             return err(str(e), 401)
         except Exception as e:
@@ -1130,7 +1202,7 @@ def refresh_trainee(tid):
             """UPDATE trainees SET hall_name=COALESCE(NULLIF(?, ''), hall_name),
                nickname=COALESCE(NULLIF(?, ''), nickname), updated_at=CURRENT_TIMESTAMP WHERE id=?""",
             (hall, nick, tid))
-    retained, prev = record_trainee_query(conn, t['uid'], r)
+    retained, prev = record_trainee_query(conn, t['uid'], r, r_last)
     dissolved = maybe_auto_dissolve(conn, t['uid'], retained, prev)
     if not dissolved:
         sync_pending_rewards(conn, tid)
@@ -1228,7 +1300,8 @@ def uid_query():
         te = conn.execute('SELECT id FROM trainees WHERE uid=?', (uid,)).fetchone()
         if te:
             if week_data.get('found'):
-                retained, prev = record_trainee_query(conn, uid, week_data)
+                retained, prev = record_trainee_query(
+                    conn, uid, week_data, result.get('last_week', {}).get('data'))
                 if maybe_auto_dissolve(conn, uid, retained, prev) == 0:
                     sync_pending_rewards(conn, te['id'])
             payload['rewards_panel'] = build_rewards_panel(conn, te['id'])
@@ -1315,6 +1388,7 @@ def refresh_all_bound_trainees():
             return None, str(e)
 
     queried, errors = [], []
+    last_start, last_end = _last_week_range()
 
     # 先刷侧方（留存判定供奖励拦截用）
     for i, s in enumerate(sides):
@@ -1339,8 +1413,12 @@ def refresh_all_bound_trainees():
             if '中止' in errmsg or '重登失败' in errmsg:
                 break
             continue
+        try:
+            r_last = crawler.query(b['uid'], 'game', last_start, last_end)
+        except Exception:
+            r_last = None
         conn = get_db()
-        retained, prev = record_trainee_query(conn, b['uid'], r)
+        retained, prev = record_trainee_query(conn, b['uid'], r, r_last)
         if r.get('found'):
             if maybe_auto_dissolve(conn, b['uid'], retained, prev) == 0:
                 sync_pending_rewards(conn, b['trainee_id'])

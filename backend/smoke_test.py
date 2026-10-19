@@ -216,8 +216,9 @@ if datetime.now() < ws:
     rw = requests.get(f'{B}/api/trainees/{te_a}/rewards').json()['rewards_panel']['panels'][0]
 check('进窗口后 in_window', rw['window_status'] == 'in_window' and rw['days_left'] is not None, str(rw['window_status']))
 st = {x['key']: x['status'] for x in rw['rewards']}
-check('金牌+任务7次 → 四档待发放', st.get('task6_bronze') == 'pending' and st.get('lv_junior_silver') == 'pending'
-      and st.get('lv_silver') == 'pending' and st.get('lv_gold') == 'pending', str(st))
+check('金牌+任务7次 → 只发最高档（金牌+任务档 pending，低档已达标）',
+      st.get('task6_bronze') == 'pending' and st.get('lv_gold') == 'pending'
+      and st.get('lv_junior_silver') == 'achieved' and st.get('lv_silver') == 'achieved', str(st))
 check('王牌未达标', st.get('lv_ace') == 'ineligible', str(st))
 grant_id = next(x['grant_id'] for x in rw['rewards'] if x['key'] == 'lv_gold')
 r = requests.post(f'{B}/api/rewards/{grant_id}/grant')
@@ -233,10 +234,11 @@ check('撤销发放', r.ok, r.text)
 print('== 一键全部标记已发 ==')
 bid_a = db_one("SELECT id FROM bindings WHERE trainee_id=? AND bind_type='trainer' AND unbound_at IS NULL", (te_a,))[0]
 r = requests.post(f'{B}/api/rewards/grant-all', json={'binding_id': bid_a})
-check('grant-all 返回发放数量', r.ok and r.json()['granted'] == 4, r.text)
+check('grant-all 返回发放数量（任务档+金牌档=2）', r.ok and r.json()['granted'] == 2, r.text)
 r = requests.get(f'{B}/api/trainees/{te_a}/rewards')
 st = {x['key']: x['status'] for x in r.json()['rewards_panel']['panels'][0]['rewards']}
-check('四档全部已发放', all(st.get(k) == 'granted' for k in ('task6_bronze', 'lv_junior_silver', 'lv_silver', 'lv_gold')), str(st))
+check('任务档+金牌档已发放，低档已达标', st.get('task6_bronze') == 'granted' and st.get('lv_gold') == 'granted'
+      and st.get('lv_junior_silver') == 'achieved' and st.get('lv_silver') == 'achieved', str(st))
 r = requests.post(f'{B}/api/rewards/grant-all', json={'binding_id': bid_a})
 check('重复 grant-all 幂等 0 档', r.ok and r.json()['granted'] == 0, r.text)
 
@@ -248,8 +250,9 @@ r = requests.get(f'{B}/api/trainees/{te_b}/rewards')
 pb = r.json()['rewards_panel']['panels']
 check('乙的奖励面板=姐妹团绑定', len(pb) == 1 and pb[0]['bind_type'] == 'sister' and pb[0]['side_label'] == '姐姐', str(pb))
 stb = {x['key']: x['status'] for x in pb[0]['rewards']}
-check('姐妹团银牌+任务7次 → 三档待发放', stb.get('task6_bronze') == 'pending' and stb.get('lv_junior_silver') == 'pending'
-      and stb.get('lv_silver') == 'pending' and stb.get('lv_gold') == 'ineligible', str(stb))
+check('姐妹团银牌+任务7次 → 银牌+任务档 pending，初银已达标',
+      stb.get('task6_bronze') == 'pending' and stb.get('lv_silver') == 'pending'
+      and stb.get('lv_junior_silver') == 'achieved' and stb.get('lv_gold') == 'ineligible', str(stb))
 
 print('== 侧方未留存暂停发奖 ==')
 sis_bid = pb[0]['binding']['id']

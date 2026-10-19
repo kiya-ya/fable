@@ -95,6 +95,9 @@ def _migrate(conn):
     if 'protection_end' not in tcols:
         # 保护期结束时间（查询时同步到档案，绑定列表展示用）
         conn.execute('ALTER TABLE trainees ADD COLUMN protection_end TEXT')
+    if 'prev_week_tasks' not in mcols:
+        # 上周任务次数（任务档奖励口径 = 上周任务 + 当周牌子）
+        conn.execute('ALTER TABLE trainee_level_monthly ADD COLUMN prev_week_tasks INTEGER')
     if 'best_rank_active' not in mcols:
         # 排档周最高等级：仅当周排档天数>0 的查询才计入名额贡献
         conn.execute('ALTER TABLE trainee_level_monthly ADD COLUMN best_rank_active INTEGER DEFAULT 0')

@@ -99,10 +99,11 @@ $('#uq-submit').addEventListener('click', async () => {
   btn.disabled = true;
   btn.textContent = '查询中…';
   $('#uq-result').innerHTML = '';
-  $('#slots-panel').classList.add('hidden');
-  $('#rewards-panel').classList.add('hidden');
   try {
     const r = await api('/api/uid-query', { method: 'POST', body: { uid, captain_type } });
+    // 面板严格按本次响应显隐，避免上一个 UID 的数据残留
+    $('#slots-panel').classList.toggle('hidden', !r.slots);
+    $('#rewards-panel').classList.toggle('hidden', !r.rewards_panel);
     if (r.slots) renderSlotsPanel(r.slots);
     if (r.rewards_panel) renderRewardsPanel(r.rewards_panel);
     renderUidResult(r.result);
@@ -191,6 +192,7 @@ $('#slots-refresh').addEventListener('click', async () => {
 const REWARD_STATUS = {
   granted: { text: '已发放', cls: 'active' },
   pending: { text: '待发放', cls: 'graduated' },
+  achieved: { text: '已达标', cls: 'inactive' },
   ineligible: { text: '未达标', cls: 'inactive' },
 };
 
