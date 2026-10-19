@@ -951,15 +951,18 @@ function renderDashCards(d) {
 }
 
 function renderLineChart(weekly) {
+  // 裁掉开头连续的全零周（系统上线前的空周），从第一个有数据的周开始显示
+  const data = [...weekly];
+  while (data.length > 2 && data[0].bound === 0 && data[0].unbound === 0) data.shift();
   const W = 640, H = 240, padL = 40, padB = 28, padT = 14, padR = 10;
-  const max = Math.max(1, ...weekly.map((w) => Math.max(w.bound, w.unbound)));
-  const stepX = (W - padL - padR) / (weekly.length - 1);
+  const max = Math.max(1, ...data.map((w) => Math.max(w.bound, w.unbound)));
+  const stepX = (W - padL - padR) / (data.length - 1);
   const y = (v) => padT + (H - padB - padT) * (1 - v / max);
-  const series = (key) => weekly.map((w, i) =>
+  const series = (key) => data.map((w, i) =>
     `${(padL + i * stepX).toFixed(1)},${y(w[key]).toFixed(1)}`).join(' ');
-  const dots = (key, color) => weekly.map((w, i) =>
+  const dots = (key, color) => data.map((w, i) =>
     `<circle cx="${padL + i * stepX}" cy="${y(w[key])}" r="3.5" fill="${color}"><title>${w.label} ${w[key]}</title></circle>`).join('');
-  const xlabels = weekly.map((w, i) =>
+  const xlabels = data.map((w, i) =>
     `<text x="${padL + i * stepX}" y="${H - 8}" font-size="10" fill="#9ca3af" text-anchor="middle">${w.week_start}</text>`).join('');
   const gridlines = [0, 0.5, 1].map((f) => {
     const gy = padT + (H - padB - padT) * (1 - f);
