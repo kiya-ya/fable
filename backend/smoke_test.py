@@ -66,9 +66,9 @@ def bind(uid_a, uid_b, **kw):
 
 # 预清理：上次异常退出可能残留的测试档案（按 UID 精确匹配）
 for b in requests.get(f'{B}/api/bindings', params={'active': 1, 'page_size': 100}).json().get('items', []):
-    if str(b['trainee_uid']) in ('80001', '80002', '80003') or str(b['trainer_uid']) in ('90001', '90002', '90003', '91001'):
+    if str(b['trainee_uid']) in ('80001', '80002', '80003') or str(b['trainer_uid']) in ('90001', '90002', '90003', '91001', '91002'):
         requests.post(f"{B}/api/bindings/{b['id']}/unbind")
-for uid in ('90001', '90002', '90003', '91001'):
+for uid in ('90001', '90002', '90003', '91001', '91002'):
     for t in requests.get(f'{B}/api/trainers', params={'role': 'all', 'kw': uid}).json().get('items', []):
         if t['uid'] == uid:
             requests.delete(f"{B}/api/trainers/{t['id']}")
@@ -322,10 +322,14 @@ r = bind('91001', '80003', bind_type='sister', force=True)
 exp_bid = r.json()['id']
 db_exec('UPDATE bindings SET bound_at=? WHERE id=?',
         ((datetime.utcnow() - timedelta(days=60)).strftime('%Y-%m-%d %H:%M:%S'), exp_bid))
+# 窗口未开始的（周一刚绑的）也不应出现：再建一条全新的
+r = bind('91002', '80001', bind_type='sister', trainer_nickname='新姐姐', force=True)
+check('新绑定窗口未开始', db_one('SELECT COUNT(*) FROM bindings WHERE trainee_id=? AND unbound_at IS NULL', (te_a,))[0] >= 1)
 r = requests.post(f'{B}/api/export/rewards', json={'bind_type': 'sister', 'date': '2026-10-05'})
 ws_rows = [row for row in load_workbook(io.BytesIO(r.content)).active.iter_rows(min_row=5, values_only=True)
            if any(v is not None for v in row)]
 check('过期绑定不出现在导出（80003 不在其中）', all(str(row[2]) != '80003' for row in ws_rows), str(ws_rows))
+check('窗口未开始的绑定也不导出（80001 不在其中）', all(str(row[2]) != '80001' for row in ws_rows), str(ws_rows))
 
 print('== UID 速查 ==')
 r = requests.get(f'{B}/api/uid-query/types')
@@ -336,7 +340,7 @@ check('刷新不存在学员 404（不打网络）', r.status_code == 404, f'got
 print(f'\n结果: {passed} passed, {failed} failed')
 
 # 清理测试数据（一律按测试 UID 精确匹配，绝不用可能错位的 id）
-TEST_TRAINER_UIDS = ('90001', '90002', '90003', '91001')
+TEST_TRAINER_UIDS = ('90001', '90002', '90003', '91001', '91002')
 TEST_TRAINEE_UIDS = ('80001', '80002', '80003')
 rows = requests.get(f'{B}/api/bindings', params={'active': 1, 'page_size': 100}).json()['items']
 for b in rows:

@@ -991,9 +991,9 @@ def export_rewards():
            WHERE b.bind_type=? AND b.unbound_at IS NULL
            ORDER BY b.bound_at''', (bind_type,)).fetchall()
     conn.close()
-    # 只导「在档且奖励窗口未过期」的绑定（窗口 = 绑定次周周一起整四周）
+    # 只导「在档且正处于奖励窗口内」的绑定；窗口未开始的（如周一刚绑的）轮到下周一，已过期的剔除
     bindings = [b for b in all_bindings
-                if reward_window_status(b['bound_at'])[2] != 'expired']
+                if reward_window_status(b['bound_at'])[2] == 'in_window']
 
     crawler = UIDCrawler()
     healed = False
