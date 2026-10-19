@@ -813,6 +813,12 @@ def list_bindings():
     btype = request.args.get('bind_type', '').strip()
     if btype in BIND_TYPES:
         items = [b for b in items if b['bind_type'] == btype]
+    kw = request.args.get('kw', '').strip()
+    if kw:
+        k = kw.lower()
+        items = [b for b in items if k in str(b['trainer_nickname']).lower()
+                 or k in str(b['trainee_nickname']).lower()
+                 or k in str(b['trainer_uid']) or k in str(b['trainee_uid'])]
     # 每行附奖励窗口信息：结束日期 / 状态 / 剩余周数
     month = _current_month()
     retained_map = {r['trainee_uid']: r['last_retained'] for r in conn.execute(
@@ -1096,29 +1102,50 @@ def dashboard_summary():
         'SELECT bind_type, bound_at, unbound_at, note FROM bindings').fetchall()
     conn.close()
 
+    # 周选择：week=YYYY-MM-DD（该周任意一天），默认本周
     today = datetime.now().date()
-    this_monday = _week_monday(today)
-    weeks = [this_monday - timedelta(weeks=i) for i in range(7, -1, -1)]  # 近 8 周（含本周）
+    try:
+        anchor = datetime.strptime(request.args.get('week', ''), '%Y-%m-%d').date()
+    except (TypeError, ValueError):
+        anchor = today
+    this_monday = _week_monday(anchor)
+    trend_anchor = _week_monday(today)
+    weeks = [trend_anchor - timedelta(weeks=i) for i in range(7, -1, -1)]  # 近 8 周（含本周）
     weekly = {w: {'bound': 0, 'unbound': 0} for w in weeks}
 
     active_trainer = active_sister = 0
     reasons = {}
     reasons_week = {}
+    sel_bound = sel_unbound = 0
+    cohort_retained = cohort_dissolved = 0
+    cutoff = today - timedelta(days=28)
     for b in bindings:
         bd = _local_date(b['bound_at'])
         w = _week_monday(bd)
         if w in weekly:
             weekly[w]['bound'] += 1
-        if b['unbound_at'] is None:
+        if w == this_monday:
+            sel_bound += 1
+        ud = _local_date(b['unbound_at']) if b['unbound_at'] else None
+        if ud is None:
             if b['bind_type'] == 'sister':
                 active_sister += 1
             else:
                 active_trainer += 1
+        else:
+            uw = _week_monday(ud)
+            if uw in weekly:
+                weekly[uw]['unbound'] += 1
+            if uw == this_monday:
+                sel_unbound += 1
+        # 4 周留存/解散：成团满 28 天的绑定，仍在档或满 28 天才解散 = 留存
+        if bd <= cutoff:
+            if ud is None or (ud - bd).days >= 28:
+                cohort_retained += 1
+            else:
+                cohort_dissolved += 1
+        if ud is None:
             continue
-        ud = _local_date(b['unbound_at'])
-        w = _week_monday(ud)
-        if w in weekly:
-            weekly[w]['unbound'] += 1
         # 解散原因归类（从备注解析）
         note = b['note'] or ''
         if '系统判定解散：留存字段为空' in note:
@@ -1132,7 +1159,7 @@ def dashboard_summary():
         else:
             reason = '手动解绑'
         reasons[reason] = reasons.get(reason, 0) + 1
-        if w == this_monday:
+        if uw == this_monday:
             reasons_week[reason] = reasons_week.get(reason, 0) + 1
 
     conn = get_db()
@@ -1142,10 +1169,14 @@ def dashboard_summary():
         "SELECT COUNT(*) FROM reward_grants WHERE status='granted'").fetchone()[0]
     conn.close()
 
+    cohort = cohort_retained + cohort_dissolved
+    retention_rate = round(cohort_retained / cohort * 100, 1) if cohort else 0.0
+    dissolution_rate = round(cohort_dissolved / cohort * 100, 1) if cohort else 0.0
+
     return ok({
         'this_week': {
-            'bound': weekly[this_monday]['bound'],
-            'unbound': weekly[this_monday]['unbound'],
+            'bound': sel_bound,
+            'unbound': sel_unbound,
             'label': f'{this_monday:%m-%d} ~ {this_monday + timedelta(days=6):%m-%d}',
         },
         'active': {'trainer': active_trainer, 'sister': active_sister,
@@ -1159,6 +1190,10 @@ def dashboard_summary():
                              sorted(reasons.items(), key=lambda x: -x[1])],
         'dissolve_reasons_week': [{'reason': k, 'count': v} for k, v in
                                   sorted(reasons_week.items(), key=lambda x: -x[1])],
+        'retention_4w': {
+            'cohort': cohort, 'retained': cohort_retained, 'dissolved': cohort_dissolved,
+            'retention_rate': retention_rate, 'dissolution_rate': dissolution_rate,
+        },
         'rewards': {'pending': pending_rewards, 'granted': granted_rewards},
     })
 

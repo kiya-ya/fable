@@ -70,7 +70,8 @@
     <div class="card">
       <div class="card-head">
         <h2>绑定列表</h2>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="bindings-kw" type="text" placeholder="搜索昵称 / UID" style="width:160px">
           <button id="bindings-refresh" class="btn">刷新全部数据</button>
           <div class="seg" id="bindings-type-seg">
             <button class="seg-btn active" data-filter="">全部类型</button>
@@ -158,6 +159,14 @@
   </section>
   <!-- 数据看板 -->
   <section id="tab-dashboard" class="panel">
+    <div class="card" style="padding:10px 20px">
+      <div class="bind-form">
+        <label>统计周
+          <input id="dash-week" type="date">
+        </label>
+        <span class="muted" style="align-self:center">选择任意一天，统计其所在周（周一~周日）的绑定与解散</span>
+      </div>
+    </div>
     <div class="dash-cards" id="dash-cards"></div>
     <div class="dash-grid">
       <div class="card">
@@ -179,7 +188,7 @@
             </div>
           </div>
           <div>
-            <h3 class="pie-title">本周</h3>
+            <h3 class="pie-title">选中周</h3>
             <div class="dash-pie-wrap">
               <div id="dash-pie-week"></div>
               <div id="dash-pie-week-legend" class="dash-pie-legend"></div>

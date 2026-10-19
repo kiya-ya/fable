@@ -426,6 +426,8 @@ let bindingsActiveView = true;
 let bindingsTypeFilter = '';
 let bindingsPage = 1;
 
+let bindingsKw = '';
+
 async function loadBindings(page) {
   if (page) bindingsPage = page;
   const params = new URLSearchParams({
@@ -433,6 +435,7 @@ async function loadBindings(page) {
     page: bindingsPage,
   });
   if (bindingsTypeFilter) params.set('bind_type', bindingsTypeFilter);
+  if (bindingsKw) params.set('kw', bindingsKw);
   const data = await api(`/api/bindings?${params}`);
   const tbody = $('#bindings-table tbody');
   $$('.col-unbound').forEach((el) => (el.style.display = bindingsActiveView ? 'none' : ''));
@@ -501,6 +504,14 @@ $('#seg-history').addEventListener('click', () => {
   $('#seg-history').classList.add('active');
   $('#seg-active').classList.remove('active');
   loadBindings();
+});
+let bindingsKwTimer = null;
+$('#bindings-kw').addEventListener('input', (e) => {
+  clearTimeout(bindingsKwTimer);
+  bindingsKwTimer = setTimeout(() => {
+    bindingsKw = e.target.value.trim();
+    loadBindings(1);
+  }, 300);
 });
 $$('#bindings-type-seg .seg-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -909,7 +920,8 @@ const PIE_COLORS = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4
 
 async function loadDashboard() {
   try {
-    const d = await api('/api/dashboard/summary');
+    const week = $('#dash-week').value;
+    const d = await api('/api/dashboard/summary' + (week ? `?week=${week}` : ''));
     renderDashCards(d);
     renderLineChart(d.weekly);
     renderPieChart(d.dissolve_reasons);
@@ -919,12 +931,17 @@ async function loadDashboard() {
   }
 }
 
+$('#dash-week').addEventListener('change', loadDashboard);
+
 function renderDashCards(d) {
+  const r4 = d.retention_4w;
   const cards = [
-    { label: `本周新绑定（${d.this_week.label}）`, value: d.this_week.bound, color: '#3b82f6' },
-    { label: '本周解散', value: d.this_week.unbound, color: '#ef4444' },
+    { label: `选中周新绑定（${d.this_week.label}）`, value: d.this_week.bound, color: '#3b82f6' },
+    { label: '选中周解散', value: d.this_week.unbound, color: '#ef4444' },
     { label: '当前生效绑定（培训师/姐妹团）', value: `${d.active.total}（${d.active.trainer}/${d.active.sister}）`, color: '#10b981' },
     { label: '奖励待发放 / 已发放（档）', value: `${d.rewards.pending} / ${d.rewards.granted}`, color: '#f59e0b' },
+    { label: `4周留存率（样本 ${r4.cohort}）`, value: `${r4.retention_rate}%`, color: '#10b981' },
+    { label: '4周解散率', value: `${r4.dissolution_rate}%`, color: '#ef4444' },
   ];
   $('#dash-cards').innerHTML = cards.map((c) => `
     <div class="dash-card" style="border-top-color:${c.color}">
@@ -966,20 +983,27 @@ function renderPieChart(reasons, pieSel = '#dash-pie', legendSel = '#dash-pie-le
     $(legendSel).innerHTML = '';
     return;
   }
-  const R = 80, CX = 100, CY = 100, CIRC = 2 * Math.PI * R;
-  let offset = 0;
-  const arcs = reasons.map((r, i) => {
+  const CX = 100, CY = 100, R = 90;
+  let angle = -Math.PI / 2;  // 从 12 点方向开始
+  const slices = reasons.map((r, i) => {
     const frac = r.count / total;
-    const dash = `${(frac * CIRC).toFixed(2)} ${(CIRC - frac * CIRC).toFixed(2)}`;
-    const el = `<circle cx="${CX}" cy="${CY}" r="${R}" fill="none"
-      stroke="${PIE_COLORS[i % PIE_COLORS.length]}" stroke-width="36"
-      stroke-dasharray="${dash}" stroke-dashoffset="${(-offset * CIRC).toFixed(2)}"
-      transform="rotate(-90 ${CX} ${CY})"><title>${r.reason}: ${r.count}</title></circle>`;
-    offset += frac;
-    return el;
+    const a0 = angle;
+    const a1 = angle + frac * Math.PI * 2;
+    angle = a1;
+    const large = frac > 0.5 ? 1 : 0;
+    const [x0, y0] = [CX + R * Math.cos(a0), CY + R * Math.sin(a0)];
+    const [x1, y1] = [CX + R * Math.cos(a1), CY + R * Math.sin(a1)];
+    // 整块（100%）时退化为整圆
+    const path = frac >= 0.999
+      ? `<circle cx="${CX}" cy="${CY}" r="${R}" fill="${PIE_COLORS[i % PIE_COLORS.length]}"/>`
+      : `<path d="M${CX},${CY} L${x0.toFixed(2)},${y0.toFixed(2)} A${R},${R} 0 ${large} 1 ${x1.toFixed(2)},${y1.toFixed(2)} Z"
+          fill="${PIE_COLORS[i % PIE_COLORS.length]}" stroke="#fff" stroke-width="1.5">
+          <title>${r.reason}: ${r.count}（${(frac * 100).toFixed(1)}%）</title></path>`;
+    return path;
   }).join('');
-  $(pieSel).innerHTML = `<svg viewBox="0 0 200 200" style="max-width:220px">${arcs}
-    <text x="${CX}" y="${CY - 4}" text-anchor="middle" font-size="20" font-weight="600">${total}</text>
+  $(pieSel).innerHTML = `<svg viewBox="0 0 200 200" style="max-width:220px">${slices}
+    <circle cx="${CX}" cy="${CY}" r="34" fill="#fff"/>
+    <text x="${CX}" y="${CY - 2}" text-anchor="middle" font-size="20" font-weight="600">${total}</text>
     <text x="${CX}" y="${CY + 16}" text-anchor="middle" font-size="11" fill="#6b7280">总解散</text></svg>`;
   $(legendSel).innerHTML = reasons.map((r, i) => `
     <div class="pie-legend-item">
@@ -989,5 +1013,6 @@ function renderPieChart(reasons, pieSel = '#dash-pie', legendSel = '#dash-pie-le
 }
 
 // ────────────── 启动（默认首页 = 绑定关系） ──────────────
+$('#dash-week').value = new Date().toLocaleDateString('sv-SE');
 initUidQuery();
 loadBindingsTab();
