@@ -347,6 +347,13 @@ ws_rows = [row for row in load_workbook(io.BytesIO(r.content)).active.iter_rows(
 check('过期绑定不出现在导出（80003 不在其中）', all(str(row[2]) != '80003' for row in ws_rows), str(ws_rows))
 check('窗口未开始的绑定也不导出（80001 不在其中）', all(str(row[2]) != '80001' for row in ws_rows), str(ws_rows))
 
+print('== 数据看板 ==')
+r = requests.get(f'{B}/api/dashboard/summary')
+d = r.json()
+check('看板结构', r.ok and len(d['weekly']) == 8 and 'dissolve_reasons' in d and 'active' in d, str(d.keys()))
+check('近8周绑定数>=1（本周有测试绑定）', sum(w['bound'] for w in d['weekly']) >= 1, str(d['weekly']))
+check('解散原因归类包含手动解绑或系统判定', all('reason' in x and x['count'] > 0 for x in d['dissolve_reasons']), str(d['dissolve_reasons']))
+
 print('== UID 速查 ==')
 r = requests.get(f'{B}/api/uid-query/types')
 check('类型列表', r.ok and len(r.json()['items']) == 4, r.text)

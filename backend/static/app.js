@@ -65,6 +65,7 @@ $$('#tabs .tab').forEach((btn) => {
     $$('.panel').forEach((p) => p.classList.remove('active'));
     $(`#tab-${btn.dataset.tab}`).classList.add('active');
     if (btn.dataset.tab === 'bindings') loadBindingsTab();
+    if (btn.dataset.tab === 'dashboard') loadDashboard();
   });
 });
 
@@ -872,6 +873,89 @@ async function exportRewards(bindType, btn) {
 
 $('#exp-trainer').addEventListener('click', (e) => exportRewards('trainer', e.target));
 $('#exp-sister').addEventListener('click', (e) => exportRewards('sister', e.target));
+
+// ────────────── 数据看板 ──────────────
+const PIE_COLORS = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#6b7280'];
+
+async function loadDashboard() {
+  try {
+    const d = await api('/api/dashboard/summary');
+    renderDashCards(d);
+    renderLineChart(d.weekly);
+    renderPieChart(d.dissolve_reasons);
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+function renderDashCards(d) {
+  const cards = [
+    { label: `本周新绑定（${d.this_week.label}）`, value: d.this_week.bound, color: '#3b82f6' },
+    { label: '本周解散', value: d.this_week.unbound, color: '#ef4444' },
+    { label: '当前生效绑定（培训师/姐妹团）', value: `${d.active.total}（${d.active.trainer}/${d.active.sister}）`, color: '#10b981' },
+    { label: '奖励待发放 / 已发放（档）', value: `${d.rewards.pending} / ${d.rewards.granted}`, color: '#f59e0b' },
+  ];
+  $('#dash-cards').innerHTML = cards.map((c) => `
+    <div class="dash-card" style="border-top-color:${c.color}">
+      <div class="dash-card-label">${esc(c.label)}</div>
+      <div class="dash-card-value" style="color:${c.color}">${esc(c.value)}</div>
+    </div>`).join('');
+}
+
+function renderLineChart(weekly) {
+  const W = 640, H = 240, padL = 40, padB = 28, padT = 14, padR = 10;
+  const max = Math.max(1, ...weekly.map((w) => Math.max(w.bound, w.unbound)));
+  const stepX = (W - padL - padR) / (weekly.length - 1);
+  const y = (v) => padT + (H - padB - padT) * (1 - v / max);
+  const series = (key) => weekly.map((w, i) =>
+    `${(padL + i * stepX).toFixed(1)},${y(w[key]).toFixed(1)}`).join(' ');
+  const dots = (key, color) => weekly.map((w, i) =>
+    `<circle cx="${padL + i * stepX}" cy="${y(w[key])}" r="3.5" fill="${color}"><title>${w.label} ${w[key]}</title></circle>`).join('');
+  const xlabels = weekly.map((w, i) =>
+    `<text x="${padL + i * stepX}" y="${H - 8}" font-size="10" fill="#9ca3af" text-anchor="middle">${w.week_start}</text>`).join('');
+  const gridlines = [0, 0.5, 1].map((f) => {
+    const gy = padT + (H - padB - padT) * (1 - f);
+    const gv = Math.round(max * f);
+    return `<line x1="${padL}" y1="${gy}" x2="${W - padR}" y2="${gy}" stroke="#e5e7eb" stroke-dasharray="3"/>
+            <text x="${padL - 6}" y="${gy + 3}" font-size="10" fill="#9ca3af" text-anchor="end">${gv}</text>`;
+  }).join('');
+  $('#dash-line').innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%">
+    ${gridlines}
+    <polyline points="${series('bound')}" fill="none" stroke="#3b82f6" stroke-width="2"/>
+    <polyline points="${series('unbound')}" fill="none" stroke="#ef4444" stroke-width="2"/>
+    ${dots('bound', '#3b82f6')}${dots('unbound', '#ef4444')}
+    ${xlabels}
+  </svg>`;
+}
+
+function renderPieChart(reasons) {
+  const total = reasons.reduce((s, r) => s + r.count, 0);
+  if (!total) {
+    $('#dash-pie').innerHTML = '<div class="empty">暂无解散记录</div>';
+    $('#dash-pie-legend').innerHTML = '';
+    return;
+  }
+  const R = 80, CX = 100, CY = 100, CIRC = 2 * Math.PI * R;
+  let offset = 0;
+  const arcs = reasons.map((r, i) => {
+    const frac = r.count / total;
+    const dash = `${(frac * CIRC).toFixed(2)} ${(CIRC - frac * CIRC).toFixed(2)}`;
+    const el = `<circle cx="${CX}" cy="${CY}" r="${R}" fill="none"
+      stroke="${PIE_COLORS[i % PIE_COLORS.length]}" stroke-width="36"
+      stroke-dasharray="${dash}" stroke-dashoffset="${(-offset * CIRC).toFixed(2)}"
+      transform="rotate(-90 ${CX} ${CY})"><title>${r.reason}: ${r.count}</title></circle>`;
+    offset += frac;
+    return el;
+  }).join('');
+  $('#dash-pie').innerHTML = `<svg viewBox="0 0 200 200" style="max-width:220px">${arcs}
+    <text x="${CX}" y="${CY - 4}" text-anchor="middle" font-size="20" font-weight="600">${total}</text>
+    <text x="${CX}" y="${CY + 16}" text-anchor="middle" font-size="11" fill="#6b7280">总解散</text></svg>`;
+  $('#dash-pie-legend').innerHTML = reasons.map((r, i) => `
+    <div class="pie-legend-item">
+      <i class="dot" style="background:${PIE_COLORS[i % PIE_COLORS.length]}"></i>
+      ${esc(r.reason)} <b>${r.count}</b>（${(r.count / total * 100).toFixed(1)}%）
+    </div>`).join('');
+}
 
 // ────────────── 启动（默认首页 = 绑定关系） ──────────────
 initUidQuery();

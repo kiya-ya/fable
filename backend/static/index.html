@@ -12,6 +12,7 @@
   <nav id="tabs">
     <button class="tab active" data-tab="bindings">绑定关系</button>
     <button class="tab" data-tab="uidquery">结果统计</button>
+    <button class="tab" data-tab="dashboard">数据看板</button>
   </nav>
 </header>
 
@@ -152,6 +153,27 @@
         <button id="exp-sister" class="btn">导出三胎奖励</button>
       </div>
       <div id="exp-status" class="muted" style="margin-top:6px"></div>
+    </div>
+  </section>
+  <!-- 数据看板 -->
+  <section id="tab-dashboard" class="panel">
+    <div class="dash-cards" id="dash-cards"></div>
+    <div class="dash-grid">
+      <div class="card">
+        <h2>近 8 周绑定 / 解散趋势</h2>
+        <div id="dash-line"></div>
+        <div class="dash-legend">
+          <span><i class="dot" style="background:#3b82f6"></i>新绑定</span>
+          <span><i class="dot" style="background:#ef4444"></i>解散</span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>解散原因分布（全部历史）</h2>
+        <div class="dash-pie-wrap">
+          <div id="dash-pie"></div>
+          <div id="dash-pie-legend" class="dash-pie-legend"></div>
+        </div>
+      </div>
     </div>
   </section>
 </main>

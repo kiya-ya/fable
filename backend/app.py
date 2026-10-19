@@ -1021,6 +1021,85 @@ def restore_binding(bid):
     return ok()
 
 
+# ────────────────────────────────────────────── 数据看板
+
+def _local_date(utc_str):
+    return (_parse_ts(utc_str) + timedelta(hours=8)).date()
+
+
+def _week_monday(d):
+    return d - timedelta(days=d.weekday())
+
+
+@app.get('/api/dashboard/summary')
+def dashboard_summary():
+    conn = get_db()
+    bindings = conn.execute(
+        'SELECT bind_type, bound_at, unbound_at, note FROM bindings').fetchall()
+    conn.close()
+
+    today = datetime.now().date()
+    this_monday = _week_monday(today)
+    weeks = [this_monday - timedelta(weeks=i) for i in range(7, -1, -1)]  # 近 8 周（含本周）
+    weekly = {w: {'bound': 0, 'unbound': 0} for w in weeks}
+
+    active_trainer = active_sister = 0
+    reasons = {}
+    for b in bindings:
+        bd = _local_date(b['bound_at'])
+        w = _week_monday(bd)
+        if w in weekly:
+            weekly[w]['bound'] += 1
+        if b['unbound_at'] is None:
+            if b['bind_type'] == 'sister':
+                active_sister += 1
+            else:
+                active_trainer += 1
+            continue
+        ud = _local_date(b['unbound_at'])
+        w = _week_monday(ud)
+        if w in weekly:
+            weekly[w]['unbound'] += 1
+        # 解散原因归类（从备注解析）
+        note = b['note'] or ''
+        if '系统判定解散：留存字段为空' in note:
+            reason = '妹妹未留存（系统）'
+        elif '系统判定解散：培训师未留存' in note:
+            reason = '培训师未留存（系统）'
+        elif '系统判定解散：姐姐未留存' in note:
+            reason = '姐姐未留存（系统）'
+        elif '人工确认解散' in note:
+            reason = '人工确认解散'
+        else:
+            reason = '手动解绑'
+        reasons[reason] = reasons.get(reason, 0) + 1
+
+    conn = get_db()
+    pending_rewards = conn.execute(
+        "SELECT COUNT(*) FROM reward_grants WHERE status='pending'").fetchone()[0]
+    granted_rewards = conn.execute(
+        "SELECT COUNT(*) FROM reward_grants WHERE status='granted'").fetchone()[0]
+    conn.close()
+
+    return ok({
+        'this_week': {
+            'bound': weekly[this_monday]['bound'],
+            'unbound': weekly[this_monday]['unbound'],
+            'label': f'{this_monday:%m-%d} ~ {this_monday + timedelta(days=6):%m-%d}',
+        },
+        'active': {'trainer': active_trainer, 'sister': active_sister,
+                   'total': active_trainer + active_sister},
+        'weekly': [{
+            'week_start': f'{w:%m-%d}',
+            'label': f'{w:%m-%d}~{w + timedelta(days=6):%m-%d}',
+            'bound': weekly[w]['bound'], 'unbound': weekly[w]['unbound'],
+        } for w in weeks],
+        'dissolve_reasons': [{'reason': k, 'count': v} for k, v in
+                             sorted(reasons.items(), key=lambda x: -x[1])],
+        'rewards': {'pending': pending_rewards, 'granted': granted_rewards},
+    })
+
+
 # ────────────────────────────────────────────── 周奖励导出（XLSX）
 
 # 导出金额口径（与参考文件一致）：任务奖固定 12.8（周任务≥6次且当周铜牌及以上）；等级奖按牌子

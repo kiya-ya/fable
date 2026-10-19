@@ -89,6 +89,23 @@ input:focus, select:focus { border-color: #3b82f6; }
 .reward-block { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 14px; margin-top: 12px; }
 .reward-block-head { font-size: 13px; color: #4b5563; margin-bottom: 8px; }
 
+/* 数据看板 */
+.dash-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.dash-card {
+  background: #fff; border-radius: 8px; padding: 14px 18px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08); border-top: 3px solid #3b82f6;
+}
+.dash-card-label { font-size: 13px; color: #6b7280; margin-bottom: 6px; }
+.dash-card-value { font-size: 24px; font-weight: 700; }
+.dash-grid { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; align-items: start; }
+.dash-legend { display: flex; gap: 18px; margin-top: 8px; font-size: 13px; color: #6b7280; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
+.dash-pie-wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.pie-legend-item { font-size: 13px; color: #4b5563; padding: 3px 0; }
+@media (max-width: 768px) {
+  .dash-grid { grid-template-columns: 1fr; }
+}
+
 /* 留存判定横幅 */
 .retention-banner { border-radius: 8px; padding: 10px 14px; margin: 12px 0; font-size: 14px; }
 .retention-banner.ok { background: #dcfce7; color: #15803d; }
