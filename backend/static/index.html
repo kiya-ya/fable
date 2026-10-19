@@ -151,6 +151,7 @@
         </label>
         <button id="exp-trainer" class="btn primary">导出培训师奖励</button>
         <button id="exp-sister" class="btn">导出三胎奖励</button>
+        <button id="exp-grant-week" class="btn">奖励已发放</button>
       </div>
       <div id="exp-status" class="muted" style="margin-top:6px"></div>
     </div>
@@ -168,10 +169,22 @@
         </div>
       </div>
       <div class="card">
-        <h2>解散原因分布（全部历史）</h2>
+        <h2>解散原因分布</h2>
         <div class="dash-pie-wrap">
-          <div id="dash-pie"></div>
-          <div id="dash-pie-legend" class="dash-pie-legend"></div>
+          <div>
+            <h3 class="pie-title">全部历史</h3>
+            <div class="dash-pie-wrap">
+              <div id="dash-pie"></div>
+              <div id="dash-pie-legend" class="dash-pie-legend"></div>
+            </div>
+          </div>
+          <div>
+            <h3 class="pie-title">本周</h3>
+            <div class="dash-pie-wrap">
+              <div id="dash-pie-week"></div>
+              <div id="dash-pie-week-legend" class="dash-pie-legend"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

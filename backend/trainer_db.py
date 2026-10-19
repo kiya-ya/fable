@@ -85,6 +85,9 @@ def _migrate(conn):
     bcols = {r[1] for r in conn.execute('PRAGMA table_info(bindings)').fetchall()}
     if 'bind_type' not in bcols:
         conn.execute("ALTER TABLE bindings ADD COLUMN bind_type TEXT NOT NULL DEFAULT 'trainer'")
+    if 'weeks_consumed' not in bcols:
+        # 已发放周数：「奖励已发放」一键 +1，剩余周数 = 日历剩余 - 已发放
+        conn.execute('ALTER TABLE bindings ADD COLUMN weeks_consumed INTEGER NOT NULL DEFAULT 0')
     # 状态简化为 active(活跃)/inactive(退出)，老的 graduated 并入 inactive
     conn.execute("UPDATE trainees SET status='inactive' WHERE status='graduated'")
     mcols = {r[1] for r in conn.execute('PRAGMA table_info(trainee_level_monthly)').fetchall()}

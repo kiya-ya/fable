@@ -64,10 +64,9 @@ def bind(uid_a, uid_b, **kw):
     return requests.post(f'{B}/api/bindings/by-uid', json=payload)
 
 
-# 预清理：上次异常退出可能残留的测试档案（按 UID 精确匹配）
-for b in requests.get(f'{B}/api/bindings', params={'active': 1, 'page_size': 100}).json().get('items', []):
-    if str(b['trainee_uid']) in ('80001', '80002', '80003') or str(b['trainer_uid']) in ('90001', '90002', '90003', '91001', '91002'):
-        requests.post(f"{B}/api/bindings/{b['id']}/unbind")
+# 预清理：上次异常退出可能残留的测试档案（按 UID 精确匹配；绑定记录直接删除）
+db_exec('''DELETE FROM bindings WHERE trainer_id IN (SELECT id FROM trainers WHERE uid IN ('90001','90002','90003','91001','91002'))
+           OR trainee_id IN (SELECT id FROM trainees WHERE uid IN ('80001','80002','80003'))''')
 for uid in ('90001', '90002', '90003', '91001', '91002'):
     for t in requests.get(f'{B}/api/trainers', params={'role': 'all', 'kw': uid}).json().get('items', []):
         if t['uid'] == uid:
@@ -316,6 +315,18 @@ db_exec("UPDATE bindings SET unbound_at=CURRENT_TIMESTAMP WHERE trainee_id=? AND
 r = requests.post(f'{B}/api/bindings/{bid_restore}/restore')
 check('解掉冲突后可恢复', r.ok, r.text)
 
+print('== 奖励周数（grant-week / set-remaining） ==')
+# 甲的窗口已在窗口内（前面改过 bound_at）
+w0 = next(b for b in requests.get(f'{B}/api/bindings', params={'active': 1}).json()['items'] if b['trainee_uid'] == '80001')
+r = requests.post(f'{B}/api/bindings/{w0["id"]}/set-remaining', json={'remaining': 2})
+check('set-remaining 改为 2', r.ok and r.json()['weeks_left'] == 2, r.text)
+r = requests.post(f'{B}/api/bindings/{w0["id"]}/set-remaining', json={'remaining': 9})
+check('set-remaining 超范围 400', r.status_code == 400, f'got {r.status_code}')
+r = requests.post(f'{B}/api/rewards/grant-week', json={'binding_ids': [w0['id']]})
+check('grant-week 窗口内周数-1 且标记奖励', r.ok and r.json()['bindings'] == 1, r.text)
+w1 = next(b for b in requests.get(f'{B}/api/bindings', params={'active': 1}).json()['items'] if b['trainee_uid'] == '80001')
+check('周数 2 → 1', w1['weeks_left'] == 1, str(w1['weeks_left']))
+
 print('== 奖励导出 ==')
 # 先解绑测试绑定（只动本测试创建的数据！）：导出测试不打网络
 db_exec(f"UPDATE bindings SET unbound_at=CURRENT_TIMESTAMP WHERE unbound_at IS NULL AND trainee_id IN ({te_a},{te_b},{te_c})")
@@ -365,10 +376,13 @@ print(f'\n结果: {passed} passed, {failed} failed')
 # 清理测试数据（一律按测试 UID 精确匹配，绝不用可能错位的 id）
 TEST_TRAINER_UIDS = ('90001', '90002', '90003', '91001', '91002')
 TEST_TRAINEE_UIDS = ('80001', '80002', '80003')
-rows = requests.get(f'{B}/api/bindings', params={'active': 1, 'page_size': 100}).json()['items']
-for b in rows:
-    if str(b['trainee_uid']) in TEST_TRAINEE_UIDS or str(b['trainer_uid']) in TEST_TRAINER_UIDS:
-        requests.post(f"{B}/api/bindings/{b['id']}/unbind")
+# 测试绑定记录直接删除（不留历史，避免污染看板统计）
+marks_tr = ','.join('?' * len(TEST_TRAINER_UIDS))
+marks_te = ','.join('?' * len(TEST_TRAINEE_UIDS))
+db_exec(f'''DELETE FROM bindings WHERE trainer_id IN (SELECT id FROM trainers WHERE uid IN ({marks_tr}))
+            OR trainee_id IN (SELECT id FROM trainees WHERE uid IN ({marks_te}))''',
+        (*TEST_TRAINER_UIDS, *TEST_TRAINEE_UIDS))
+db_exec(f'DELETE FROM reward_grants WHERE trainee_uid IN ({marks_te})', TEST_TRAINEE_UIDS)
 for uid in TEST_TRAINER_UIDS:
     for t in requests.get(f'{B}/api/trainers', params={'role': 'all', 'kw': uid}).json()['items']:
         if t['uid'] == uid:
@@ -377,8 +391,6 @@ for uid in TEST_TRAINEE_UIDS:
     for t in requests.get(f'{B}/api/trainees', params={'kw': uid}).json()['items']:
         if t['uid'] == uid:
             requests.delete(f"{B}/api/trainees/{t['id']}")
-for uid in TEST_TRAINEE_UIDS:
     db_exec('DELETE FROM trainee_level_monthly WHERE trainee_uid=?', (uid,))
-    db_exec('DELETE FROM reward_grants WHERE trainee_uid=?', (uid,))
 print('测试数据已清理')
 sys.exit(1 if failed else 0)

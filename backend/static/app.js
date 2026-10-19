@@ -441,7 +441,7 @@ async function loadBindings(page) {
   } else {
     tbody.innerHTML = data.items.map((b) => {
       const weeksTag = b.window_status === 'in_window'
-        ? `<span class="tag plus">剩 ${b.weeks_left}/4 周</span>`
+        ? `<span class="tag plus">剩 ${b.weeks_left}/4 周</span><button class="btn small" style="margin-left:4px;padding:1px 6px" onclick="editWeeks(${b.id}, ${b.weeks_left})" title="修改剩余周数">修改</button>`
         : b.window_status === 'not_started'
           ? `<span class="tag graduated">未开始</span>`
           : '<span class="tag inactive">已结束</span>';
@@ -528,6 +528,21 @@ async function restoreBinding(id) {
     await api(`/api/bindings/${id}/restore`, { method: 'POST' });
     toast('已恢复为生效绑定');
     loadBindingsTab();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// 修改剩余奖励周数
+async function editWeeks(id, current) {
+  const input = prompt(`修改剩余奖励周数（当前 ${current} 周，可填 0~4）`, String(current));
+  if (input === null) return;
+  const remaining = parseInt(input, 10);
+  if (isNaN(remaining) || remaining < 0 || remaining > 4) return toast('请输入 0~4 的整数', true);
+  try {
+    await api(`/api/bindings/${id}/set-remaining`, { method: 'POST', body: { remaining } });
+    toast(`剩余周数已改为 ${remaining}`);
+    loadBindings();
   } catch (e) {
     toast(e.message, true);
   }
@@ -874,6 +889,21 @@ async function exportRewards(bindType, btn) {
 $('#exp-trainer').addEventListener('click', (e) => exportRewards('trainer', e.target));
 $('#exp-sister').addEventListener('click', (e) => exportRewards('sister', e.target));
 
+// 「奖励已发放」：窗口内绑定剩余周数-1，待发放奖励全部标记已发（未开始的不动）
+$('#exp-grant-week').addEventListener('click', async (e) => {
+  if (!confirm('确认本周奖励已全部发放？\n所有窗口内绑定的剩余周数将 -1，待发放奖励全部标记为已发。')) return;
+  const btn = e.target;
+  btn.disabled = true;
+  try {
+    const r = await api('/api/rewards/grant-week', { method: 'POST' });
+    toast(`已处理：${r.bindings} 条绑定周数-1，${r.granted} 档奖励标记已发`);
+  } catch (e2) {
+    toast(e2.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // ────────────── 数据看板 ──────────────
 const PIE_COLORS = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#6b7280'];
 
@@ -883,6 +913,7 @@ async function loadDashboard() {
     renderDashCards(d);
     renderLineChart(d.weekly);
     renderPieChart(d.dissolve_reasons);
+    renderPieChart(d.dissolve_reasons_week, '#dash-pie-week', '#dash-pie-week-legend');
   } catch (e) {
     toast(e.message, true);
   }
@@ -928,11 +959,11 @@ function renderLineChart(weekly) {
   </svg>`;
 }
 
-function renderPieChart(reasons) {
+function renderPieChart(reasons, pieSel = '#dash-pie', legendSel = '#dash-pie-legend') {
   const total = reasons.reduce((s, r) => s + r.count, 0);
   if (!total) {
-    $('#dash-pie').innerHTML = '<div class="empty">暂无解散记录</div>';
-    $('#dash-pie-legend').innerHTML = '';
+    $(pieSel).innerHTML = '<div class="empty">暂无解散记录</div>';
+    $(legendSel).innerHTML = '';
     return;
   }
   const R = 80, CX = 100, CY = 100, CIRC = 2 * Math.PI * R;
@@ -947,10 +978,10 @@ function renderPieChart(reasons) {
     offset += frac;
     return el;
   }).join('');
-  $('#dash-pie').innerHTML = `<svg viewBox="0 0 200 200" style="max-width:220px">${arcs}
+  $(pieSel).innerHTML = `<svg viewBox="0 0 200 200" style="max-width:220px">${arcs}
     <text x="${CX}" y="${CY - 4}" text-anchor="middle" font-size="20" font-weight="600">${total}</text>
     <text x="${CX}" y="${CY + 16}" text-anchor="middle" font-size="11" fill="#6b7280">总解散</text></svg>`;
-  $('#dash-pie-legend').innerHTML = reasons.map((r, i) => `
+  $(legendSel).innerHTML = reasons.map((r, i) => `
     <div class="pie-legend-item">
       <i class="dot" style="background:${PIE_COLORS[i % PIE_COLORS.length]}"></i>
       ${esc(r.reason)} <b>${r.count}</b>（${(r.count / total * 100).toFixed(1)}%）

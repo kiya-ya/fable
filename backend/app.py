@@ -801,7 +801,7 @@ def list_bindings():
     active = request.args.get('active', '1') != '0'
     conn = get_db()
     rows = conn.execute(
-        '''SELECT b.id, b.bind_type, b.bound_at, b.unbound_at, b.note,
+        '''SELECT b.id, b.bind_type, b.bound_at, b.unbound_at, b.note, b.weeks_consumed,
                   tr.id AS trainer_id, tr.uid AS trainer_uid, tr.nickname AS trainer_nickname, tr.role AS side_role,
                   te.id AS trainee_id, te.uid AS trainee_uid, te.nickname AS trainee_nickname, te.hall_name, te.protection_end
            FROM bindings b
@@ -824,7 +824,8 @@ def list_bindings():
         b['window_status'] = status
         b['retained'] = retained_map.get(b['trainee_uid'])  # None=本月未查询
         if status == 'in_window':
-            b['weeks_left'] = min(max(-(-(end - datetime.now()).days // 7), 0), REWARD_WINDOW_WEEKS)
+            cal_weeks = min(max(-(-(end - datetime.now()).days // 7), 0), REWARD_WINDOW_WEEKS)
+            b['weeks_left'] = max(cal_weeks - (b['weeks_consumed'] or 0), 0)
         elif status == 'not_started':
             b['weeks_left'] = REWARD_WINDOW_WEEKS
         else:
@@ -1021,6 +1022,63 @@ def restore_binding(bid):
     return ok()
 
 
+@app.post('/api/rewards/grant-week')
+def grant_week():
+    """「奖励已发放」：窗口内的生效绑定 已发放周数+1，且其待发放奖励全部标记已发。
+    窗口未开始的绑定不动。可选 binding_ids 限定范围（默认全部窗口内绑定）。"""
+    data = request.get_json(force=True, silent=True) or {}
+    id_filter = data.get('binding_ids')
+    conn = get_db()
+    bindings = conn.execute(
+        'SELECT id, bound_at, weeks_consumed FROM bindings WHERE unbound_at IS NULL').fetchall()
+    touched_ids = []
+    for b in bindings:
+        if id_filter and b['id'] not in id_filter:
+            continue
+        if reward_window_status(b['bound_at'])[2] != 'in_window':
+            continue
+        conn.execute(
+            'UPDATE bindings SET weeks_consumed = MIN(weeks_consumed + 1, ?) WHERE id=?',
+            (REWARD_WINDOW_WEEKS, b['id']))
+        touched_ids.append(b['id'])
+    granted = 0
+    if touched_ids:
+        marks = ','.join('?' * len(touched_ids))
+        granted = conn.execute(
+            f"""UPDATE reward_grants SET status='granted', granted_at=CURRENT_TIMESTAMP
+                WHERE status='pending' AND binding_id IN ({marks})""", touched_ids).rowcount
+    conn.commit()
+    conn.close()
+    return ok({'bindings': len(touched_ids), 'granted': granted})
+
+
+@app.post('/api/bindings/<int:bid>/set-remaining')
+def set_remaining(bid):
+    """手动修改某条绑定的剩余奖励周数（0~4）"""
+    data = request.get_json(force=True)
+    try:
+        remaining = int(data.get('remaining'))
+    except (TypeError, ValueError):
+        return err('remaining 必须是 0~4 的整数')
+    if not 0 <= remaining <= REWARD_WINDOW_WEEKS:
+        return err(f'remaining 必须在 0~{REWARD_WINDOW_WEEKS} 之间')
+    conn = get_db()
+    b = conn.execute('SELECT * FROM bindings WHERE id=?', (bid,)).fetchone()
+    if not b or b['unbound_at'] is not None:
+        conn.close()
+        return err('绑定不存在或已解绑', 404)
+    start, end, status = reward_window_status(b['bound_at'])
+    if status != 'in_window':
+        conn.close()
+        return err('只能修改窗口内的绑定（未开始/已结束不可改）', 409)
+    cal_weeks = min(max(-(-(end - datetime.now()).days // 7), 0), REWARD_WINDOW_WEEKS)
+    consumed = max(cal_weeks - remaining, 0)
+    conn.execute('UPDATE bindings SET weeks_consumed=? WHERE id=?', (consumed, bid))
+    conn.commit()
+    conn.close()
+    return ok({'weeks_consumed': consumed, 'weeks_left': remaining})
+
+
 # ────────────────────────────────────────────── 数据看板
 
 def _local_date(utc_str):
@@ -1045,6 +1103,7 @@ def dashboard_summary():
 
     active_trainer = active_sister = 0
     reasons = {}
+    reasons_week = {}
     for b in bindings:
         bd = _local_date(b['bound_at'])
         w = _week_monday(bd)
@@ -1073,6 +1132,8 @@ def dashboard_summary():
         else:
             reason = '手动解绑'
         reasons[reason] = reasons.get(reason, 0) + 1
+        if w == this_monday:
+            reasons_week[reason] = reasons_week.get(reason, 0) + 1
 
     conn = get_db()
     pending_rewards = conn.execute(
@@ -1096,6 +1157,8 @@ def dashboard_summary():
         } for w in weeks],
         'dissolve_reasons': [{'reason': k, 'count': v} for k, v in
                              sorted(reasons.items(), key=lambda x: -x[1])],
+        'dissolve_reasons_week': [{'reason': k, 'count': v} for k, v in
+                                  sorted(reasons_week.items(), key=lambda x: -x[1])],
         'rewards': {'pending': pending_rewards, 'granted': granted_rewards},
     })
 
