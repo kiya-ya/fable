@@ -370,12 +370,17 @@ def build_slots_panel(conn, trainer_id):
         })
     base = tr['base_slots']
     total = min(base + extra, SLOT_CAP)
+    # 扩充有效期：当月达标当月生效，次月按新月等级重算 → 截至本月底
+    first_of_month = datetime.now().replace(day=1)
+    next_month = first_of_month + timedelta(days=32)
+    month_end = (next_month.replace(day=1) - timedelta(days=1)).strftime('%Y-%m-%d')
     return {
         'trainer': {'id': tr['id'], 'uid': tr['uid'], 'nickname': tr['nickname']},
         'month': month,
         'base_slots': base, 'extra_slots': extra, 'total_slots': total,
         'used_slots': len(rows), 'over': len(rows) > total,
         'slot_cap': SLOT_CAP,
+        'extra_valid_until': month_end,
         'trainees': trainees,
     }
 

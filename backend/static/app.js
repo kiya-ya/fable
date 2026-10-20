@@ -155,7 +155,12 @@ function renderSlotsPanel(s) {
     <span class="slot-chip">额外 <b>${s.extra_slots}</b></span> =
     <span class="slot-chip total">总名额 <b>${s.total_slots}</b>（上限 ${s.slot_cap}）</span>
     <span class="slot-chip ${s.over ? 'warn' : ''}">已绑定 <b>${s.used_slots}</b> / ${s.total_slots}</span>
-    ${overTag}`;
+    ${overTag}
+    <span class="slot-chip">总名额扩充截至 <b>${esc(s.extra_valid_until)}</b></span>
+    <div class="muted" style="width:100%;font-size:12px">
+      时间口径：额外名额按学员「当月排档周最高等级」实时计算（初银+1/银牌+1/金牌+1，需当周排档天数&gt;0）；
+      当月达标当月生效，次月 1 号按新月实际等级重算（月初无新数据时暂用上月等级兜底）——即本月扩充有效期至月底
+    </div>`;
   const tbody = $('#slots-table tbody');
   tbody.innerHTML = s.trainees.length ? s.trainees.map((t) => `
     <tr>
