@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>管理员登录 · 培训师系统</title>
+<link rel="icon" href="/logo.jpg" type="image/jpeg">
 <link rel="stylesheet" href="/style.css">
 <style>
 .login-box { max-width: 360px; margin: 8vh auto; }
@@ -13,12 +14,12 @@
 .login-box .btn { width: 100%; padding: 10px; margin-top: 6px; }
 .portal-link { text-align: center; margin-top: 14px; font-size: 13px; }
 .login-logo { display: flex; justify-content: center; margin-bottom: 12px; }
-.login-logo svg { width: 96px; height: 96px; }
+.login-logo-img { width: 120px; height: 120px; border-radius: 24px; box-shadow: 0 4px 12px rgba(122,62,18,.15); }
 </style>
 </head>
 <body>
 <div class="card login-box">
-  <div class="login-logo"><svg viewBox="0 0 24 24" fill="#5b2a06" aria-hidden="true"><path d="M3 19 L4.5 7 L9 10.5 L12 4 L15 10.5 L19.5 7 L21 19 Z M4 21 L20 21 L20 18.5 L4 18.5 Z"/></svg></div>
+  <div class="login-logo"><img src="/logo.jpg" alt="点点开黑 LOGO" class="login-logo-img"></div>
   <h2>管理员登录</h2>
   <label>账号 <input id="login-username" type="text" value="admin" autocomplete="username"></label>
   <label>密码 <input id="login-password" type="password" autocomplete="current-password" placeholder="请输入管理员密码"></label>

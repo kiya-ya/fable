@@ -44,7 +44,7 @@ ADMIN_PASSWORD = '112233'
 PORTAL_CODE_TTL = 300  # 用户端验证码有效期（秒）
 
 PUBLIC_PATHS = {'/login', '/portal', '/api/login', '/api/portal/login', '/api/portal/captcha',
-                '/app.js', '/style.css', '/portal.js', '/favicon.ico'}
+                '/app.js', '/style.css', '/portal.js', '/favicon.ico', '/logo.jpg'}
 
 
 @app.before_request
