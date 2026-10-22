@@ -215,6 +215,7 @@
     </div>
     <div class="toolbar">
       <input id="trainer-kw" type="text" placeholder="搜索 UID / 昵称">
+      <button id="trainer-bulk" class="btn">批量导入</button>
       <button id="trainer-add" class="btn primary">新增培训师</button>
     </div>
     <table id="trainers-table">
@@ -292,6 +293,19 @@
     <div class="modal-actions">
       <button id="import-cancel" class="btn">取消</button>
       <button id="import-submit" class="btn primary">导入选中</button>
+    </div>
+  </div>
+</div>
+
+<!-- 培训师批量导入弹窗 -->
+<div id="bulk-modal" class="modal-mask hidden">
+  <div class="modal">
+    <h3>批量导入培训师</h3>
+    <div class="muted" style="margin-bottom:10px">输入多个 UID，用逗号、空格或换行分隔（如 111,222,333）。基础名额默认 2，已存在的自动跳过</div>
+    <textarea id="bulk-uids" rows="5" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:8px" placeholder="111,222,333"></textarea>
+    <div class="modal-actions">
+      <button id="bulk-cancel" class="btn">取消</button>
+      <button id="bulk-submit" class="btn primary">导入</button>
     </div>
   </div>
 </div>

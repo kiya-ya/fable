@@ -805,6 +805,32 @@ def create_trainer():
         conn.close()
 
 
+@app.post('/api/trainers/bulk-import')
+def bulk_import_trainers():
+    """批量录入培训师：uids 为逗号/空格/换行分隔的 UID 文本，默认基础名额 2，重复跳过"""
+    data = request.get_json(force=True)
+    raw = str(data.get('uids', ''))
+    uids = [u.strip() for u in re.split(r'[,\s，、;；\n\r]+', raw) if u.strip()]
+    if not uids:
+        return err('请输入至少一个 UID（逗号分隔）')
+    conn = get_db()
+    created, skipped = [], []
+    for uid in dict.fromkeys(uids):  # 保序去重
+        try:
+            conn.execute('INSERT INTO trainers (uid, nickname, base_slots) VALUES (?, ?, 2)', (uid, uid))
+            created.append(uid)
+        except Exception as e:
+            if 'UNIQUE' in str(e):
+                skipped.append(uid)
+            else:
+                conn.rollback()
+                conn.close()
+                raise
+    conn.commit()
+    conn.close()
+    return ok({'created': created, 'skipped': skipped, 'created_count': len(created)})
+
+
 @app.put('/api/trainers/<int:tid>')
 def update_trainer(tid):
     person, msg = _validate_person(request.get_json(force=True), TRAINER_STATUSES, with_slots=True)

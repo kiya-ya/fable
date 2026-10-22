@@ -110,6 +110,18 @@ item_a = next((t for t in r.json()['items'] if t['uid'] == '90001'), None)
 check('列表带名额字段 total_slots=2', item_a and item_a['total_slots'] == 2, str(item_a))
 check('列表带分页字段', 'total' in r.json() and r.json()['page_size'] == 20, str(r.json().keys()))
 
+print('== 培训师批量导入 ==')
+r = requests.post(f'{B}/api/trainers/bulk-import', json={'uids': '90011,90012,90013'})
+check('批量导入 3 人', r.ok and r.json()['created_count'] == 3, r.text)
+r = requests.post(f'{B}/api/trainers/bulk-import', json={'uids': '90011,90014'})
+check('重复跳过', r.ok and r.json()['created_count'] == 1 and r.json()['skipped'] == ['90011'], r.text)
+r = requests.get(f'{B}/api/trainers', params={'kw': '90011'})
+check('批量导入可搜索到', len(r.json()['items']) == 1 and r.json()['items'][0]['base_slots'] == 2, r.text)
+for uid in ('90011', '90012', '90013', '90014'):
+    for t in requests.get(f'{B}/api/trainers', params={'role': 'all', 'kw': uid}).json()['items']:
+        if t['uid'] == uid:
+            requests.delete(f"{B}/api/trainers/{t['id']}")
+
 print('== 妹妹 CRUD ==')
 r = requests.post(f'{B}/api/trainees', json={'uid': '80001', 'nickname': '测试妹妹甲', 'hall_name': '游戏一厅'})
 check('新增妹妹甲', r.ok, r.text)

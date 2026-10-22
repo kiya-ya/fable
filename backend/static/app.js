@@ -766,6 +766,26 @@ function openPersonModal(kind, person) {
 
 $('#trainer-add').addEventListener('click', () => openPersonModal('trainers', null));
 $('#trainee-add').addEventListener('click', () => openPersonModal('trainees', null));
+
+// 培训师批量导入
+$('#trainer-bulk').addEventListener('click', () => {
+  $('#bulk-uids').value = '';
+  $('#bulk-modal').classList.remove('hidden');
+});
+$('#bulk-cancel').addEventListener('click', () => $('#bulk-modal').classList.add('hidden'));
+$('#bulk-submit').addEventListener('click', async () => {
+  const raw = $('#bulk-uids').value.trim();
+  if (!raw) return toast('请输入 UID', true);
+  try {
+    const r = await api('/api/trainers/bulk-import', { method: 'POST', body: { uids: raw } });
+    toast(`导入 ${r.created_count} 人${r.skipped.length ? `，跳过已存在 ${r.skipped.length} 人` : ''}`);
+    $('#bulk-modal').classList.add('hidden');
+    loadTrainers();
+    refreshTotals();
+  } catch (e) {
+    toast(e.message, true);
+  }
+});
 $('#pm-cancel').addEventListener('click', () => $('#person-modal').classList.add('hidden'));
 
 $('#pm-autofill').addEventListener('click', async () => {
