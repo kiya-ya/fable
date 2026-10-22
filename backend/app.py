@@ -13,7 +13,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, jsonify, request, send_file, session
 
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BACKEND_DIR)
@@ -24,6 +24,172 @@ from uid_crawler import UIDCrawler, CookieExpiredError, CAPTAIN_TYPE_LABELS  # n
 from trainer_db import init_trainer_db  # noqa: E402
 
 app = Flask(__name__, static_folder='static', static_url_path='')
+
+# 登录态：Flask session（密钥持久化在 data/，重启不失效）
+def _load_secret_key():
+    path = os.path.join(PROJECT_ROOT, 'data', 'flask_secret.txt')
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return f.read().strip()
+    except Exception:
+        import secrets
+        key = secrets.token_hex(32)
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(key)
+        return key
+
+app.secret_key = _load_secret_key()
+ADMIN_USER = 'admin'
+ADMIN_PASSWORD = '112233'
+PORTAL_CODE_TTL = 300  # 用户端验证码有效期（秒）
+
+PUBLIC_PATHS = {'/login', '/portal', '/api/login', '/api/portal/login', '/api/portal/captcha',
+                '/app.js', '/style.css', '/portal.js', '/favicon.ico'}
+
+
+@app.before_request
+def _auth_guard():
+    path = request.path
+    if path in PUBLIC_PATHS or path.startswith('/portal/') or path.startswith('/api/portal/'):
+        return None
+    if session.get('admin'):
+        return None
+    if path.startswith('/api/'):
+        return jsonify({'ok': False, 'msg': '未登录或登录已过期'}, ), 401
+    return app.send_static_file('login.html')
+
+
+# ────────────────────────────────────────────── 管理员登录
+
+@app.get('/login')
+def login_page():
+    return app.send_static_file('login.html')
+
+
+@app.post('/api/login')
+def admin_login():
+    data = request.get_json(force=True)
+    if data.get('username') == ADMIN_USER and data.get('password') == ADMIN_PASSWORD:
+        session['admin'] = True
+        return ok()
+    return err('账号或密码错误', 401)
+
+
+@app.post('/api/logout')
+def admin_logout():
+    session.pop('admin', None)
+    return ok()
+
+
+# ────────────────────────────────────────────── 用户端登录（UID + 5位验证码 + 培训师校验）
+
+@app.get('/portal')
+def portal_page():
+    return app.send_static_file('portal.html')
+
+
+def _new_portal_code():
+    import random
+    import string
+    code = ''.join(random.choices(string.ascii_lowercase + string.digits, k=5))
+    session['portal_code'] = code
+    session['portal_code_at'] = time.time()
+    return code
+
+
+@app.get('/api/portal/captcha')
+def portal_captcha():
+    return ok({'code': _new_portal_code()})
+
+
+@app.post('/api/portal/login')
+def portal_login():
+    data = request.get_json(force=True)
+    uid = str(data.get('uid', '')).strip()
+    code = str(data.get('code', '')).strip().lower()
+    if not uid or not code:
+        return err('UID 和验证码不能为空')
+    expected = session.get('portal_code', '')
+    if not expected or code != expected or time.time() - session.get('portal_code_at', 0) > PORTAL_CODE_TTL:
+        return err('验证码错误或已过期，请刷新后重试', 401)
+    conn = get_db()
+    tr = conn.execute("SELECT * FROM trainers WHERE uid=? AND role='trainer'", (uid,)).fetchone()
+    conn.close()
+    if not tr:
+        return err('该 UID 不在培训师名单中，不能进入系统', 403)
+    session.pop('portal_code', None)
+    session['portal_uid'] = uid
+    session['portal_trainer_id'] = tr['id']
+    return ok({'uid': uid, 'nickname': tr['nickname']})
+
+
+@app.post('/api/portal/logout')
+def portal_logout():
+    session.pop('portal_uid', None)
+    session.pop('portal_trainer_id', None)
+    return ok()
+
+
+def _portal_trainer():
+    tid = session.get('portal_trainer_id')
+    if not tid:
+        return None
+    conn = get_db()
+    tr = conn.execute("SELECT * FROM trainers WHERE id=? AND role='trainer'", (tid,)).fetchone()
+    conn.close()
+    return tr
+
+
+@app.get('/api/portal/me')
+def portal_me():
+    tr = _portal_trainer()
+    if not tr:
+        return err('未登录', 401)
+    conn = get_db()
+    panel = build_slots_panel(conn, tr['id'])
+    conn.close()
+    return ok({'trainer': {'uid': tr['uid'], 'nickname': tr['nickname'], 'hall_name': tr['hall_name']},
+               'slots': panel})
+
+
+@app.post('/api/portal/bind')
+def portal_bind():
+    """用户自助绑定：培训师 UID 固定为登录者，只需输入妹妹 UID"""
+    tr = _portal_trainer()
+    if not tr:
+        return err('未登录', 401)
+    data = request.get_json(force=True)
+    trainee_uid = str(data.get('trainee_uid', '')).strip()
+    note = str(data.get('note', '') or '').strip()
+    if not trainee_uid:
+        return err('妹妹 UID 不能为空')
+    if trainee_uid == tr['uid']:
+        return err('不能绑定自己')
+
+    allowed, gate_msg, gate_warn = _protection_gate(trainee_uid)
+    if not allowed:
+        return jsonify({'ok': False, 'msg': gate_msg, 'gate': True}), 422
+
+    conn = get_db()
+    try:
+        trainee_id, trainee_created = _upsert_person(
+            conn, 'trainees', trainee_uid,
+            str(data.get('trainee_nickname', '') or '').strip(),
+            str(data.get('trainee_hall', '') or '').strip())
+        payload, code = _bind_core(conn, tr['id'], trainee_id, note, False, 'trainer')
+        if code == 200:
+            payload['trainee_created'] = trainee_created
+            if gate_msg:
+                payload['gate_msg'] = gate_msg
+                payload['gate_warn'] = gate_warn
+            conn.commit()
+        return jsonify(payload), code
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
 
 TRAINER_STATUSES = ('active', 'inactive')
 TRAINEE_STATUSES = ('active', 'inactive')

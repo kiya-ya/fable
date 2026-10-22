@@ -11,6 +11,17 @@ import requests
 B = 'http://127.0.0.1:5000'
 passed = failed = 0
 
+# 管理员登录（后续请求都带登录态）
+S = requests.Session()
+r = S.post(f'{B}/api/login', json={'username': 'admin', 'password': '112233'})
+assert r.ok, f'管理员登录失败: {r.text}'
+requests = S
+
+# 未登录访问管理 API 应 401
+anon = __import__('requests').Session()
+r = anon.get(f'{B}/api/trainers')
+print('未登录管理 API 拦截 401:', 'PASS' if r.status_code == 401 else 'FAIL')
+
 def check(name, cond, extra=''):
     global passed, failed
     if cond:
@@ -357,6 +368,24 @@ ws_rows = [row for row in load_workbook(io.BytesIO(r.content)).active.iter_rows(
            if any(v is not None for v in row)]
 check('过期绑定不出现在导出（80003 不在其中）', all(str(row[2]) != '80003' for row in ws_rows), str(ws_rows))
 check('窗口未开始的绑定也不导出（80001 不在其中）', all(str(row[2]) != '80001' for row in ws_rows), str(ws_rows))
+
+print('== 用户端登录与自助绑定 ==')
+cap = requests.get(f'{B}/api/portal/captcha').json()['code']
+r = requests.post(f'{B}/api/portal/login', json={'uid': '90001', 'code': cap})
+check('培训师 UID+验证码登录', r.ok, r.text)
+r = requests.get(f'{B}/api/portal/me')
+check('用户端返回我的名额面板', r.ok and r.json()['slots']['trainer']['uid'] == '90001', r.text[:200])
+r = requests.post(f'{B}/api/portal/bind', json={'trainee_uid': '80001'})
+check('自助绑定被保护期门槛拦截 422', r.status_code == 422 and r.json().get('gate'), r.text)
+cap = requests.get(f'{B}/api/portal/captcha').json()['code']
+r = requests.post(f'{B}/api/portal/login', json={'uid': '80001', 'code': cap})
+check('非培训师拒绝进入 403', r.status_code == 403, f'got {r.status_code}')
+cap = requests.get(f'{B}/api/portal/captcha').json()['code']
+r = requests.post(f'{B}/api/portal/login', json={'uid': '90001', 'code': 'xxxxx'})
+check('错误验证码 401', r.status_code == 401, f'got {r.status_code}')
+r = requests.post(f'{B}/api/portal/logout')
+r = requests.get(f'{B}/api/portal/me')
+check('退出后 401', r.status_code == 401, f'got {r.status_code}')
 
 print('== 数据看板 ==')
 r = requests.get(f'{B}/api/dashboard/summary')
