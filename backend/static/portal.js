@@ -92,7 +92,11 @@ function renderSlots(s) {
       <td>${esc(t.best_level)}</td>
       <td>${t.slot_plus > 0 ? `<span class="tag plus">+${t.slot_plus}</span>` : '<span class="muted">+0</span>'}</td>
       <td class="muted">${esc(t.last_queried_at || '本月未查询')}</td>
-    </tr>`).join('') : '<tr><td colspan="6" class="empty">还没有绑定妹妹，去下方绑定吧</td></tr>';
+      <td style="white-space:nowrap">
+        <button class="btn small" onclick="showTraineeData('${esc(t.uid)}', '${esc(t.nickname)}')">数据</button>
+        <button class="btn small danger" onclick="unbindTrainee(${t.binding_id}, '${esc(t.nickname)}')">解散</button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="7" class="empty">还没有绑定妹妹，去下方绑定吧</td></tr>';
 }
 
 // ────────────── 自助绑定 ──────────────
@@ -148,6 +152,66 @@ $('#p-logout').addEventListener('click', async (e) => {
   await api('/api/portal/logout', { method: 'POST' });
   location.reload();
 });
+
+// 刷新自己学员数据
+$('#p-refresh').addEventListener('click', async () => {
+  const btn = $('#p-refresh');
+  btn.disabled = true;
+  btn.textContent = '刷新中…';
+  try {
+    const r = await api('/api/portal/refresh', { method: 'POST' });
+    toast(`已刷新 ${r.queried.length} 人${r.errors.length ? `，${r.errors.length} 人失败` : ''}`);
+    loadMe();
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '刷新数据';
+  }
+});
+
+// 查看妹妹本周/上周数据
+async function showTraineeData(uid, nickname) {
+  const card = $('#p-data-card');
+  card.classList.remove('hidden');
+  $('#p-data-title').textContent = `妹妹数据：${nickname}（${uid}）`;
+  $('#p-data-body').innerHTML = '<div class="muted">查询中…</div>';
+  try {
+    const r = await api(`/api/portal/trainee-data?uid=${encodeURIComponent(uid)}`);
+    const res = r.result;
+    const tw = res.this_week.data, lw = res.last_week.data;
+    const rows = [
+      ['牌子', tw.week_level || '-', lw.week_level || '-'],
+      ['礼物流水', tw.week_revenue ?? '-', lw.week_revenue ?? '-'],
+      ['每日任务完成次数', tw.daily_task_count ?? '-', lw.daily_task_count ?? '-'],
+      ['排档天数', tw.week_schedule_days ?? '-', lw.week_schedule_days ?? '-'],
+      ['排档所属大厅', tw.schedule_hall || '-', lw.schedule_hall || '-'],
+      ['保护期结束', tw.protection_end || '-', lw.protection_end || '-'],
+    ];
+    $('#p-data-body').innerHTML = `
+      <div class="muted" style="margin-bottom:8px">本周 ${esc(res.this_week.period)} ｜ 上周 ${esc(res.last_week.period)}</div>
+      <table>
+        <thead><tr><th>项目</th><th>本周</th><th>上周</th></tr></thead>
+        <tbody>${rows.map(([k, a, b]) => `<tr><td>${k}</td><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join('')}</tbody>
+      </table>`;
+  } catch (e) {
+    $('#p-data-body').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+  }
+}
+
+$('#p-data-close').addEventListener('click', () => $('#p-data-card').classList.add('hidden'));
+
+// 用户自行解散（名额贡献随绑定结束自动减除）
+async function unbindTrainee(bindingId, nickname) {
+  if (!confirm(`确认解散与「${nickname}」的绑定？\n其名额扩充贡献会同时减除。`)) return;
+  try {
+    await api('/api/portal/unbind', { method: 'POST', body: { binding_id: bindingId } });
+    toast(`已解散与「${nickname}」的绑定，其名额贡献已减除`);
+    loadMe();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
 
 // 已登录则直接进主界面
 (async function init() {

@@ -47,15 +47,26 @@
     </div>
 
     <div class="card">
-      <h2>我的名额</h2>
+      <div class="card-head">
+        <h2>我的名额</h2>
+        <button id="p-refresh" class="btn">刷新数据</button>
+      </div>
       <div id="p-slots-summary" class="slot-summary"></div>
       <div class="muted" style="font-size:12px;margin-bottom:8px">
         额外名额按学员当月排档周最高等级计算（初银+1/银牌+1/金牌+1，需当周排档天数&gt;0），当月达标当月生效，次月按新月等级重算
       </div>
       <table>
-        <thead><tr><th>妹妹</th><th>UID</th><th>绑定时间</th><th>当月最高等级</th><th>贡献名额</th><th>最后查询</th></tr></thead>
+        <thead><tr><th>妹妹</th><th>UID</th><th>绑定时间</th><th>当月最高等级</th><th>贡献名额</th><th>最后查询</th><th>操作</th></tr></thead>
         <tbody id="p-trainees"></tbody>
       </table>
+    </div>
+
+    <div id="p-data-card" class="card hidden">
+      <div class="card-head">
+        <h2 id="p-data-title">妹妹数据</h2>
+        <button id="p-data-close" class="btn small">关闭</button>
+      </div>
+      <div id="p-data-body"></div>
     </div>
 
     <div class="card">

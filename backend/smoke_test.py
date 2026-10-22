@@ -387,6 +387,26 @@ r = requests.post(f'{B}/api/portal/logout')
 r = requests.get(f'{B}/api/portal/me')
 check('退出后 401', r.status_code == 401, f'got {r.status_code}')
 
+print('== 用户自行解散 ==')
+db_exec("INSERT INTO bindings (trainer_id, trainee_id, bind_type) VALUES (?, ?, 'trainer')", (tr_b, te_a))
+bid_p = db_one("SELECT id FROM bindings WHERE trainer_id=? AND trainee_id=? AND unbound_at IS NULL", (tr_b, te_a))[0]
+cap = requests.get(f'{B}/api/portal/captcha').json()['code']
+r = requests.post(f'{B}/api/portal/login', json={'uid': '90002', 'code': cap})
+check('培训师B登录', r.ok, r.text)
+r = requests.post(f'{B}/api/portal/unbind', json={'binding_id': bid_p})
+check('用户自行解散成功', r.ok, r.text)
+r = requests.get(f'{B}/api/bindings', params={'active': 1})
+check('解散后不在生效列表', all(b['id'] != bid_p for b in r.json()['items']), r.text[:200])
+# 别人的绑定不能解散
+db_exec("INSERT INTO bindings (trainer_id, trainee_id, bind_type) VALUES (?, ?, 'trainer')", (tr_b, te_a))
+bid_p2 = db_one("SELECT id FROM bindings WHERE trainer_id=? AND trainee_id=? AND unbound_at IS NULL", (tr_b, te_a))[0]
+cap = requests.get(f'{B}/api/portal/captcha').json()['code']
+requests.post(f'{B}/api/portal/login', json={'uid': '90001', 'code': cap})
+r = requests.post(f'{B}/api/portal/unbind', json={'binding_id': bid_p2})
+check('解散他人绑定 403', r.status_code == 403, f'got {r.status_code}')
+r = requests.get(f'{B}/api/portal/trainee-data', params={'uid': '80001'})
+check('查询他人妹妹数据 403', r.status_code == 403, f'got {r.status_code}')
+
 print('== 数据看板 ==')
 r = requests.get(f'{B}/api/dashboard/summary')
 d = r.json()

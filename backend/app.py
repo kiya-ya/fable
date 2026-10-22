@@ -194,6 +194,68 @@ def portal_bind():
 TRAINER_STATUSES = ('active', 'inactive')
 TRAINEE_STATUSES = ('active', 'inactive')
 
+@app.post('/api/portal/refresh')
+def portal_refresh():
+    """用户端刷新自己学员的数据"""
+    tr = _portal_trainer()
+    if not tr:
+        return err('未登录', 401)
+    return refresh_trainees(tr['id'])
+
+
+@app.get('/api/portal/trainee-data')
+def portal_trainee_data():
+    """查看自己某个妹妹的本周/上周数据（等级/流水/任务/排档）"""
+    tr = _portal_trainer()
+    if not tr:
+        return err('未登录', 401)
+    uid = request.args.get('uid', '').strip()
+    if not uid:
+        return err('uid 不能为空')
+    conn = get_db()
+    owned = conn.execute(
+        'SELECT id FROM bindings WHERE trainer_id=? AND unbound_at IS NULL AND trainee_id=(SELECT id FROM trainees WHERE uid=?)',
+        (tr['id'], uid)).fetchone()
+    conn.close()
+    if not owned:
+        return err('只能查看自己绑定的妹妹', 403)
+    try:
+        result = UIDCrawler().query_with_compare(uid, 'game')
+    except CookieExpiredError:
+        try:
+            _heal_uid_cookie()
+            result = UIDCrawler().query_with_compare(uid, 'game')
+        except CookieExpiredError as e:
+            return err(str(e), 401)
+        except Exception as e:
+            return err(f'查询失败: {e}', 502)
+    except Exception as e:
+        return err(f'查询失败: {e}', 502)
+    return ok({'result': result})
+
+
+@app.post('/api/portal/unbind')
+def portal_unbind():
+    """用户自行解散自己的绑定（名额贡献随绑定结束自动减除）"""
+    tr = _portal_trainer()
+    if not tr:
+        return err('未登录', 401)
+    data = request.get_json(force=True)
+    bid = data.get('binding_id')
+    conn = get_db()
+    b = conn.execute(
+        'SELECT * FROM bindings WHERE id=? AND trainer_id=? AND unbound_at IS NULL',
+        (bid, tr['id'])).fetchone()
+    if not b:
+        conn.close()
+        return err('绑定不存在或不属于当前登录培训师', 403)
+    note = ((b['note'] or '') + ' [用户自行解散]').strip()
+    conn.execute('UPDATE bindings SET unbound_at=CURRENT_TIMESTAMP, note=? WHERE id=?', (note, bid))
+    conn.commit()
+    conn.close()
+    return ok()
+
+
 # ────────────────────────────────────────────── 名额与奖励政策
 
 # 等级序列（判定用当周等级）
@@ -317,24 +379,6 @@ def judge_side_retained(data):
                 and empty(data.get('week_level')))
 
 
-def auto_dissolve_trainee(conn, trainee_uid):
-    """留存字段全空的学员：所有生效绑定标记解散（置 unbound_at + 备注），档案置为退出。
-    返回解散的绑定数。"""
-    rows = conn.execute(
-        '''SELECT b.id, b.note, b.trainee_id FROM bindings b JOIN trainees t ON t.id=b.trainee_id
-           WHERE t.uid=? AND b.unbound_at IS NULL''', (trainee_uid,)).fetchall()
-    for r in rows:
-        note = ((r['note'] or '') + ' [系统判定解散：留存字段为空]').strip()
-        conn.execute('UPDATE bindings SET unbound_at=CURRENT_TIMESTAMP, note=? WHERE id=?',
-                     (note, r['id']))
-        conn.execute("UPDATE trainees SET status='inactive', updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                     (r['trainee_id'],))
-    if rows:
-        conn.commit()
-        print(f'[AutoDissolve] 学员 {trainee_uid} 未留存，解散 {len(rows)} 条绑定', flush=True)
-    return len(rows)
-
-
 def auto_dissolve_side(conn, side_uid):
     """侧方（培训师/姐姐）未留存：其所有生效绑定解散进历史（备注原因），奖励随之中止。"""
     rows = conn.execute(
@@ -403,13 +447,6 @@ def record_trainee_query(conn, uid, data, last_week_data=None, side=False):
         conn.execute('UPDATE trainees SET protection_end=? WHERE uid=?', (prot, uid))
     conn.commit()
     return retained, prev
-
-
-def maybe_auto_dissolve(conn, uid, retained, prev):
-    """自动解散仅在「之前留存、本次变空」时触发；从未进厅的新人（首次即空）不误判"""
-    if retained is False and prev == 1:
-        return auto_dissolve_trainee(conn, uid)
-    return 0
 
 
 def _parse_ts(s):
@@ -513,7 +550,7 @@ def build_slots_panel(conn, trainer_id):
         return None
     month = _current_month()
     rows = conn.execute(
-        '''SELECT t.uid, t.nickname, b.bound_at
+        '''SELECT t.uid, t.nickname, b.bound_at, b.id AS binding_id
            FROM bindings b JOIN trainees t ON t.id = b.trainee_id
            WHERE b.trainer_id = ? AND b.bind_type='trainer' AND b.unbound_at IS NULL
            ORDER BY b.bound_at''', (trainer_id,)).fetchall()
@@ -530,6 +567,7 @@ def build_slots_panel(conn, trainer_id):
             label += '（上月兜底）'
         trainees.append({
             'uid': r['uid'], 'nickname': r['nickname'], 'bound_at': r['bound_at'],
+            'binding_id': r['binding_id'],
             'best_level': label, 'slot_plus': plus,
             'from_last_month': lv['from_last_month'] if lv else False,
             'last_queried_at': lv['last_queried_at'] if lv else None,
@@ -1554,8 +1592,7 @@ def refresh_trainees(tid):
         conn = get_db()
         retained, prev = record_trainee_query(conn, b['uid'], r, r_last)
         if r.get('found'):
-            if maybe_auto_dissolve(conn, b['uid'], retained, prev) == 0:
-                sync_pending_rewards(conn, b['trainee_id'])
+            sync_pending_rewards(conn, b['trainee_id'])
             queried.append({'uid': b['uid'], 'nickname': b['nickname'], 'week_level': r.get('week_level', '')})
         else:
             errors.append({'uid': b['uid'], 'nickname': b['nickname'], 'msg': r.get('msg', '未查到数据')})
@@ -1617,13 +1654,12 @@ def refresh_trainee(tid):
                nickname=COALESCE(NULLIF(?, ''), nickname), updated_at=CURRENT_TIMESTAMP WHERE id=?""",
             (hall, nick, tid))
     retained, prev = record_trainee_query(conn, t['uid'], r, r_last)
-    dissolved = maybe_auto_dissolve(conn, t['uid'], retained, prev)
-    if not dissolved:
-        sync_pending_rewards(conn, tid)
+    # 妹妹不再由系统自动解散（由用户自行解散）
+    sync_pending_rewards(conn, tid)
     conn.commit()
     conn.close()
     return ok({'info': {'nickname': nick, 'hall_name': hall, 'week_level': r.get('week_level', '')},
-               'retained': retained, 'dissolved': bool(dissolved)})
+               'retained': retained, 'dissolved': False})
 
 
 @app.post('/api/rewards/grant-all')
@@ -1715,10 +1751,9 @@ def uid_query():
         te = conn.execute('SELECT id FROM trainees WHERE uid=?', (uid,)).fetchone()
         if te:
             if week_data.get('found'):
-                retained, prev = record_trainee_query(
+                record_trainee_query(
                     conn, uid, week_data, result.get('last_week', {}).get('data'))
-                if maybe_auto_dissolve(conn, uid, retained, prev) == 0:
-                    sync_pending_rewards(conn, te['id'])
+                sync_pending_rewards(conn, te['id'])
             payload['rewards_panel'] = build_rewards_panel(conn, te['id'])
     finally:
         conn.close()
@@ -1836,8 +1871,7 @@ def refresh_all_bound_trainees():
         conn = get_db()
         retained, prev = record_trainee_query(conn, b['uid'], r, r_last)
         if r.get('found'):
-            if maybe_auto_dissolve(conn, b['uid'], retained, prev) == 0:
-                sync_pending_rewards(conn, b['trainee_id'])
+            sync_pending_rewards(conn, b['trainee_id'])
             queried.append({'uid': b['uid'], 'nickname': b['nickname'], 'week_level': r.get('week_level', '')})
         else:
             errors.append({'uid': b['uid'], 'nickname': b['nickname'], 'msg': r.get('msg', '未查到数据')})
