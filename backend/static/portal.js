@@ -111,7 +111,9 @@ function renderSlots(s) {
       <div class="p-trainee-meta">
         当月最高等级 ${levelBadge(t.best_level)}
         ｜ 贡献 ${t.slot_plus > 0 ? `<span class="tag plus">+${t.slot_plus}</span>` : '+0'}
-        ｜ 剩余奖励 ${t.window_status === 'in_window'
+      </div>
+      <div class="p-trainee-meta">
+        剩余奖励 ${t.window_status === 'in_window'
           ? `<span class="tag plus">剩 ${t.weeks_left}/4 周</span>`
           : t.window_status === 'not_started' ? '<span class="tag graduated">未开始</span>'
           : '<span class="tag inactive">已结束</span>'}
