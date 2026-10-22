@@ -180,6 +180,9 @@ tr:hover td { background: #f9fafb; }
 .uq-item .c.down { color: #dc2626; }
 .uq-item .c.flat { color: #9ca3af; }
 
+/* 通用隐藏类 */
+.hidden { display: none !important; }
+
 /* toast */
 #toast {
   position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
