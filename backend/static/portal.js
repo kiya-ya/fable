@@ -81,6 +81,15 @@ async function loadMe() {
   }
 }
 
+function levelBadge(level) {
+  const cls = level.includes('王牌') || level.includes('大神') ? 'lv-ace'
+    : level.includes('初级') ? 'lv-junior'
+    : level.includes('金') ? 'lv-gold'
+    : level.includes('银') ? 'lv-silver'
+    : level.includes('铜') ? 'lv-bronze' : 'lv-none';
+  return `<span class="lv-badge ${cls}">${esc(level || '未评级')}</span>`;
+}
+
 function renderSlots(s) {
   $('#p-slots-summary').innerHTML = `
     <span class="slot-chip">基础 <b>${s.base_slots}</b></span> +
@@ -101,7 +110,7 @@ function renderSlots(s) {
         </div>
       </div>
       <div class="p-trainee-meta">
-        当月最高等级 <b>${esc(t.best_level)}</b>
+        当月最高等级 ${levelBadge(t.best_level)}
         ｜ 贡献 ${t.slot_plus > 0 ? `<span class="tag plus">+${t.slot_plus}</span>` : '+0'}
         ｜ 绑定 ${esc(t.bound_at)}
         ｜ 最后查询 ${esc(t.last_queried_at || '本月未查询')}

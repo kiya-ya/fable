@@ -44,7 +44,7 @@ ADMIN_PASSWORD = '112233'
 PORTAL_CODE_TTL = 300  # 用户端验证码有效期（秒）
 
 PUBLIC_PATHS = {'/login', '/portal', '/api/login', '/api/portal/login', '/api/portal/captcha',
-                '/app.js', '/style.css', '/portal.js', '/favicon.ico', '/logo.jpg'}
+                '/app.js', '/style.css', '/brand.css', '/portal.js', '/favicon.ico', '/logo.jpg'}
 
 
 @app.before_request
@@ -678,7 +678,7 @@ def ok(data=None):
 @app.after_request
 def _no_cache_static(resp):
     """页面/静态资源禁缓存，避免浏览器拿到旧版 JS/CSS"""
-    if request.path in ('/', '/app.js', '/style.css', '/portal.js', '/login', '/portal'):
+    if request.path in ('/', '/app.js', '/style.css', '/brand.css', '/portal.js', '/login', '/portal'):
         resp.headers['Cache-Control'] = 'no-store'
     return resp
 
