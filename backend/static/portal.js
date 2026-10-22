@@ -85,18 +85,24 @@ function renderSlots(s) {
     <span class="slot-chip ${s.over ? 'warn' : ''}">已绑定 <b>${s.used_slots}</b> / ${s.total_slots}</span>
     <span class="slot-chip">扩充截至 <b>${esc(s.extra_valid_until)}</b></span>`;
   $('#p-trainees').innerHTML = s.trainees.length ? s.trainees.map((t) => `
-    <tr>
-      <td>${esc(t.nickname)}</td>
-      <td>${esc(t.uid)}</td>
-      <td>${esc(t.bound_at)}</td>
-      <td>${esc(t.best_level)}</td>
-      <td>${t.slot_plus > 0 ? `<span class="tag plus">+${t.slot_plus}</span>` : '<span class="muted">+0</span>'}</td>
-      <td class="muted">${esc(t.last_queried_at || '本月未查询')}</td>
-      <td style="white-space:nowrap">
-        <button class="btn small" onclick="showTraineeData('${esc(t.uid)}', '${esc(t.nickname)}')">数据</button>
-        <button class="btn small danger" onclick="unbindTrainee(${t.binding_id}, '${esc(t.nickname)}')">解散</button>
-      </td>
-    </tr>`).join('') : '<tr><td colspan="7" class="empty">还没有绑定妹妹，去下方绑定吧</td></tr>';
+    <div class="p-trainee-card">
+      <div class="p-trainee-head">
+        <div>
+          <b>${esc(t.nickname)}</b>
+          <span class="muted" style="margin-left:8px">${esc(t.uid)}</span>
+        </div>
+        <div class="p-trainee-actions">
+          <button class="btn small" onclick="showTraineeData('${esc(t.uid)}', '${esc(t.nickname)}')">数据</button>
+          <button class="btn small danger" onclick="unbindTrainee(${t.binding_id}, '${esc(t.nickname)}')">解散</button>
+        </div>
+      </div>
+      <div class="p-trainee-meta">
+        当月最高等级 <b>${esc(t.best_level)}</b>
+        ｜ 贡献 ${t.slot_plus > 0 ? `<span class="tag plus">+${t.slot_plus}</span>` : '+0'}
+        ｜ 绑定 ${esc(t.bound_at)}
+        ｜ 最后查询 ${esc(t.last_queried_at || '本月未查询')}
+      </div>
+    </div>`).join('') : '<div class="empty">还没有绑定妹妹，去下方绑定吧</div>';
 }
 
 // ────────────── 自助绑定 ──────────────
@@ -170,7 +176,20 @@ $('#p-refresh').addEventListener('click', async () => {
   }
 });
 
-// 查看妹妹本周/上周数据
+// 查看妹妹本周/上周数据（与管理员端一致的对比卡片）
+const PORTAL_COMPARE_LABELS = {
+  week_level: '当周等级',
+  week_schedule_days: '排档天数',
+  daily_task_count: '每日任务',
+  week_revenue: '礼物流水',
+  week_accompany_time: '陪档时长',
+  week_rank: '周排名',
+  total_revenue: '累计流水',
+  best_4week_level: '4周最高等级',
+  hall: '所属大厅',
+  is_elite: '精英队长',
+};
+
 async function showTraineeData(uid, nickname) {
   const card = $('#p-data-card');
   card.classList.remove('hidden');
@@ -179,21 +198,18 @@ async function showTraineeData(uid, nickname) {
   try {
     const r = await api(`/api/portal/trainee-data?uid=${encodeURIComponent(uid)}`);
     const res = r.result;
-    const tw = res.this_week.data, lw = res.last_week.data;
-    const rows = [
-      ['牌子', tw.week_level || '-', lw.week_level || '-'],
-      ['礼物流水', tw.week_revenue ?? '-', lw.week_revenue ?? '-'],
-      ['每日任务完成次数', tw.daily_task_count ?? '-', lw.daily_task_count ?? '-'],
-      ['排档天数', tw.week_schedule_days ?? '-', lw.week_schedule_days ?? '-'],
-      ['排档所属大厅', tw.schedule_hall || '-', lw.schedule_hall || '-'],
-      ['保护期结束', tw.protection_end || '-', lw.protection_end || '-'],
-    ];
+    const cards = Object.entries(PORTAL_COMPARE_LABELS).map(([key, label]) => {
+      const c = res.compare[key];
+      if (!c) return '';
+      return `<div class="uq-item">
+        <div class="k">${label}</div>
+        <div class="v">本周 ${esc(c.this)} ｜ 上周 ${esc(c.last)}</div>
+        <div class="c ${c.trend || 'flat'}">${esc(c.change || '')}</div>
+      </div>`;
+    }).join('');
     $('#p-data-body').innerHTML = `
       <div class="muted" style="margin-bottom:8px">本周 ${esc(res.this_week.period)} ｜ 上周 ${esc(res.last_week.period)}</div>
-      <table>
-        <thead><tr><th>项目</th><th>本周</th><th>上周</th></tr></thead>
-        <tbody>${rows.map(([k, a, b]) => `<tr><td>${k}</td><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join('')}</tbody>
-      </table>`;
+      <div class="uq-grid">${cards}</div>`;
   } catch (e) {
     $('#p-data-body').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
   }

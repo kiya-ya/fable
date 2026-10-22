@@ -85,6 +85,18 @@ input:focus, select:focus { border-color: #3b82f6; }
   gap: 10px; margin-top: 10px;
 }
 
+/* 用户端学员卡片 */
+.p-trainee-list { display: flex; flex-direction: column; gap: 10px; }
+.p-trainee-card {
+  border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 14px;
+}
+.p-trainee-head {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 8px; flex-wrap: wrap;
+}
+.p-trainee-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.p-trainee-meta { font-size: 12px; color: #6b7280; margin-top: 6px; line-height: 1.7; }
+
 /* 奖励面板多绑定分组 */
 .reward-block { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 14px; margin-top: 12px; }
 .reward-block-head { font-size: 13px; color: #4b5563; margin-bottom: 8px; }
