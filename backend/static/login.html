@@ -6,17 +6,20 @@
 <title>管理员登录 · 培训师系统</title>
 <link rel="stylesheet" href="/style.css">
 <style>
-.login-box { max-width: 360px; margin: 10vh auto; }
-.login-box h2 { margin-bottom: 16px; }
+.login-box { max-width: 360px; margin: 8vh auto; }
+.login-box h2 { margin-bottom: 16px; text-align: center; }
 .login-box label { display: block; margin-bottom: 12px; font-size: 13px; color: #6b7280; }
 .login-box input { width: 100%; margin-top: 4px; }
 .login-box .btn { width: 100%; padding: 10px; margin-top: 6px; }
 .portal-link { text-align: center; margin-top: 14px; font-size: 13px; }
+.login-logo { display: flex; justify-content: center; margin-bottom: 12px; }
+.login-logo svg { width: 96px; height: 96px; }
 </style>
 </head>
 <body>
 <div class="card login-box">
-  <h2><svg class="logo-crown" viewBox="0 0 24 24" fill="#5b2a06" aria-hidden="true"><path d="M3 19 L4.5 7 L9 10.5 L12 4 L15 10.5 L19.5 7 L21 19 Z M4 21 L20 21 L20 18.5 L4 18.5 Z"/></svg> 管理员登录</h2>
+  <div class="login-logo"><svg viewBox="0 0 24 24" fill="#5b2a06" aria-hidden="true"><path d="M3 19 L4.5 7 L9 10.5 L12 4 L15 10.5 L19.5 7 L21 19 Z M4 21 L20 21 L20 18.5 L4 18.5 Z"/></svg></div>
+  <h2>管理员登录</h2>
   <label>账号 <input id="login-username" type="text" value="admin" autocomplete="username"></label>
   <label>密码 <input id="login-password" type="password" autocomplete="current-password" placeholder="请输入管理员密码"></label>
   <button id="login-submit" class="btn primary">登录</button>
