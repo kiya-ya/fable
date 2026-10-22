@@ -678,7 +678,7 @@ def ok(data=None):
 @app.after_request
 def _no_cache_static(resp):
     """页面/静态资源禁缓存，避免浏览器拿到旧版 JS/CSS"""
-    if request.path in ('/', '/app.js', '/style.css'):
+    if request.path in ('/', '/app.js', '/style.css', '/portal.js', '/login', '/portal'):
         resp.headers['Cache-Control'] = 'no-store'
     return resp
 
