@@ -7,62 +7,36 @@
 <link rel="icon" href="/logo.jpg" type="image/jpeg">
 <link rel="stylesheet" href="/style.css">
 <style>
-body { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-.login-shell {
-  display: flex; width: 860px; max-width: 92vw; overflow: hidden;
-  border-radius: 22px;
-}
-.login-brand {
-  flex: 1.1; padding: 44px 36px;
-  background: linear-gradient(160deg, rgba(255,255,255,.42), rgba(255,255,255,.12));
+body {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center; border-right: 1px solid rgba(255,255,255,.4);
+  min-height: 100vh;
 }
-.login-brand img { width: 132px; height: 132px; border-radius: 28px; box-shadow: 0 10px 30px rgba(122,62,18,.18); }
-.login-brand h1 { font-size: 26px; color: var(--brand-brown); margin: 20px 0 8px; letter-spacing: 2px; }
-.login-brand p { font-size: 13px; color: rgba(91,42,6,.65); line-height: 1.8; }
-.brand-points { display: flex; gap: 14px; margin-top: 22px; flex-wrap: wrap; justify-content: center; }
-.brand-points span {
-  font-size: 12px; color: var(--brand-brown-mid);
-  background: rgba(255,255,255,.5); padding: 4px 12px; border-radius: 999px;
-  border: 1px solid rgba(255,255,255,.6);
+.login-logo { margin-bottom: 26px; }
+.login-logo img {
+  width: 148px; height: 148px; border-radius: 32px;
+  box-shadow: 0 12px 32px rgba(122, 62, 18, .2);
 }
-.login-form { flex: 1; padding: 44px 36px; }
-.login-form h2 { font-size: 20px; color: var(--brand-brown); margin-bottom: 6px; }
-.login-form .sub { font-size: 13px; color: rgba(91,42,6,.55); margin-bottom: 24px; }
-.login-form label { display: block; margin-bottom: 16px; font-size: 13px; color: rgba(91,42,6,.7); }
-.login-form input { width: 100%; margin-top: 6px; padding: 10px 12px; border-radius: 8px; }
-.login-form .btn { width: 100%; padding: 11px; margin-top: 10px; border-radius: 8px; font-size: 15px; }
-.portal-link { text-align: center; margin-top: 18px; font-size: 13px; }
+.login-card {
+  width: 380px; max-width: 92vw; padding: 28px 30px;
+}
+.login-card h2 { font-size: 20px; color: var(--brand-brown); text-align: center; margin-bottom: 6px; }
+.login-card .sub { font-size: 13px; color: rgba(91,42,6,.55); text-align: center; margin-bottom: 22px; }
+.login-card label { display: block; margin-bottom: 14px; font-size: 13px; color: rgba(91,42,6,.7); }
+.login-card input { width: 100%; margin-top: 6px; padding: 10px 12px; border-radius: 8px; }
+.login-card .btn { width: 100%; padding: 11px; margin-top: 8px; border-radius: 8px; font-size: 15px; }
+.portal-link { text-align: center; margin-top: 16px; font-size: 13px; }
 .portal-link a { color: var(--brand-brown-mid); }
-@media (max-width: 640px) {
-  body { align-items: flex-start; }
-  .login-shell { flex-direction: column; margin: 4vh auto; }
-  .login-brand { padding: 28px 20px; border-right: none; border-bottom: 1px solid rgba(255,255,255,.4); }
-  .login-brand img { width: 88px; height: 88px; }
-  .login-brand h1 { font-size: 22px; margin-top: 12px; }
-  .login-form { padding: 28px 24px; }
-}
 </style>
 </head>
 <body>
-<div class="card login-shell">
-  <div class="login-brand">
-    <img src="/logo.jpg" alt="点点开黑 LOGO">
-    <h1>培训师系统</h1>
-    <p>培训师与妹妹的绑定、名额与奖励管理</p>
-    <div class="brand-points">
-      <span>绑定管理</span><span>名额扩充</span><span>奖励统计</span>
-    </div>
-  </div>
-  <div class="login-form">
-    <h2>管理员登录</h2>
-    <div class="sub">使用管理员账号进入完整后台</div>
-    <label>账号 <input id="login-username" type="text" value="admin" autocomplete="username"></label>
-    <label>密码 <input id="login-password" type="password" autocomplete="current-password" placeholder="请输入管理员密码"></label>
-    <button id="login-submit" class="btn primary">登录</button>
-    <div class="portal-link"><a href="/portal">我是培训师，去用户端 →</a></div>
-  </div>
+<div class="login-logo"><img src="/logo.jpg" alt="点点开黑 LOGO"></div>
+<div class="card login-card">
+  <h2>管理员登录</h2>
+  <div class="sub">使用管理员账号进入完整后台</div>
+  <label>账号 <input id="login-username" type="text" value="admin" autocomplete="username"></label>
+  <label>密码 <input id="login-password" type="password" autocomplete="current-password" placeholder="请输入管理员密码"></label>
+  <button id="login-submit" class="btn primary">登录</button>
+  <div class="portal-link"><a href="/portal">我是培训师，去用户端 →</a></div>
 </div>
 <div id="toast" class="hidden"></div>
 <script>
