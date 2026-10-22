@@ -18,7 +18,10 @@ body {
 }
 
 header {
-  background: linear-gradient(90deg, var(--brand-gold-light), var(--brand-gold));
+  background: rgba(255, 255, 255, .5);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  border-bottom: 1px solid rgba(255, 255, 255, .6);
   color: var(--brand-brown); padding: 0 24px;
   display: flex; align-items: center; gap: 32px; height: 56px;
 }
