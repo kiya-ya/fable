@@ -153,6 +153,22 @@
 .help-toggle:hover { text-decoration: underline; }
 .trainee-data { margin-top: 10px; border-top: 1px dashed rgba(122,62,18,.15); padding-top: 8px; }
 
+/* 学员卡片透明大箭头 */
+.p-trainee-actions .btn {
+  background: transparent; border: none; box-shadow: none;
+  color: var(--brown-700); font-size: 22px; line-height: 1;
+  padding: 0 6px; min-height: 0; font-weight: 400;
+  transition: color .15s ease, transform .15s ease;
+}
+.p-trainee-actions .btn:hover:not(:disabled) {
+  background: transparent; box-shadow: none;
+  color: var(--gold-500); transform: scale(1.15);
+}
+.p-trainee-actions .btn:focus-visible {
+  outline: 2px solid rgba(245, 179, 1, .5);
+  border-radius: 6px;
+}
+
 /* 移动端专项（触控目标与留白） */
 @media (max-width: 768px) {
   .btn, .btn.small { min-height: var(--btn-height-touch); padding: 8px 14px; }
