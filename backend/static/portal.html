@@ -7,7 +7,16 @@
 <link rel="icon" href="/logo.jpg" type="image/jpeg">
 <link rel="stylesheet" href="/style.css">
 <style>
-.portal-login { max-width: 420px; margin: 8vh auto; }
+body {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 100vh;
+}
+.login-logo { margin-bottom: 26px; }
+.login-logo img {
+  width: 148px; height: 148px; border-radius: 32px;
+  box-shadow: 0 12px 32px rgba(122, 62, 18, .2);
+}
+.portal-login { width: 420px; max-width: 92vw; }
 .portal-login label { display: block; margin-bottom: 12px; font-size: 13px; color: #6b7280; }
 .portal-login input { width: 100%; margin-top: 4px; }
 .captcha-row { display: flex; gap: 8px; align-items: center; }
@@ -18,12 +27,14 @@
 }
 .portal-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
 .portal-top h2 { margin: 0; }
+main { width: 100%; }
+body.logged-in { display: block; }
+#portal-login-logo.hidden { display: none; }
 </style>
 </head>
 <body>
-<header><h1><img class="logo-img" src="/logo.jpg" alt="LOGO">培训师用户端</h1></header>
-<main>
-  <!-- 登录 -->
+  <!-- 登录（LOGO 居中 + 下方登录框，无顶栏） -->
+  <div class="login-logo" id="portal-login-logo"><img src="/logo.jpg" alt="点点开黑 LOGO"></div>
   <div id="portal-login" class="card portal-login">
     <h2>培训师登录</h2>
     <div class="muted" style="margin-bottom:12px">输入你的 UID 和验证码；仅培训师可进入</div>
@@ -80,7 +91,7 @@
       <div id="p-bind-info" class="lookup-info"></div>
     </div>
   </div>
-</main>
+</div>
 <footer class="app-footer">
   <div class="footer-lines"><span></span><span></span><span></span></div>
   <div class="footer-text">培训师用户端 · 点点开黑</div>

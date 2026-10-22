@@ -50,6 +50,8 @@ async function doLogin() {
   try {
     await api('/api/portal/login', { method: 'POST', body: { uid, code } });
     $('#portal-login').classList.add('hidden');
+    $('#portal-login-logo').classList.add('hidden');
+    document.body.classList.add('logged-in');
     $('#portal-main').classList.remove('hidden');
     loadMe();
   } catch (e) {
@@ -70,6 +72,8 @@ async function loadMe() {
     if (e.status === 401) {
       $('#portal-main').classList.add('hidden');
       $('#portal-login').classList.remove('hidden');
+      $('#portal-login-logo').classList.remove('hidden');
+      document.body.classList.remove('logged-in');
       refreshCaptcha();
     } else {
       toast(e.message, true);
@@ -234,6 +238,8 @@ async function unbindTrainee(bindingId, nickname) {
   try {
     const r = await api('/api/portal/me');
     $('#portal-login').classList.add('hidden');
+    $('#portal-login-logo').classList.add('hidden');
+    document.body.classList.add('logged-in');
     $('#portal-main').classList.remove('hidden');
     $('#p-welcome').textContent = `${r.trainer.nickname}（${r.trainer.uid}）`;
     renderSlots(r.slots);
