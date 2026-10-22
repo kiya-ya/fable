@@ -145,6 +145,14 @@
 }
 .seg-btn.active { box-shadow: inset 0 0 0 1px rgba(91, 42, 6, .2); }
 
+/* 说明抽屉与学员展开区 */
+.help-toggle {
+  background: none; border: none; color: var(--brown-700);
+  font-size: 12px; cursor: pointer; padding: 2px 0;
+}
+.help-toggle:hover { text-decoration: underline; }
+.trainee-data { margin-top: 10px; border-top: 1px dashed rgba(122,62,18,.15); padding-top: 8px; }
+
 /* 移动端专项（触控目标与留白） */
 @media (max-width: 768px) {
   .btn, .btn.small { min-height: var(--btn-height-touch); padding: 8px 14px; }

@@ -105,8 +105,7 @@ function renderSlots(s) {
           <span class="muted" style="margin-left:8px">${esc(t.uid)}</span>
         </div>
         <div class="p-trainee-actions">
-          <button class="btn small" onclick="showTraineeData('${esc(t.uid)}', '${esc(t.nickname)}')">数据</button>
-          <button class="btn small danger" onclick="unbindTrainee(${t.binding_id}, '${esc(t.nickname)}')">解散</button>
+          <button class="btn small" onclick="toggleTraineeData('${esc(t.uid)}', '${esc(t.nickname)}', ${t.binding_id}, this)" title="展开数据">▸</button>
         </div>
       </div>
       <div class="p-trainee-meta">
@@ -115,6 +114,7 @@ function renderSlots(s) {
         ｜ 绑定 ${esc(t.bound_at)}
         ｜ 最后查询 ${esc(t.last_queried_at || '本月未查询')}
       </div>
+      <div id="td-${esc(t.uid)}" class="trainee-data hidden"></div>
     </div>`).join('') : '<div class="empty">还没有绑定妹妹，去下方绑定吧</div>';
 }
 
@@ -189,7 +189,6 @@ $('#p-refresh').addEventListener('click', async () => {
   }
 });
 
-// 查看妹妹本周/上周数据（与管理员端一致的对比卡片）
 const PORTAL_COMPARE_LABELS = {
   week_level: '当周等级',
   week_schedule_days: '排档天数',
@@ -203,11 +202,26 @@ const PORTAL_COMPARE_LABELS = {
   is_elite: '精英队长',
 };
 
-async function showTraineeData(uid, nickname) {
-  const card = $('#p-data-card');
-  card.classList.remove('hidden');
-  $('#p-data-title').textContent = `妹妹数据：${nickname}（${uid}）`;
-  $('#p-data-body').innerHTML = '<div class="muted">查询中…</div>';
+// 名额说明抽屉
+$('#p-slots-help-toggle').addEventListener('click', () => {
+  const box = $('#p-slots-help');
+  const open = box.classList.toggle('hidden');
+  $('#p-help-arrow').textContent = open ? '▸' : '▾';
+});
+
+// 妹妹数据：卡片内箭头展开，解散按钮在展开区底部
+async function toggleTraineeData(uid, nickname, bindingId, btn) {
+  const box = document.getElementById(`td-${uid}`);
+  if (!box.classList.contains('hidden')) {
+    box.classList.add('hidden');
+    btn.textContent = '▸';
+    return;
+  }
+  box.classList.remove('hidden');
+  btn.textContent = '▾';
+  if (box.dataset.loaded) return;
+  box.dataset.loaded = '1';
+  box.innerHTML = '<div class="muted">查询中…</div>';
   try {
     const r = await api(`/api/portal/trainee-data?uid=${encodeURIComponent(uid)}`);
     const res = r.result;
@@ -220,15 +234,16 @@ async function showTraineeData(uid, nickname) {
         <div class="c ${c.trend || 'flat'}">${esc(c.change || '')}</div>
       </div>`;
     }).join('');
-    $('#p-data-body').innerHTML = `
-      <div class="muted" style="margin-bottom:8px">本周 ${esc(res.this_week.period)} ｜ 上周 ${esc(res.last_week.period)}</div>
-      <div class="uq-grid">${cards}</div>`;
+    box.innerHTML = `
+      <div class="muted" style="margin:8px 0">本周 ${esc(res.this_week.period)} ｜ 上周 ${esc(res.last_week.period)}</div>
+      <div class="uq-grid">${cards}</div>
+      <div style="margin-top:10px;text-align:right">
+        <button class="btn small danger" onclick="unbindTrainee(${bindingId}, '${esc(nickname)}')">解散</button>
+      </div>`;
   } catch (e) {
-    $('#p-data-body').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+    box.innerHTML = `<div class="empty">${esc(e.message)}</div>`;
   }
 }
-
-$('#p-data-close').addEventListener('click', () => $('#p-data-card').classList.add('hidden'));
 
 // 用户自行解散（名额贡献随绑定结束自动减除）
 async function unbindTrainee(bindingId, nickname) {

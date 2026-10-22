@@ -72,18 +72,11 @@ body.logged-in { display: block; }
         <button id="p-refresh" class="btn">刷新数据</button>
       </div>
       <div id="p-slots-summary" class="slot-summary"></div>
-      <div class="muted" style="font-size:12px;margin-bottom:8px">
+      <button id="p-slots-help-toggle" class="help-toggle" type="button">名额计算说明 <span id="p-help-arrow">▸</span></button>
+      <div id="p-slots-help" class="muted hidden" style="font-size:12px;margin:6px 0 8px">
         额外名额按学员当月排档周最高等级计算（初银+1/银牌+1/金牌+1，需当周排档天数&gt;0），当月达标当月生效，次月按新月等级重算
       </div>
       <div id="p-trainees" class="p-trainee-list"></div>
-    </div>
-
-    <div id="p-data-card" class="card hidden">
-      <div class="card-head">
-        <h2 id="p-data-title">妹妹数据</h2>
-        <button id="p-data-close" class="btn small">关闭</button>
-      </div>
-      <div id="p-data-body"></div>
     </div>
 
     <div class="card">
