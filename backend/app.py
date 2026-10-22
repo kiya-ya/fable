@@ -550,7 +550,7 @@ def build_slots_panel(conn, trainer_id):
         return None
     month = _current_month()
     rows = conn.execute(
-        '''SELECT t.uid, t.nickname, b.bound_at, b.id AS binding_id
+        '''SELECT t.uid, t.nickname, b.bound_at, b.id AS binding_id, b.weeks_consumed
            FROM bindings b JOIN trainees t ON t.id = b.trainee_id
            WHERE b.trainer_id = ? AND b.bind_type='trainer' AND b.unbound_at IS NULL
            ORDER BY b.bound_at''', (trainer_id,)).fetchall()
@@ -565,12 +565,23 @@ def build_slots_panel(conn, trainer_id):
         label = lv['best_level'] if lv else '（本月未查询）'
         if lv and lv['from_last_month']:
             label += '（上月兜底）'
+        # 每条绑定附奖励窗口与剩余周数
+        start, end, wstatus = reward_window_status(r['bound_at'])
+        if wstatus == 'in_window':
+            cal_weeks = min(max(-(-(end - datetime.now()).days // 7), 0), REWARD_WINDOW_WEEKS)
+            weeks_left = max(cal_weeks - (r['weeks_consumed'] or 0), 0)
+        elif wstatus == 'not_started':
+            weeks_left = REWARD_WINDOW_WEEKS
+        else:
+            weeks_left = 0
         trainees.append({
             'uid': r['uid'], 'nickname': r['nickname'], 'bound_at': r['bound_at'],
             'binding_id': r['binding_id'],
             'best_level': label, 'slot_plus': plus,
             'from_last_month': lv['from_last_month'] if lv else False,
             'last_queried_at': lv['last_queried_at'] if lv else None,
+            'window_status': wstatus, 'weeks_left': weeks_left,
+            'window_start': start.strftime('%Y-%m-%d'), 'window_end': end.strftime('%Y-%m-%d'),
         })
     base = tr['base_slots']
     total = min(base + extra, SLOT_CAP)

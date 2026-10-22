@@ -105,7 +105,7 @@ function renderSlots(s) {
           <span class="muted" style="margin-left:8px">${esc(t.uid)}</span>
         </div>
         <div class="p-trainee-actions">
-          <button class="btn small" onclick="toggleTraineeData('${esc(t.uid)}', '${esc(t.nickname)}', ${t.binding_id}, this, '${esc(t.bound_at)}', '${esc(t.last_queried_at || '')}')" title="展开数据">▸</button>
+          <button class="btn small" onclick="toggleTraineeData('${esc(t.uid)}', '${esc(t.nickname)}', ${t.binding_id}, this, '${esc(t.bound_at)}', '${esc(t.last_queried_at || '')}', '${esc(t.window_status)}', ${t.weeks_left})" title="展开数据">▸</button>
         </div>
       </div>
       <div class="p-trainee-meta">
@@ -208,7 +208,7 @@ $('#p-slots-help-toggle').addEventListener('click', () => {
 });
 
 // 妹妹数据：卡片内箭头展开，解散按钮在展开区底部
-async function toggleTraineeData(uid, nickname, bindingId, btn, boundAt, lastQuery) {
+async function toggleTraineeData(uid, nickname, bindingId, btn, boundAt, lastQuery, windowStatus, weeksLeft) {
   const box = document.getElementById(`td-${uid}`);
   if (!box.classList.contains('hidden')) {
     box.classList.add('hidden');
@@ -235,6 +235,7 @@ async function toggleTraineeData(uid, nickname, bindingId, btn, boundAt, lastQue
     box.innerHTML = `
       <div class="muted" style="margin:8px 0">
         绑定 ${esc(boundAt)} ｜ 最后查询 ${esc(lastQuery || '本月未查询')}<br>
+        剩余奖励 <b>${windowStatus === 'in_window' ? `剩 ${weeksLeft}/4 周` : windowStatus === 'not_started' ? '未开始' : '已结束'}</b><br>
         本周 ${esc(res.this_week.period)} ｜ 上周 ${esc(res.last_week.period)}
       </div>
       <div class="uq-grid">${cards}</div>
