@@ -1,50 +1,62 @@
-/* 培训师系统 - 后台风格 */
+/* 培训师系统 - 品牌主题（金黄 LOGO + 棕色描边 + 奶白底） */
+:root {
+  --brand-gold: #f5b301;
+  --brand-gold-light: #ffc53d;
+  --brand-brown: #5b2a06;
+  --brand-brown-mid: #7a3e12;
+  --brand-cream: #fff7ea;
+  --brand-border: #f1dfb9;
+  --brand-pink: #f48a8a;
+}
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
-  background: #f0f2f5; color: #333; font-size: 14px;
+  background: var(--brand-cream); color: #3f2a14; font-size: 14px;
 }
 
 header {
-  background: #1f2937; color: #fff; padding: 0 24px;
+  background: linear-gradient(90deg, var(--brand-gold-light), var(--brand-gold));
+  color: var(--brand-brown); padding: 0 24px;
   display: flex; align-items: center; gap: 32px; height: 56px;
 }
-header h1 { font-size: 18px; font-weight: 600; }
+header h1 { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.logo-crown { width: 24px; height: 24px; flex-shrink: 0; }
 #tabs { display: flex; gap: 4px; height: 100%; }
 .tab {
-  background: none; border: none; color: #9ca3af; font-size: 14px;
+  background: none; border: none; color: rgba(91, 42, 6, .55); font-size: 14px;
   padding: 0 16px; cursor: pointer; height: 100%;
   border-bottom: 2px solid transparent;
 }
-.tab:hover { color: #e5e7eb; }
-.tab.active { color: #fff; border-bottom-color: #3b82f6; }
+.tab:hover { color: var(--brand-brown); }
+.tab.active { color: var(--brand-brown); border-bottom-color: var(--brand-brown); font-weight: 600; }
 
 main { max-width: 1600px; margin: 20px auto; padding: 0 24px; }
 .panel { display: none; }
 .panel.active { display: block; }
 
 .card {
-  background: #fff; border-radius: 8px; padding: 16px 20px;
-  margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  background: #fff; border-radius: 12px; padding: 16px 20px;
+  margin-bottom: 16px; border: 1px solid var(--brand-border);
+  box-shadow: 0 2px 8px rgba(122, 62, 18, .05);
 }
-.card h2 { font-size: 15px; margin-bottom: 12px; }
+.card h2 { font-size: 15px; margin-bottom: 12px; color: var(--brand-brown); }
 .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .card-head h2 { margin-bottom: 0; }
 .card-head > div { display: flex; gap: 8px; }
 
 input, select {
   padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px;
-  font-size: 14px; outline: none;
+  font-size: 14px; outline: none; background: #fff;
 }
-input:focus, select:focus { border-color: #3b82f6; }
+input:focus, select:focus { border-color: var(--brand-gold); box-shadow: 0 0 0 3px rgba(245, 179, 1, .15); }
 
 .btn {
   padding: 6px 16px; border: 1px solid #d1d5db; border-radius: 6px;
   background: #fff; cursor: pointer; font-size: 14px;
 }
-.btn:hover { background: #f3f4f6; }
-.btn.primary { background: #3b82f6; border-color: #3b82f6; color: #fff; }
-.btn.primary:hover { background: #2563eb; }
+.btn:hover { background: #fdf3e0; }
+.btn.primary { background: var(--brand-brown-mid); border-color: var(--brand-brown-mid); color: var(--brand-cream); }
+.btn.primary:hover { background: var(--brand-brown); }
 .btn.small { padding: 3px 10px; font-size: 13px; }
 .btn.danger { color: #dc2626; border-color: #fca5a5; }
 .btn.danger:hover { background: #fef2f2; }
@@ -73,7 +85,7 @@ input:focus, select:focus { border-color: #3b82f6; }
 .duplex { display: flex; gap: 16px; align-items: stretch; }
 .duplex .card { flex: 1; min-width: 0; }
 .entry-card { cursor: pointer; text-align: center; padding: 32px 20px; transition: box-shadow .15s; }
-.entry-card:hover { box-shadow: 0 4px 12px rgba(59,130,246,.18); }
+.entry-card:hover { box-shadow: 0 4px 12px rgba(245, 179, 1, .25); }
 .entry-card h2 { margin-bottom: 8px; }
 .entry-hint { color: #9ca3af; font-size: 13px; }
 .toolbar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
@@ -126,14 +138,14 @@ input:focus, select:focus { border-color: #3b82f6; }
 
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #e5e7eb; }
-th { color: #6b7280; font-weight: 500; font-size: 13px; background: #f9fafb; }
+th { color: #8a5a20; font-weight: 500; font-size: 13px; background: #fbf3e2; }
 td .btn { margin-right: 6px; }
 tr:hover td { background: #f9fafb; }
 .empty { text-align: center; color: #9ca3af; padding: 24px; }
 
 .seg { display: flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; }
 .seg-btn { border: none; background: #fff; padding: 6px 14px; cursor: pointer; font-size: 13px; }
-.seg-btn.active { background: #3b82f6; color: #fff; }
+.seg-btn.active { background: var(--brand-gold); color: var(--brand-brown); font-weight: 600; }
 
 .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; }
 .tag.active { background: #dcfce7; color: #15803d; }
@@ -147,7 +159,7 @@ tr:hover td { background: #f9fafb; }
 .slot-chip {
   background: #f3f4f6; border-radius: 8px; padding: 6px 14px; font-size: 14px;
 }
-.slot-chip.total { background: #dbeafe; }
+.slot-chip.total { background: #ffe9b8; }
 .slot-chip.warn { background: #fee2e2; }
 
 /* 弹窗 */
@@ -168,7 +180,7 @@ tr:hover td { background: #f9fafb; }
 .modal input, .modal select { width: 100%; margin-top: 4px; }
 .uid-row { display: flex; gap: 8px; margin-top: 4px; }
 .uid-row input { flex: 1; margin-top: 0; }
-.uid-link { color: #2563eb; text-decoration: none; }
+.uid-link { color: #b45309; text-decoration: none; }
 .uid-link:hover { text-decoration: underline; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 
