@@ -105,14 +105,12 @@ function renderSlots(s) {
           <span class="muted" style="margin-left:8px">${esc(t.uid)}</span>
         </div>
         <div class="p-trainee-actions">
-          <button class="btn small" onclick="toggleTraineeData('${esc(t.uid)}', '${esc(t.nickname)}', ${t.binding_id}, this)" title="展开数据">▸</button>
+          <button class="btn small" onclick="toggleTraineeData('${esc(t.uid)}', '${esc(t.nickname)}', ${t.binding_id}, this, '${esc(t.bound_at)}', '${esc(t.last_queried_at || '')}')" title="展开数据">▸</button>
         </div>
       </div>
       <div class="p-trainee-meta">
         当月最高等级 ${levelBadge(t.best_level)}
         ｜ 贡献 ${t.slot_plus > 0 ? `<span class="tag plus">+${t.slot_plus}</span>` : '+0'}
-        ｜ 绑定 ${esc(t.bound_at)}
-        ｜ 最后查询 ${esc(t.last_queried_at || '本月未查询')}
       </div>
       <div id="td-${esc(t.uid)}" class="trainee-data hidden"></div>
     </div>`).join('') : '<div class="empty">还没有绑定妹妹，去下方绑定吧</div>';
@@ -210,7 +208,7 @@ $('#p-slots-help-toggle').addEventListener('click', () => {
 });
 
 // 妹妹数据：卡片内箭头展开，解散按钮在展开区底部
-async function toggleTraineeData(uid, nickname, bindingId, btn) {
+async function toggleTraineeData(uid, nickname, bindingId, btn, boundAt, lastQuery) {
   const box = document.getElementById(`td-${uid}`);
   if (!box.classList.contains('hidden')) {
     box.classList.add('hidden');
@@ -235,7 +233,10 @@ async function toggleTraineeData(uid, nickname, bindingId, btn) {
       </div>`;
     }).join('');
     box.innerHTML = `
-      <div class="muted" style="margin:8px 0">本周 ${esc(res.this_week.period)} ｜ 上周 ${esc(res.last_week.period)}</div>
+      <div class="muted" style="margin:8px 0">
+        绑定 ${esc(boundAt)} ｜ 最后查询 ${esc(lastQuery || '本月未查询')}<br>
+        本周 ${esc(res.this_week.period)} ｜ 上周 ${esc(res.last_week.period)}
+      </div>
       <div class="uq-grid">${cards}</div>
       <div style="margin-top:10px;text-align:right">
         <button class="btn small danger" onclick="unbindTrainee(${bindingId}, '${esc(nickname)}')">解散</button>
