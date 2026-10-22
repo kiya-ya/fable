@@ -37,7 +37,7 @@ header h1 { font-size: 18px; font-weight: 700; display: flex; align-items: cente
 .tab:hover { color: var(--brand-brown); }
 .tab.active { color: var(--brand-brown); border-bottom-color: var(--brand-brown); font-weight: 600; }
 
-main { max-width: 1600px; margin: 20px auto; padding: 0 24px; }
+main { max-width: 1200px; margin: 20px auto; padding: 0 24px; }
 .panel { display: none; }
 .panel.active { display: block; }
 
@@ -125,12 +125,12 @@ input:focus, select:focus { border-color: var(--brand-gold); box-shadow: 0 0 0 3
 
 /* 页脚装饰横线 */
 .app-footer { margin: 28px 0 12px; text-align: center; }
-.footer-lines { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
-.footer-lines span { display: block; height: 2px; border-radius: 2px; }
-.footer-lines span:nth-child(1) { background: var(--brand-gold); }
-.footer-lines span:nth-child(2) { background: var(--brand-brown-mid); height: 1px; opacity: .55; }
-.footer-lines span:nth-child(3) { background: var(--brand-pink); height: 1px; opacity: .6; }
-.footer-text { font-size: 12px; color: rgba(91, 42, 6, .55); letter-spacing: 2px; }
+.footer-lines { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
+.footer-lines span { display: block; border-radius: 999px; height: 4px; }
+.footer-lines span:nth-child(1) { width: 64px; background: linear-gradient(90deg, var(--gold-300), var(--gold-500)); }
+.footer-lines span:nth-child(2) { width: 32px; height: 3px; background: var(--brown-700); opacity: .65; }
+.footer-lines span:nth-child(3) { width: 16px; height: 3px; background: var(--pink-400); opacity: .8; }
+.footer-text { font-size: 12px; color: rgba(91, 42, 6, .6); letter-spacing: 3px; }
 
 /* 数据看板 */
 .dash-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }

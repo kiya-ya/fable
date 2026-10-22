@@ -148,16 +148,17 @@
 /* 说明抽屉与学员展开区 */
 .help-toggle {
   background: none; border: none; color: var(--brown-700);
-  font-size: 12px; cursor: pointer; padding: 2px 0;
+  font-size: 14px; font-weight: 600; cursor: pointer; padding: 4px 0;
 }
+.help-toggle span { font-size: 16px; }
 .help-toggle:hover { text-decoration: underline; }
 .trainee-data { margin-top: 10px; border-top: 1px dashed rgba(122,62,18,.15); padding-top: 8px; }
 
 /* 学员卡片透明大箭头 */
 .p-trainee-actions .btn {
   background: transparent; border: none; box-shadow: none;
-  color: var(--brown-700); font-size: 22px; line-height: 1;
-  padding: 0 6px; min-height: 0; font-weight: 400;
+  color: var(--brown-700); font-size: 30px; line-height: 1;
+  padding: 0 8px; min-height: 0; font-weight: 400;
   transition: color .15s ease, transform .15s ease;
 }
 .p-trainee-actions .btn:hover:not(:disabled) {
