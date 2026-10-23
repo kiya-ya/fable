@@ -848,11 +848,36 @@ def ok(data=None):
 
 # ────────────────────────────────────────────── 首页
 
+import gzip
+from io import BytesIO
+
+GZIP_TYPES = ('text/html', 'text/css', 'application/javascript', 'text/javascript', 'application/json')
+CACHE_LONG = {'/logo.jpg', '/wutong.png', '/ludeng.png'}
+CACHE_SHORT = {'/app.js', '/style.css', '/brand.css', '/portal.js'}
+
+
 @app.after_request
 def _no_cache_static(resp):
-    """页面/静态资源禁缓存，避免浏览器拿到旧版 JS/CSS"""
-    if request.path in ('/', '/app.js', '/style.css', '/brand.css', '/portal.js', '/login', '/portal'):
+    """页面/静态资源缓存与压缩优化：HTML 不缓存，JS/CSS 短缓存协商，图片长缓存，文本 gzip"""
+    path = request.path
+    if path in CACHE_LONG:
+        resp.headers['Cache-Control'] = 'public, max-age=86400'
+    elif path in CACHE_SHORT:
+        resp.headers['Cache-Control'] = 'no-cache'  # 有修改才全量下载，否则 304
+    elif path in ('/', '/login', '/portal'):
         resp.headers['Cache-Control'] = 'no-store'
+
+    # 文本响应 gzip（>500 字节且客户端支持）
+    if (resp.status_code == 200 and not resp.is_streamed and resp.content_length and resp.content_length > 500
+            and resp.mimetype in GZIP_TYPES and 'gzip' in request.headers.get('Accept-Encoding', '')):
+        raw = resp.get_data()
+        buf = BytesIO()
+        with gzip.GzipFile(fileobj=buf, mode='wb') as f:
+            f.write(raw)
+        resp.set_data(buf.getvalue())
+        resp.headers['Content-Encoding'] = 'gzip'
+        resp.headers['Vary'] = 'Accept-Encoding'
+        resp.content_length = len(resp.get_data())
     return resp
 
 
