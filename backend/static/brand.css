@@ -188,6 +188,11 @@
 #p-trainees-toggle span { font-size: 18px; }
 #p-trainees-toggle:hover { color: var(--gold-500); text-decoration: none; }
 
+/* 用户端标题字阶 */
+#portal-main .card h2 { font-size: 20px; font-weight: 700; letter-spacing: .5px; }  /* 一级标题 */
+#p-trainees-toggle, #p-granted-toggle { font-size: 16px; font-weight: 600; }          /* 二级标题 */
+#p-slots-help-toggle { font-size: 13px; font-weight: 400; }                            /* 三级标题 */
+
 /* 移动端专项（触控目标与留白） */
 @media (max-width: 768px) {
   .btn, .btn.small { min-height: var(--btn-height-touch); padding: 8px 14px; }
