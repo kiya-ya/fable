@@ -430,11 +430,37 @@ async function doBind(payload) {
 let bindingsActiveView = true;
 let bindingsTypeFilter = '';
 let bindingsPage = 1;
+let bindingsView = 'active';  // active / history / ops
 
 let bindingsKw = '';
 
 async function loadBindings(page) {
   if (page) bindingsPage = page;
+  if (bindingsView === 'ops') {
+    const data = await api('/api/operations?limit=50');
+    $('#bindings-table thead').innerHTML = '<tr><th>时间</th><th>操作者</th><th>动作</th><th>类型</th><th>培训师/姐姐UID</th><th>妹妹UID</th><th>备注</th></tr>';
+    const tbody = $('#bindings-table tbody');
+    if (!data.items.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty">暂无操作日志</td></tr>';
+    } else {
+      tbody.innerHTML = data.items.map((o) => `
+        <tr>
+          <td>${esc(o.created_at)}</td>
+          <td>${o.actor_type === 'portal' ? `用户(${esc(o.actor_uid)})` : o.actor_type === 'admin' ? '管理员' : '系统'}</td>
+          <td>${esc(o.action)}</td>
+          <td>${esc(o.bind_type === 'sister' ? '姐妹团' : '培训师')}</td>
+          <td>${esc(o.trainer_uid)}</td>
+          <td>${esc(o.trainee_uid)}</td>
+          <td>${esc(o.detail || '')}</td>
+        </tr>`).join('');
+    }
+    $('#bindings-pager').innerHTML = '';
+    return;
+  }
+  $('#bindings-table thead').innerHTML = `<tr>
+    <th>类型</th><th>培训师/姐姐</th><th>UID</th><th>妹妹</th><th>UID</th><th>大厅</th><th>保护期结束</th><th>留存</th>
+    <th>绑定时间</th><th>结束日期</th><th>剩余奖励</th><th class="col-unbound">解绑时间</th><th>备注</th><th>操作</th>
+  </tr>`;
   const params = new URLSearchParams({
     active: bindingsActiveView ? 1 : 0,
     page: bindingsPage,
@@ -498,16 +524,27 @@ async function loadBindings(page) {
 
 $('#seg-active').addEventListener('click', () => {
   bindingsActiveView = true;
+  bindingsView = 'active';
   bindingsPage = 1;
   $('#seg-active').classList.add('active');
   $('#seg-history').classList.remove('active');
+  $('#seg-ops').classList.remove('active');
   loadBindings();
 });
 $('#seg-history').addEventListener('click', () => {
   bindingsActiveView = false;
+  bindingsView = 'history';
   bindingsPage = 1;
   $('#seg-history').classList.add('active');
   $('#seg-active').classList.remove('active');
+  $('#seg-ops').classList.remove('active');
+  loadBindings();
+});
+$('#seg-ops').addEventListener('click', () => {
+  bindingsView = 'ops';
+  $('#seg-ops').classList.add('active');
+  $('#seg-active').classList.remove('active');
+  $('#seg-history').classList.remove('active');
   loadBindings();
 });
 let bindingsKwTimer = null;
@@ -757,6 +794,7 @@ function openPersonModal(kind, person) {
   $('#pm-hall').value = person ? (person.hall_name || '') : '';
   $('#pm-note').value = person ? (person.note || '') : '';
   $('#pm-slots-row').style.display = kind === 'trainers' ? '' : 'none';
+  $('#pm-setpwd').style.display = kind === 'trainers' && person ? '' : 'none';
   $('#pm-slots').value = person && person.base_slots != null ? person.base_slots : 2;
   $('#pm-status').innerHTML = Object.entries(conf.statuses)
     .map(([k, v]) => `<option value="${k}" ${person && person.status === k ? 'selected' : ''}>${v}</option>`)
@@ -765,6 +803,21 @@ function openPersonModal(kind, person) {
 }
 
 $('#trainer-add').addEventListener('click', () => openPersonModal('trainers', null));
+
+// 管理员为培训师设置/重置密码
+$('#pm-setpwd').addEventListener('click', async () => {
+  const id = $('#pm-id').value;
+  if (!id) return;
+  const pwd = prompt('为该培训师设置新密码（至少 6 位，将覆盖旧密码）');
+  if (pwd === null) return;
+  if (pwd.length < 6) return toast('密码至少 6 位', true);
+  try {
+    await api(`/api/trainers/${id}/set-password`, { method: 'POST', body: { password: pwd } });
+    toast('密码已设置，请将其告知该培训师');
+  } catch (e) {
+    toast(e.message, true);
+  }
+});
 $('#trainee-add').addEventListener('click', () => openPersonModal('trainees', null));
 
 // 培训师批量导入

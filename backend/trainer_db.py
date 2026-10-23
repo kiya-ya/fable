@@ -82,6 +82,21 @@ def _migrate(conn):
     if 'role' not in cols:
         # role: trainer(培训师) / sister(姐妹团姐姐)
         conn.execute("ALTER TABLE trainers ADD COLUMN role TEXT NOT NULL DEFAULT 'trainer'")
+    if 'password_hash' not in cols:
+        # 用户端账号密码（哈希存储，不可逆；管理员设置/重置，用户可自改）
+        conn.execute('ALTER TABLE trainers ADD COLUMN password_hash TEXT')
+    # 操作日志：谁（admin/portal/system）在何时对谁做了什么
+    conn.execute('''CREATE TABLE IF NOT EXISTS operation_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        actor_type TEXT NOT NULL,
+        actor_uid TEXT,
+        action TEXT NOT NULL,
+        bind_type TEXT,
+        trainer_uid TEXT,
+        trainee_uid TEXT,
+        detail TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
     bcols = {r[1] for r in conn.execute('PRAGMA table_info(bindings)').fetchall()}
     if 'bind_type' not in bcols:
         conn.execute("ALTER TABLE bindings ADD COLUMN bind_type TEXT NOT NULL DEFAULT 'trainer'")

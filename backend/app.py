@@ -14,6 +14,7 @@ import time
 from datetime import datetime, timedelta
 
 from flask import Flask, jsonify, request, send_file, session
+from werkzeug.security import generate_password_hash, check_password_hash
 
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BACKEND_DIR)
@@ -39,8 +40,20 @@ def _load_secret_key():
         return key
 
 app.secret_key = _load_secret_key()
-ADMIN_USER = 'admin'
-ADMIN_PASSWORD = '112233'
+
+
+def _load_admin_config():
+    """管理员账号从 data/admin_config.json 读取（gitignore，不进入代码库）"""
+    path = os.path.join(PROJECT_ROOT, 'data', 'admin_config.json')
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            cfg = json.load(f)
+        return cfg.get('username', 'admin'), cfg.get('password', '112233')
+    except Exception:
+        return 'admin', '112233'
+
+
+ADMIN_USER, ADMIN_PASSWORD = _load_admin_config()
 PORTAL_CODE_TTL = 300  # 用户端验证码有效期（秒）
 
 PUBLIC_PATHS = {'/login', '/portal', '/api/login', '/api/portal/login', '/api/portal/captcha',
@@ -105,10 +118,16 @@ def portal_captcha():
 @app.post('/api/portal/login')
 def portal_login():
     data = request.get_json(force=True)
+    # 每次登录尝试先清除旧登录态，防止失败后沿用上一个身份
+    session.pop('portal_uid', None)
+    session.pop('portal_trainer_id', None)
     uid = str(data.get('uid', '')).strip()
     code = str(data.get('code', '')).strip().lower()
+    password = str(data.get('password', ''))
     if not uid or not code:
         return err('UID 和验证码不能为空')
+    if not password:
+        return err('请输入密码')
     expected = session.get('portal_code', '')
     if not expected or code != expected or time.time() - session.get('portal_code_at', 0) > PORTAL_CODE_TTL:
         return err('验证码错误或已过期，请刷新后重试', 401)
@@ -117,6 +136,10 @@ def portal_login():
     conn.close()
     if not tr:
         return err('该 UID 不在培训师名单中，不能进入系统', 403)
+    if not tr['password_hash']:
+        return err('该账号尚未设置密码，请联系管理员设置', 403)
+    if not check_password_hash(tr['password_hash'], password):
+        return err('密码错误', 401)
     session.pop('portal_code', None)
     session['portal_uid'] = uid
     session['portal_trainer_id'] = tr['id']
@@ -138,6 +161,44 @@ def _portal_trainer():
     tr = conn.execute("SELECT * FROM trainers WHERE id=? AND role='trainer'", (tid,)).fetchone()
     conn.close()
     return tr
+
+
+@app.post('/api/trainers/<int:tid>/set-password')
+def set_trainer_password(tid):
+    """管理员为培训师设置/重置密码（只写哈希，不显示旧密码）"""
+    data = request.get_json(force=True)
+    password = str(data.get('password', ''))
+    if len(password) < 6:
+        return err('密码至少 6 位')
+    conn = get_db()
+    cur = conn.execute('UPDATE trainers SET password_hash=? WHERE id=?',
+                       (generate_password_hash(password), tid))
+    conn.commit()
+    conn.close()
+    if cur.rowcount == 0:
+        return err('培训师不存在', 404)
+    return ok()
+
+
+@app.post('/api/portal/change-password')
+def portal_change_password():
+    """用户端修改密码：校验旧密码后更新哈希"""
+    tr = _portal_trainer()
+    if not tr:
+        return err('未登录', 401)
+    data = request.get_json(force=True)
+    old = str(data.get('old_password', ''))
+    new = str(data.get('new_password', ''))
+    if len(new) < 6:
+        return err('新密码至少 6 位')
+    if not check_password_hash(tr['password_hash'], old):
+        return err('原密码错误', 401)
+    conn = get_db()
+    conn.execute('UPDATE trainers SET password_hash=? WHERE id=?',
+                 (generate_password_hash(new), tr['id']))
+    conn.commit()
+    conn.close()
+    return ok()
 
 
 @app.get('/api/portal/me')
@@ -183,6 +244,7 @@ def portal_bind():
                 payload['gate_msg'] = gate_msg
                 payload['gate_warn'] = gate_warn
             conn.commit()
+            log_operation('portal', tr['uid'], 'bind', 'trainer', tr['uid'], trainee_uid, '用户自助绑定')
         return jsonify(payload), code
     except Exception:
         conn.rollback()
@@ -252,7 +314,9 @@ def portal_unbind():
     note = ((b['note'] or '') + ' [用户自行解散]').strip()
     conn.execute('UPDATE bindings SET unbound_at=CURRENT_TIMESTAMP, note=? WHERE id=?', (note, bid))
     conn.commit()
+    trainee_uid = conn.execute('SELECT uid FROM trainees WHERE id=?', (b['trainee_id'],)).fetchone()[0]
     conn.close()
+    log_operation('portal', tr['uid'], 'unbind', b['bind_type'], tr['uid'], trainee_uid, '用户自行解散')
     return ok()
 
 
@@ -275,6 +339,29 @@ def portal_granted_rewards():
     conn.close()
     return ok({'items': rows_to_dicts(rows)})
 
+
+# ────────────────────────────────────────────── 操作日志与查询串行锁
+
+def log_operation(actor_type, actor_uid, action, bind_type, trainer_uid, trainee_uid, detail=''):
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO operation_log (actor_type, actor_uid, action, bind_type, trainer_uid, trainee_uid, detail) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        (actor_type, actor_uid, action, bind_type, trainer_uid, trainee_uid, detail))
+    conn.commit()
+    conn.close()
+
+
+QUERY_LOCK = threading.Lock()  # 长查询任务串行，防止互踢 server1 会话 / SQLite 写冲突
+
+
+def serialized_query(fn):
+    """长查询任务串行执行装饰器"""
+    import functools
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with QUERY_LOCK:
+            return fn(*args, **kwargs)
+    return wrapper
 
 # ────────────────────────────────────────────── 名额与奖励政策
 
@@ -364,8 +451,7 @@ def judge_retained(data):
 
 def _protection_gate(uid):
     """培训师绑定门槛：妹妹须在保护期内（UID 查询的保护期结束时间 >= 今天）。
-    返回 (allowed, msg, warn)。查到数据才强制拦截；查询失败/未找到放行但带警告
-    （前端绑定流程本就先查 UID，查不到的 UID 到不了这一步）"""
+    返回 (allowed, msg, warn)。查不到数据或查询失败一律拒绝（保护期无法确认）"""
     try:
         r = UIDCrawler().query(uid, 'game')
     except CookieExpiredError:
@@ -373,11 +459,11 @@ def _protection_gate(uid):
             _heal_uid_cookie()
             r = UIDCrawler().query(uid, 'game')
         except Exception as e:
-            return True, f'保护期查询失败（本次放行）: {e}', True
+            return False, f'保护期查询失败，无法确认保护期，不能绑定: {e}', False
     except Exception as e:
-        return True, f'保护期查询失败（本次放行）: {e}', True
+        return False, f'保护期查询失败，无法确认保护期，不能绑定: {e}', False
     if not r.get('found'):
-        return True, 'UID 未查到数据，跳过保护期校验', True
+        return False, '未查到该 UID 的数据，保护期无法确认，不能绑定', False
     raw = (r.get('protection_end') or '').strip()
     m = re.search(r'(\d{4})-(\d{1,2})-(\d{1,2})', raw)
     if not m:
@@ -397,29 +483,6 @@ def judge_side_retained(data):
         return v is None or str(v).strip() in ('', '-')
     return not (empty(data.get('schedule_hall')) and empty(data.get('auth_hall'))
                 and empty(data.get('week_level')))
-
-
-def auto_dissolve_side(conn, side_uid):
-    """侧方（培训师/姐姐）未留存：其所有生效绑定解散进历史（备注原因），奖励随之中止。"""
-    rows = conn.execute(
-        '''SELECT b.id, b.note, b.bind_type FROM bindings b JOIN trainers tr ON tr.id=b.trainer_id
-           WHERE tr.uid=? AND b.unbound_at IS NULL''', (side_uid,)).fetchall()
-    for r in rows:
-        reason = '姐姐未留存' if r['bind_type'] == 'sister' else '培训师未留存'
-        note = ((r['note'] or '') + f' [系统判定解散：{reason}]').strip()
-        conn.execute('UPDATE bindings SET unbound_at=CURRENT_TIMESTAMP, note=? WHERE id=?',
-                     (note, r['id']))
-    if rows:
-        conn.commit()
-        print(f'[AutoDissolve] 侧方 {side_uid} 未留存，解散 {len(rows)} 条绑定', flush=True)
-    return len(rows)
-
-
-def maybe_auto_dissolve_side(conn, side_uid, retained, prev):
-    """侧方自动解散仅在「之前留存、本次变空」时触发"""
-    if retained is False and prev == 1:
-        return auto_dissolve_side(conn, side_uid)
-    return 0
 
 
 def record_trainee_query(conn, uid, data, last_week_data=None, side=False):
@@ -1281,6 +1344,8 @@ def create_binding_by_uid():
                 payload['gate_msg'] = gate_msg
                 payload['gate_warn'] = gate_warn
             conn.commit()
+            log_operation('admin', None, 'bind', bind_type, trainer_uid, trainee_uid,
+                          '强制换绑' if payload.get('rebound') else '新建绑定')
         return jsonify(payload), code
     except Exception:
         conn.rollback()
@@ -1295,9 +1360,15 @@ def unbind(bid):
     cur = conn.execute(
         'UPDATE bindings SET unbound_at=CURRENT_TIMESTAMP WHERE id=? AND unbound_at IS NULL', (bid,))
     conn.commit()
-    conn.close()
     if cur.rowcount == 0:
+        conn.close()
         return err('绑定不存在或已解绑', 404)
+    info = conn.execute(
+        '''SELECT b.bind_type, tr.uid AS trainer_uid, te.uid AS trainee_uid FROM bindings b
+           JOIN trainers tr ON tr.id=b.trainer_id JOIN trainees te ON te.id=b.trainee_id WHERE b.id=?''',
+        (bid,)).fetchone()
+    conn.close()
+    log_operation('admin', None, 'unbind', info['bind_type'], info['trainer_uid'], info['trainee_uid'], '管理员解绑')
     return ok()
 
 
@@ -1328,7 +1399,12 @@ def restore_binding(bid):
     conn.execute('UPDATE bindings SET unbound_at=NULL WHERE id=?', (bid,))
     conn.execute("UPDATE trainees SET status='active', updated_at=CURRENT_TIMESTAMP WHERE id=?", (b['trainee_id'],))
     conn.commit()
+    info = conn.execute(
+        '''SELECT b.bind_type, tr.uid AS trainer_uid, te.uid AS trainee_uid FROM bindings b
+           JOIN trainers tr ON tr.id=b.trainer_id JOIN trainees te ON te.id=b.trainee_id WHERE b.id=?''',
+        (bid,)).fetchone()
     conn.close()
+    log_operation('admin', None, 'restore', info['bind_type'], info['trainer_uid'], info['trainee_uid'], '从历史恢复')
     return ok()
 
 
@@ -1387,6 +1463,18 @@ def set_remaining(bid):
     conn.commit()
     conn.close()
     return ok({'weeks_consumed': consumed, 'weeks_left': remaining})
+
+
+# ────────────────────────────────────────────── 操作日志查看
+
+@app.get('/api/operations')
+def list_operations():
+    limit = min(int(request.args.get('limit', 50)), 200)
+    conn = get_db()
+    rows = conn.execute(
+        'SELECT * FROM operation_log ORDER BY id DESC LIMIT ?', (limit,)).fetchall()
+    conn.close()
+    return ok({'items': rows_to_dicts(rows)})
 
 
 # ────────────────────────────────────────────── 数据看板
@@ -1511,6 +1599,7 @@ LEVEL_REWARD = {'初级银牌': 12.8, '银牌': 23.3, '金牌': 52.0, '王牌': 
 
 
 @app.post('/api/export/rewards')
+@serialized_query
 def export_rewards():
     """导出周奖励 XLSX：任务次数/礼物流水 = 所选日期的上一周，牌子 = 所选日期当周"""
     data = request.get_json(force=True)
@@ -1646,6 +1735,7 @@ def trainer_slots(tid):
 
 
 @app.post('/api/trainers/<int:tid>/refresh-trainees')
+@serialized_query
 def refresh_trainees(tid):
     """逐个实时查询该培训师生效绑定的学员，刷新当月等级并重新判定奖励"""
     conn = get_db()
@@ -1711,6 +1801,7 @@ def trainee_rewards(tid):
 
 
 @app.post('/api/trainees/<int:tid>/refresh')
+@serialized_query
 def refresh_trainee(tid):
     """实时查询该学员并更新档案（大厅/昵称）+ 当月等级记录 + 留存判定"""
     conn = get_db()
@@ -1806,6 +1897,7 @@ def uid_query_types():
 
 
 @app.post('/api/uid-query')
+@serialized_query
 def uid_query():
     data = request.get_json(force=True)
     uid = str(data.get('uid', '')).strip()
@@ -1840,8 +1932,7 @@ def uid_query():
         tr = conn.execute('SELECT id FROM trainers WHERE uid=?', (uid,)).fetchone()
         if tr:
             if week_data.get('found'):
-                retained, prev = record_trainee_query(conn, uid, week_data, side=True)  # 侧方也落留存判定
-                maybe_auto_dissolve_side(conn, uid, retained, prev)
+                record_trainee_query(conn, uid, week_data, side=True)  # 侧方留存判定（只标记，不自动解散）
             payload['slots'] = build_slots_panel(conn, tr['id'])
         te = conn.execute('SELECT id FROM trainees WHERE uid=?', (uid,)).fetchone()
         if te:
@@ -1899,6 +1990,7 @@ WEEKLY_REFRESH_HOUR = 9      # 09:00 后执行
 WEEKLY_REFRESH_STATE = os.path.join(PROJECT_ROOT, 'data', 'weekly_refresh_status.json')
 
 
+@serialized_query
 def refresh_all_bound_trainees():
     """逐个实时查询所有生效绑定的学员+侧方（培训师/姐姐），落库当月等级、留存并重算奖励"""
     conn = get_db()
@@ -1946,8 +2038,7 @@ def refresh_all_bound_trainees():
                 return queried, errors
             continue
         conn = get_db()
-        retained, prev = record_trainee_query(conn, s['uid'], r, side=True)   # 落留存判定（宽松口径）
-        maybe_auto_dissolve_side(conn, s['uid'], retained, prev)
+        record_trainee_query(conn, s['uid'], r, side=True)   # 侧方留存判定（只标记，不自动解散）
         conn.close()
 
     for i, b in enumerate(rows):

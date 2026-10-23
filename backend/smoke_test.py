@@ -382,28 +382,39 @@ check('过期绑定不出现在导出（80003 不在其中）', all(str(row[2]) 
 check('窗口未开始的绑定也不导出（80001 不在其中）', all(str(row[2]) != '80001' for row in ws_rows), str(ws_rows))
 
 print('== 用户端登录与自助绑定 ==')
+r = requests.post(f'{B}/api/trainers/{tr_a}/set-password', json={'password': 'test123'})
+check('管理员设置密码', r.ok, r.text)
 cap = requests.get(f'{B}/api/portal/captcha').json()['code']
-r = requests.post(f'{B}/api/portal/login', json={'uid': '90001', 'code': cap})
-check('培训师 UID+验证码登录', r.ok, r.text)
+r = requests.post(f'{B}/api/portal/login', json={'uid': '90001', 'code': cap, 'password': 'wrong'})
+check('错误密码 401', r.status_code == 401, f'got {r.status_code}')
+cap = requests.get(f'{B}/api/portal/captcha').json()['code']
+r = requests.post(f'{B}/api/portal/login', json={'uid': '90001', 'code': cap, 'password': 'test123'})
+check('培训师 UID+密码+验证码登录', r.ok, r.text)
 r = requests.get(f'{B}/api/portal/me')
 check('用户端返回我的名额面板', r.ok and r.json()['slots']['trainer']['uid'] == '90001', r.text[:200])
+r = requests.post(f'{B}/api/portal/change-password', json={'old_password': 'test123', 'new_password': 'test456'})
+check('修改密码', r.ok, r.text)
+cap = requests.get(f'{B}/api/portal/captcha').json()['code']
+r = requests.post(f'{B}/api/portal/login', json={'uid': '90001', 'code': cap, 'password': 'test456'})
+check('新密码可登录', r.ok, r.text)
 r = requests.post(f'{B}/api/portal/bind', json={'trainee_uid': '80001'})
 check('自助绑定被保护期门槛拦截 422', r.status_code == 422 and r.json().get('gate'), r.text)
 cap = requests.get(f'{B}/api/portal/captcha').json()['code']
-r = requests.post(f'{B}/api/portal/login', json={'uid': '80001', 'code': cap})
+r = requests.post(f'{B}/api/portal/login', json={'uid': '80001', 'code': cap, 'password': 'x'})
 check('非培训师拒绝进入 403', r.status_code == 403, f'got {r.status_code}')
 cap = requests.get(f'{B}/api/portal/captcha').json()['code']
-r = requests.post(f'{B}/api/portal/login', json={'uid': '90001', 'code': 'xxxxx'})
+r = requests.post(f'{B}/api/portal/login', json={'uid': '90001', 'code': 'xxxxx', 'password': 'test456'})
 check('错误验证码 401', r.status_code == 401, f'got {r.status_code}')
 r = requests.post(f'{B}/api/portal/logout')
 r = requests.get(f'{B}/api/portal/me')
 check('退出后 401', r.status_code == 401, f'got {r.status_code}')
 
 print('== 用户自行解散 ==')
+requests.post(f'{B}/api/trainers/{tr_b}/set-password', json={'password': 'test123'})
 db_exec("INSERT INTO bindings (trainer_id, trainee_id, bind_type) VALUES (?, ?, 'trainer')", (tr_b, te_a))
 bid_p = db_one("SELECT id FROM bindings WHERE trainer_id=? AND trainee_id=? AND unbound_at IS NULL", (tr_b, te_a))[0]
 cap = requests.get(f'{B}/api/portal/captcha').json()['code']
-r = requests.post(f'{B}/api/portal/login', json={'uid': '90002', 'code': cap})
+r = requests.post(f'{B}/api/portal/login', json={'uid': '90002', 'code': cap, 'password': 'test123'})
 check('培训师B登录', r.ok, r.text)
 r = requests.post(f'{B}/api/portal/unbind', json={'binding_id': bid_p})
 check('用户自行解散成功', r.ok, r.text)
@@ -413,13 +424,15 @@ check('解散后不在生效列表', all(b['id'] != bid_p for b in r.json()['ite
 db_exec("INSERT INTO bindings (trainer_id, trainee_id, bind_type) VALUES (?, ?, 'trainer')", (tr_b, te_a))
 bid_p2 = db_one("SELECT id FROM bindings WHERE trainer_id=? AND trainee_id=? AND unbound_at IS NULL", (tr_b, te_a))[0]
 cap = requests.get(f'{B}/api/portal/captcha').json()['code']
-requests.post(f'{B}/api/portal/login', json={'uid': '90001', 'code': cap})
+requests.post(f'{B}/api/portal/login', json={'uid': '90001', 'code': cap, 'password': 'test456'})
 r = requests.post(f'{B}/api/portal/unbind', json={'binding_id': bid_p2})
 check('解散他人绑定 403', r.status_code == 403, f'got {r.status_code}')
 r = requests.get(f'{B}/api/portal/trainee-data', params={'uid': '80001'})
 check('查询他人妹妹数据 403', r.status_code == 403, f'got {r.status_code}')
 
 print('== 数据看板 ==')
+r = requests.get(f'{B}/api/operations', params={'limit': 5})
+check('操作日志有记录', r.ok and len(r.json()['items']) >= 1, r.text[:200])
 r = requests.get(f'{B}/api/dashboard/summary')
 d = r.json()
 check('看板结构', r.ok and len(d['weekly']) == 8 and 'dissolve_reasons' in d and 'active' in d, str(d.keys()))

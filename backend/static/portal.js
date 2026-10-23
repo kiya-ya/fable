@@ -46,9 +46,11 @@ $('#p-captcha').addEventListener('click', refreshCaptcha);
 async function doLogin() {
   const uid = $('#p-uid').value.trim();
   const code = $('#p-code').value.trim();
+  const password = $('#p-password').value;
   if (!uid || !code) return toast('请输入 UID 和验证码', true);
+  if (!password) return toast('请输入密码', true);
   try {
-    await api('/api/portal/login', { method: 'POST', body: { uid, code } });
+    await api('/api/portal/login', { method: 'POST', body: { uid, code, password } });
     $('#portal-login').classList.add('hidden');
     $('#portal-login-logo').classList.add('hidden');
     document.body.classList.add('logged-in');
@@ -193,6 +195,26 @@ $('#p-logout').addEventListener('click', async (e) => {
   e.preventDefault();
   await api('/api/portal/logout', { method: 'POST' });
   location.reload();
+});
+
+// 修改密码
+$('#p-change-pwd').addEventListener('click', () => {
+  $('#pwd-old').value = '';
+  $('#pwd-new').value = '';
+  $('#pwd-modal').classList.remove('hidden');
+});
+$('#pwd-cancel').addEventListener('click', () => $('#pwd-modal').classList.add('hidden'));
+$('#pwd-save').addEventListener('click', async () => {
+  const old = $('#pwd-old').value, newPwd = $('#pwd-new').value;
+  try {
+    await api('/api/portal/change-password', {
+      method: 'POST', body: { old_password: old, new_password: newPwd },
+    });
+    toast('密码已修改');
+    $('#pwd-modal').classList.add('hidden');
+  } catch (e) {
+    toast(e.message, true);
+  }
 });
 
 // 刷新自己学员数据

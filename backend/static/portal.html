@@ -41,6 +41,7 @@ body.logged-in { display: block; }
     <h2>培训师登录</h2>
     <div class="muted" style="margin-bottom:12px">输入你的 UID 和验证码；仅培训师可进入</div>
     <label>UID <input id="p-uid" type="text" placeholder="请输入你的 UID"></label>
+    <label>密码 <input id="p-password" type="password" placeholder="请输入密码（管理员设置的初始密码）"></label>
     <label>验证码（5 位数字字母）
       <div class="captcha-row">
         <input id="p-code" type="text" maxlength="5" placeholder="输入右侧字符" style="flex:1">
@@ -62,6 +63,7 @@ body.logged-in { display: block; }
         </div>
       </div>
       <div>
+        <button id="p-change-pwd" class="btn small">修改密码</button>
         <button id="p-logout" class="btn small">退出登录</button>
       </div>
     </div>
@@ -108,6 +110,19 @@ body.logged-in { display: block; }
   <div class="footer-lines"><span></span><span></span><span></span></div>
   <div class="footer-text">点点开黑 · 享受开黑乐趣</div>
 </footer>
+<!-- 修改密码弹窗 -->
+<div id="pwd-modal" class="modal-mask hidden">
+  <div class="modal">
+    <h3>修改密码</h3>
+    <label>原密码 <input id="pwd-old" type="password"></label>
+    <label>新密码（至少 6 位） <input id="pwd-new" type="password"></label>
+    <div class="modal-actions">
+      <button id="pwd-cancel" class="btn">取消</button>
+      <button id="pwd-save" class="btn primary">保存</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="hidden"></div>
 <button id="back-top" title="回到顶部" aria-label="回到顶部">↑</button>
 <script src="/portal.js"></script>

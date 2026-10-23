@@ -12,10 +12,11 @@ SCHEMA_PATH = os.path.join(PROJECT_ROOT, 'data', 'schema.sql')
 
 
 def get_db():
-    """获取数据库连接"""
+    """获取数据库连接（WAL 模式，减少多连接写冲突）"""
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA journal_mode=WAL')
     return conn
 
 
