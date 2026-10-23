@@ -1056,6 +1056,12 @@ def create_trainer():
         return ok({'id': cur.lastrowid})
     except Exception as e:
         if 'UNIQUE' in str(e):
+            # 已存在但是姐姐角色（先作为姐妹团姐姐建档）：转换为培训师
+            row = conn.execute('SELECT id, role FROM trainers WHERE uid=?', (person['uid'],)).fetchone()
+            if row and row['role'] != 'trainer':
+                conn.execute("UPDATE trainers SET role='trainer', updated_at=CURRENT_TIMESTAMP WHERE id=?", (row['id'],))
+                conn.commit()
+                return ok({'id': row['id'], 'converted': True})
             return err(f"UID {person['uid']} 的培训师已存在", 409)
         raise
     finally:

@@ -121,6 +121,10 @@ check('批量导入可搜索到', len(r.json()['items']) == 1 and r.json()['item
 db_exec("INSERT INTO trainers (uid, nickname, role) VALUES ('90006', '角色测试', 'sister')")
 r = requests.post(f'{B}/api/trainers/bulk-import', json={'uids': '90006'})
 check('姐姐角色导入后更新为 trainer', db_one("SELECT role FROM trainers WHERE uid='90006'")[0] == 'trainer')
+# 单个新增遇姐姐角色也应转换（而不是 409）
+db_exec("INSERT INTO trainers (uid, nickname, role) VALUES ('90007', '角色测试2', 'sister')")
+r = requests.post(f'{B}/api/trainers', json={'uid': '90007', 'nickname': '角色测试2'})
+check('单个新增遇姐姐角色自动转换', r.ok and r.json().get('converted'), r.text)
 # 姐姐冲突检查：造 team_detail 快照，验证 空/同 UID/异 UID
 SNAP = datetime.now().strftime('%Y-%m-%d')
 db_exec("DELETE FROM team_detail WHERE snapshot_date=?", (SNAP,))
@@ -139,7 +143,7 @@ db_exec("DELETE FROM team_detail WHERE snapshot_date=?", (SNAP,))
 ok3 = _csc(_conn, '80001', '90001')
 check('无姐妹团记录允许绑定', ok3[0] is True, str(ok3))
 _conn.close()
-for uid in ('90011', '90012', '90013', '90014', '90006'):
+for uid in ('90011', '90012', '90013', '90014', '90006', '90007'):
     for t in requests.get(f'{B}/api/trainers', params={'role': 'all', 'kw': uid}).json()['items']:
         if t['uid'] == uid:
             requests.delete(f"{B}/api/trainers/{t['id']}")
@@ -512,7 +516,7 @@ check('刷新不存在学员 404（不打网络）', r.status_code == 404, f'got
 print(f'\n结果: {passed} passed, {failed} failed')
 
 # 清理测试数据（一律按测试 UID 精确匹配，绝不用可能错位的 id）
-TEST_TRAINER_UIDS = ('90001', '90002', '90003', '90004', '90005', '90006', '91001', '91002')
+TEST_TRAINER_UIDS = ('90001', '90002', '90003', '90004', '90005', '90006', '90007', '91001', '91002')
 TEST_TRAINEE_UIDS = ('80001', '80002', '80003')
 # 测试绑定记录直接删除（不留历史，避免污染看板统计）
 marks_tr = ','.join('?' * len(TEST_TRAINER_UIDS))

@@ -898,12 +898,13 @@ $('#pm-save').addEventListener('click', async () => {
   };
   if (kind === 'trainers') body.base_slots = +$('#pm-slots').value;
   try {
+    let r;
     if (id) {
-      await api(`${PERSON_CONF[kind].url}/${id}`, { method: 'PUT', body });
+      r = await api(`${PERSON_CONF[kind].url}/${id}`, { method: 'PUT', body });
     } else {
-      await api(PERSON_CONF[kind].url, { method: 'POST', body });
+      r = await api(PERSON_CONF[kind].url, { method: 'POST', body });
     }
-    toast('已保存');
+    toast(r && r.converted ? '已转换为培训师（原为姐姐角色）' : '已保存');
     $('#person-modal').classList.add('hidden');
     kind === 'trainers' ? loadTrainers() : loadTrainees();
     loadBindings();   // 昵称/大厅可能变了，绑定列表同步
