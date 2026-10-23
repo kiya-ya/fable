@@ -19,3 +19,6 @@ __pycache__/
 
 # 工具与运行产物
 tools/
+
+# 测试与导出产物
+exp_check.xlsx
