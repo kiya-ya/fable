@@ -795,6 +795,7 @@ function openPersonModal(kind, person) {
   $('#pm-hall').value = person ? (person.hall_name || '') : '';
   $('#pm-note').value = person ? (person.note || '') : '';
   $('#pm-slots-row').style.display = kind === 'trainers' ? '' : 'none';
+  $('#pm-resetpwd').style.display = kind === 'trainers' && person ? '' : 'none';
   $('#pm-slots').value = person && person.base_slots != null ? person.base_slots : 2;
   $('#pm-status').innerHTML = Object.entries(conf.statuses)
     .map(([k, v]) => `<option value="${k}" ${person && person.status === k ? 'selected' : ''}>${v}</option>`)
@@ -803,6 +804,19 @@ function openPersonModal(kind, person) {
 }
 
 $('#trainer-add').addEventListener('click', () => openPersonModal('trainers', null));
+
+// 管理员重置密码：生成一次性随机密码，仅显示一次
+$('#pm-resetpwd').addEventListener('click', async () => {
+  const id = $('#pm-id').value;
+  if (!id) return;
+  if (!confirm('将为该培训师生成新的随机密码，旧密码立即失效。继续？')) return;
+  try {
+    const r = await api(`/api/trainers/${id}/reset-password`, { method: 'POST' });
+    prompt('新密码（仅显示一次，请复制发给该培训师）', r.password);
+  } catch (e) {
+    toast(e.message, true);
+  }
+});
 
 // 刷新单个培训师信息（昵称/大厅）
 async function refreshTrainerInfo(id) {

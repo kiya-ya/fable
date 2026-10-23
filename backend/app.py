@@ -435,6 +435,25 @@ def refresh_all_trainers_info():
     return ok({'updated': updated, 'total': len(uids), 'failed': failed})
 
 
+@app.post('/api/trainers/<int:tid>/reset-password')
+def reset_trainer_password(tid):
+    """管理员重置密码：生成一次性随机密码并返回一次（只显示一次）"""
+    import secrets
+    import string
+    conn = get_db()
+    tr = conn.execute("SELECT id FROM trainers WHERE id=? AND role='trainer'", (tid,)).fetchone()
+    if not tr:
+        conn.close()
+        return err('培训师不存在', 404)
+    alphabet = string.ascii_letters + string.digits
+    new_pwd = ''.join(secrets.choice(alphabet) for _ in range(8))
+    conn.execute('UPDATE trainers SET password_hash=? WHERE id=?',
+                 (generate_password_hash(new_pwd), tid))
+    conn.commit()
+    conn.close()
+    return ok({'password': new_pwd})
+
+
 # ────────────────────────────────────────────── 操作日志与查询串行锁
 
 def log_operation(actor_type, actor_uid, action, bind_type, trainer_uid, trainee_uid, detail=''):
