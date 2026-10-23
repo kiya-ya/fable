@@ -42,14 +42,13 @@ body.logged-in { display: block; }
     <div class="muted" style="margin-bottom:12px">输入你的 UID 和验证码；仅培训师可进入</div>
     <label>UID <input id="p-uid" type="text" placeholder="请输入你的 UID"></label>
     <label>密码 <input id="p-password" type="password" placeholder="初始密码为 UID 后 5 位，登录后请修改密码"></label>
-    <label>验证码（5 位数字字母）
-      <div class="captcha-row">
-        <input id="p-code" type="text" maxlength="5" placeholder="输入右侧字符" style="flex:1">
-        <span id="p-captcha" class="captcha-code" title="点击刷新">-----</span>
-      </div>
-    </label>
     <button id="p-login" class="btn primary" style="width:100%;padding:10px">进入系统</button>
-    <div class="muted" style="margin-top:10px;font-size:12px">验证码看不清？点字符刷新</div>
+    <button id="p-sysinfo-toggle" class="help-toggle" type="button" style="margin-top:10px">系统说明 <span id="p-sysinfo-arrow">▸</span></button>
+    <div id="p-sysinfo" class="muted hidden" style="font-size:12px;margin-top:8px;line-height:1.8">
+      <div>· 本站使用内网穿透，域名不固定（免费版地址可能变化），请收藏最新地址</div>
+      <div>· 若出现网站失效或登录失败，请联系 <b>梧桐</b> 或 <b>卢登</b></div>
+      <div>· 初始密码为 UID 后 5 位，首次登录后请及时修改密码</div>
+    </div>
   </div>
 
   <!-- 主界面 -->

@@ -409,7 +409,7 @@ r = requests.post(f'{B}/api/portal/login', json={'uid': '80001', 'code': cap, 'p
 check('非培训师拒绝进入 403', r.status_code == 403, f'got {r.status_code}')
 cap = requests.get(f'{B}/api/portal/captcha').json()['code']
 r = requests.post(f'{B}/api/portal/login', json={'uid': '90001', 'code': 'xxxxx', 'password': 'test456'})
-check('错误验证码 401', r.status_code == 401, f'got {r.status_code}')
+check('验证码环节已取消（任意验证码不拦截）', r.ok, r.text)
 r = requests.post(f'{B}/api/portal/logout')
 r = requests.get(f'{B}/api/portal/me')
 check('退出后 401', r.status_code == 401, f'got {r.status_code}')

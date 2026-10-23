@@ -32,25 +32,19 @@ async function api(url, options = {}) {
 }
 
 // ────────────── 登录 ──────────────
-async function refreshCaptcha() {
-  try {
-    const r = await api('/api/portal/captcha');
-    $('#p-captcha').textContent = r.code;
-    $('#p-code').value = '';
-  } catch (e) {
-    toast(e.message, true);
-  }
-}
-$('#p-captcha').addEventListener('click', refreshCaptcha);
+$('#p-sysinfo-toggle').addEventListener('click', () => {
+  const box = $('#p-sysinfo');
+  const collapsed = box.classList.toggle('hidden');
+  $('#p-sysinfo-arrow').textContent = collapsed ? '▸' : '▾';
+});
 
 async function doLogin() {
   const uid = $('#p-uid').value.trim();
-  const code = $('#p-code').value.trim();
   const password = $('#p-password').value;
-  if (!uid || !code) return toast('请输入 UID 和验证码', true);
+  if (!uid) return toast('请输入 UID', true);
   if (!password) return toast('请输入密码', true);
   try {
-    await api('/api/portal/login', { method: 'POST', body: { uid, code, password } });
+    await api('/api/portal/login', { method: 'POST', body: { uid, password } });
     $('#portal-login').classList.add('hidden');
     $('#portal-login-logo').classList.add('hidden');
     document.body.classList.add('logged-in');
@@ -59,11 +53,10 @@ async function doLogin() {
     loadGranted();
   } catch (e) {
     toast(e.message, true);
-    refreshCaptcha();
   }
 }
 $('#p-login').addEventListener('click', doLogin);
-$('#p-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+$('#p-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
 
 // ────────────── 我的数据 ──────────────
 async function loadMe() {
@@ -77,7 +70,6 @@ async function loadMe() {
       $('#portal-login').classList.remove('hidden');
       $('#portal-login-logo').classList.remove('hidden');
       document.body.classList.remove('logged-in');
-      refreshCaptcha();
     } else {
       toast(e.message, true);
     }
@@ -187,7 +179,7 @@ $('#p-bind').addEventListener('click', async () => {
     $('#p-bind-info').innerHTML = '';
     loadMe();
   } catch (e) {
-    toast(e.message, true);
+    toast('请检查绑定妹妹是否排挡进厅或在保护期内', true);
   }
 });
 
@@ -376,6 +368,6 @@ $('#back-top').addEventListener('click', () => {
     renderSlots(r.slots);
     loadGranted();
   } catch (e) {
-    refreshCaptcha();
+    // 未登录则停留在登录页
   }
 })();

@@ -122,15 +122,11 @@ def portal_login():
     session.pop('portal_uid', None)
     session.pop('portal_trainer_id', None)
     uid = str(data.get('uid', '')).strip()
-    code = str(data.get('code', '')).strip().lower()
     password = str(data.get('password', ''))
-    if not uid or not code:
-        return err('UID 和验证码不能为空')
+    if not uid:
+        return err('UID 不能为空')
     if not password:
         return err('请输入密码')
-    expected = session.get('portal_code', '')
-    if not expected or code != expected or time.time() - session.get('portal_code_at', 0) > PORTAL_CODE_TTL:
-        return err('验证码错误或已过期，请刷新后重试', 401)
     conn = get_db()
     tr = conn.execute("SELECT * FROM trainers WHERE uid=? AND role='trainer'", (uid,)).fetchone()
     conn.close()
