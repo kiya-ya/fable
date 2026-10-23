@@ -256,6 +256,26 @@ def portal_unbind():
     return ok()
 
 
+@app.get('/api/portal/granted-rewards')
+def portal_granted_rewards():
+    """用户端「已发放奖励」：当前培训师所有已发放记录（按发放时间倒序）"""
+    tr = _portal_trainer()
+    if not tr:
+        return err('未登录', 401)
+    conn = get_db()
+    rows = conn.execute(
+        '''SELECT g.reward_label, g.amount, g.granted_at,
+                  te.uid AS trainee_uid, te.nickname AS trainee_nickname, te.hall_name,
+                  b.bind_type
+           FROM reward_grants g
+           JOIN bindings b ON b.id = g.binding_id
+           JOIN trainees te ON te.id = b.trainee_id
+           WHERE g.trainer_id = ? AND g.status = 'granted'
+           ORDER BY g.granted_at DESC, g.id DESC LIMIT 100''', (tr['id'],)).fetchall()
+    conn.close()
+    return ok({'items': rows_to_dicts(rows)})
+
+
 # ────────────────────────────────────────────── 名额与奖励政策
 
 # 等级序列（判定用当周等级）
@@ -807,7 +827,8 @@ def create_trainer():
 
 @app.post('/api/trainers/bulk-import')
 def bulk_import_trainers():
-    """批量录入培训师：uids 为逗号/空格/换行分隔的 UID 文本，默认基础名额 2，重复跳过"""
+    """批量录入培训师：uids 为逗号/空格/换行分隔的 UID 文本，默认基础名额 2，重复跳过。
+    新增的成功后自动用 UID 查询补全昵称/大厅（查不到的保留 UID 当昵称）"""
     data = request.get_json(force=True)
     raw = str(data.get('uids', ''))
     uids = [u.strip() for u in re.split(r'[,\s，、;；\n\r]+', raw) if u.strip()]
@@ -828,7 +849,44 @@ def bulk_import_trainers():
                 raise
     conn.commit()
     conn.close()
-    return ok({'created': created, 'skipped': skipped, 'created_count': len(created)})
+
+    # 逐个补全昵称/大厅（有间隔，失败自动重登一次）
+    filled = 0
+    if created:
+        crawler = UIDCrawler()
+        healed = False
+        for i, uid in enumerate(created):
+            if i:
+                time.sleep(0.6)
+            try:
+                r = crawler.query(uid, 'game')
+                if not r.get('found'):
+                    continue
+                nick = (r.get('nickname') or '').strip()
+                hall = (r.get('schedule_hall') or r.get('auth_hall') or '').strip()
+                if hall == '-':
+                    hall = ''
+                conn = get_db()
+                conn.execute(
+                    """UPDATE trainers SET nickname=COALESCE(NULLIF(?, ''), nickname),
+                       hall_name=COALESCE(NULLIF(?, ''), hall_name) WHERE uid=?""",
+                    (nick, hall, uid))
+                conn.commit()
+                conn.close()
+                if nick or hall:
+                    filled += 1
+            except CookieExpiredError:
+                if healed:
+                    break
+                healed = True
+                try:
+                    _heal_uid_cookie()
+                    crawler = UIDCrawler()
+                except Exception:
+                    break
+            except Exception:
+                continue
+    return ok({'created': created, 'skipped': skipped, 'created_count': len(created), 'filled': filled})
 
 
 @app.put('/api/trainers/<int:tid>')

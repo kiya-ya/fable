@@ -12,9 +12,17 @@
 body {
   font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
   background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 45%, #f6d365 100%);
-  background-attachment: fixed;
+  background-size: 240% 240%;
   color: #3f2a14; font-size: 14px;
   min-height: 100vh;
+  animation: bg-pan 26s ease-in-out infinite alternate;
+}
+@keyframes bg-pan {
+  from { background-position: 0% 0%; }
+  to { background-position: 100% 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body { animation: none; }
 }
 
 header {

@@ -54,6 +54,7 @@ async function doLogin() {
     document.body.classList.add('logged-in');
     $('#portal-main').classList.remove('hidden');
     loadMe();
+    loadGranted();
   } catch (e) {
     toast(e.message, true);
     refreshCaptcha();
@@ -265,6 +266,25 @@ async function unbindTrainee(bindingId, nickname) {
   }
 }
 
+// 已发放奖励
+async function loadGranted() {
+  try {
+    const r = await api('/api/portal/granted-rewards');
+    $('#p-granted').innerHTML = r.items.length ? r.items.map((g) => `
+      <tr>
+        <td>${esc(g.trainee_uid)}</td>
+        <td>${esc(g.trainee_nickname)}</td>
+        <td>${esc(g.hall_name || '-')}</td>
+        <td>${esc(g.reward_label)}</td>
+        <td><b>${g.amount} × 2</b></td>
+        <td class="muted">${esc(g.granted_at || '-')}</td>
+      </tr>`).join('') : '<tr><td colspan="6" class="empty">还没有已发放的奖励</td></tr>';
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+$('#p-granted-refresh').addEventListener('click', loadGranted);
+
 // 已登录则直接进主界面
 (async function init() {
   try {
@@ -275,6 +295,7 @@ async function unbindTrainee(bindingId, nickname) {
     $('#portal-main').classList.remove('hidden');
     $('#p-welcome').textContent = `${r.trainer.nickname}（${r.trainer.uid}）`;
     renderSlots(r.slots);
+    loadGranted();
   } catch (e) {
     refreshCaptcha();
   }

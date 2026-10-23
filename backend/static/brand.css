@@ -48,7 +48,7 @@
 .bg-decor { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: -1; }
 .bg-decor i {
   position: absolute; display: block; border-radius: 50%;
-  filter: blur(2px); opacity: .35;
+  filter: blur(4px); opacity: .45;
   animation: decor-float 9s ease-in-out infinite alternate;
 }
 .bg-decor .d1 { width: 220px; height: 220px; background: var(--gold-300); top: -60px; left: -50px; }
