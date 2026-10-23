@@ -6,6 +6,8 @@ data/keepalive_status.json
 data/weekly_refresh_status.json
 data/flask_secret.txt
 data/admin_config.json
+data/ngrok_state.json
+data/ngrok_changes.log
 
 # 数据库与日志
 *.db

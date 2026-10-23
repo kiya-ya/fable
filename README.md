@@ -98,6 +98,17 @@ backend/
 
 数据口径：绑定关系只存在本系统（`data/stats.db` 的 bindings 表），不提交外部系统。
 
+## ngrok 域名变化检测
+
+```bash
+.venv/Scripts/python.exe -X utf8 tools/ngrok_watch.py 60   # 每 60 秒检查一次，可改秒数
+```
+
+- 每 60 秒查询本机 ngrok API（`127.0.0.1:4040`），与上次域名比对
+- 域名变化时：写入 `data/ngrok_changes.log`，并自动用默认浏览器打开新的 `/portal` 链接
+- ngrok 离线时也会记录日志
+- 状态保存在 `data/ngrok_state.json`（已 gitignore）
+
 ## 快速验证爬虫可用
 
 ```bash
