@@ -266,19 +266,35 @@ async function unbindTrainee(bindingId, nickname) {
   }
 }
 
-// 已发放奖励
+// 已发放奖励（按妹妹分组，卡片式上下排布）
 async function loadGranted() {
   try {
     const r = await api('/api/portal/granted-rewards');
-    $('#p-granted').innerHTML = r.items.length ? r.items.map((g) => `
-      <tr>
-        <td>${esc(g.trainee_uid)}</td>
-        <td>${esc(g.trainee_nickname)}</td>
-        <td>${esc(g.hall_name || '-')}</td>
-        <td>${esc(g.reward_label)}</td>
-        <td><b>${g.amount} × 2</b></td>
-        <td class="muted">${esc(g.granted_at || '-')}</td>
-      </tr>`).join('') : '<tr><td colspan="6" class="empty">还没有已发放的奖励</td></tr>';
+    const groups = new Map();
+    r.items.forEach((g) => {
+      if (!groups.has(g.trainee_uid)) groups.set(g.trainee_uid, []);
+      groups.get(g.trainee_uid).push(g);
+    });
+    $('#p-granted').innerHTML = groups.size ? [...groups.values()].map((items) => {
+      const g0 = items[0];
+      return `<div class="p-trainee-card">
+        <div class="p-trainee-head">
+          <div>
+            <b>${esc(g0.trainee_nickname)}</b>
+            <span class="muted" style="margin-left:8px">${esc(g0.trainee_uid)}</span>
+          </div>
+          <span class="muted">${esc(g0.hall_name || '-')}</span>
+        </div>
+        <div class="granted-rows">
+          ${items.map((g) => `
+            <div class="granted-row">
+              <span>${esc(g.reward_label)}</span>
+              <b>${g.amount} × 2</b>
+              <span class="muted">${esc(g.granted_at || '-')}</span>
+            </div>`).join('')}
+        </div>
+      </div>`;
+    }).join('') : '<div class="empty">还没有已发放的奖励</div>';
   } catch (e) {
     toast(e.message, true);
   }

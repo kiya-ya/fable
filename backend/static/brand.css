@@ -170,6 +170,15 @@
   border-radius: 6px;
 }
 
+/* 已发放奖励分组行 */
+.granted-rows { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.granted-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  font-size: 13px; padding: 6px 0; border-top: 1px dashed rgba(122,62,18,.12);
+}
+.granted-row b { color: var(--brown-700); }
+.granted-row .muted { margin-left: auto; font-size: 12px; }
+
 /* 移动端专项（触控目标与留白） */
 @media (max-width: 768px) {
   .btn, .btn.small { min-height: var(--btn-height-touch); padding: 8px 14px; }
