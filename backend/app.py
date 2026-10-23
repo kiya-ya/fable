@@ -190,8 +190,12 @@ def portal_change_password():
     new = str(data.get('new_password', ''))
     if len(new) < 6:
         return err('新密码至少 6 位')
-    if not check_password_hash(tr['password_hash'], old):
-        return err('原密码错误', 401)
+    # 无哈希（初始密码 = UID 后 5 位）时按初始密码校验，避免 check_password_hash(None) 抛异常
+    if tr['password_hash']:
+        if not check_password_hash(tr['password_hash'], old):
+            return err('原密码错误', 401)
+    elif old != tr['uid'][-5:]:
+        return err('原密码错误（初始密码为 UID 后 5 位）', 401)
     conn = get_db()
     conn.execute('UPDATE trainers SET password_hash=? WHERE id=?',
                  (generate_password_hash(new), tr['id']))
@@ -255,6 +259,19 @@ def portal_bind():
 TRAINER_STATUSES = ('active', 'inactive')
 TRAINEE_STATUSES = ('active', 'inactive')
 
+# 长查询任务串行，防止互踢 server1 会话 / SQLite 写冲突
+QUERY_LOCK = threading.Lock()
+
+
+def serialized_query(fn):
+    """长查询任务串行执行装饰器"""
+    import functools
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with QUERY_LOCK:
+            return fn(*args, **kwargs)
+    return wrapper
+
 @app.post('/api/portal/refresh')
 def portal_refresh():
     """用户端刷新自己学员的数据"""
@@ -265,6 +282,7 @@ def portal_refresh():
 
 
 @app.get('/api/portal/trainee-data')
+@serialized_query
 def portal_trainee_data():
     """查看自己某个妹妹的本周/上周数据（等级/流水/任务/排档）"""
     tr = _portal_trainer()
@@ -339,6 +357,80 @@ def portal_granted_rewards():
     return ok({'items': rows_to_dicts(rows)})
 
 
+def _refresh_trainer_info(conn, crawler, uid):
+    """用 UID 查询同步培训师昵称/大厅。返回是否同步到有效值"""
+    r = crawler.query(uid, 'game')
+    if not r.get('found'):
+        return False
+    nick = (r.get('nickname') or '').strip()
+    hall = (r.get('schedule_hall') or r.get('auth_hall') or '').strip()
+    if hall == '-':
+        hall = ''
+    if not nick and not hall:
+        return False
+    conn.execute(
+        """UPDATE trainers SET nickname=COALESCE(NULLIF(?, ''), nickname),
+           hall_name=COALESCE(NULLIF(?, ''), hall_name), updated_at=CURRENT_TIMESTAMP WHERE uid=?""",
+        (nick, hall, uid))
+    conn.commit()
+    return True
+
+
+@app.post('/api/trainers/<int:tid>/refresh')
+def refresh_trainer(tid):
+    """刷新单个培训师的昵称/大厅（解决批量导入后昵称未同步）"""
+    conn = get_db()
+    tr = conn.execute("SELECT * FROM trainers WHERE id=? AND role='trainer'", (tid,)).fetchone()
+    if not tr:
+        conn.close()
+        return err('培训师不存在', 404)
+    try:
+        updated = _refresh_trainer_info(conn, UIDCrawler(), tr['uid'])
+    except CookieExpiredError:
+        try:
+            _heal_uid_cookie()
+            updated = _refresh_trainer_info(conn, UIDCrawler(), tr['uid'])
+        except Exception as e:
+            conn.close()
+            return err(f'刷新失败: {e}', 502)
+    except Exception as e:
+        conn.close()
+        return err(f'刷新失败: {e}', 502)
+    new = conn.execute('SELECT uid, nickname, hall_name FROM trainers WHERE id=?', (tid,)).fetchone()
+    conn.close()
+    return ok({'updated': updated, 'info': dict(new)})
+
+
+@app.post('/api/trainers/refresh-all')
+def refresh_all_trainers_info():
+    """批量补全培训师信息：只处理昵称为 UID 的记录（即批量导入未同步的）"""
+    conn = get_db()
+    uids = [r['uid'] for r in conn.execute(
+        "SELECT uid FROM trainers WHERE role='trainer' AND nickname = uid").fetchall()]
+    conn.close()
+    if not uids:
+        return ok({'updated': 0, 'total': 0})
+    crawler = UIDCrawler()
+    updated, failed = 0, 0
+    for i, uid in enumerate(uids):
+        if i:
+            time.sleep(0.6)
+        try:
+            if _refresh_trainer_info(get_db(), crawler, uid):
+                updated += 1
+        except CookieExpiredError:
+            try:
+                _heal_uid_cookie()
+                crawler = UIDCrawler()
+            except Exception:
+                failed += 1
+                break
+        except Exception:
+            failed += 1
+            continue
+    return ok({'updated': updated, 'total': len(uids), 'failed': failed})
+
+
 # ────────────────────────────────────────────── 操作日志与查询串行锁
 
 def log_operation(actor_type, actor_uid, action, bind_type, trainer_uid, trainee_uid, detail=''):
@@ -349,18 +441,6 @@ def log_operation(actor_type, actor_uid, action, bind_type, trainer_uid, trainee
     conn.commit()
     conn.close()
 
-
-QUERY_LOCK = threading.Lock()  # 长查询任务串行，防止互踢 server1 会话 / SQLite 写冲突
-
-
-def serialized_query(fn):
-    """长查询任务串行执行装饰器"""
-    import functools
-    @functools.wraps(fn)
-    def wrapper(*args, **kwargs):
-        with QUERY_LOCK:
-            return fn(*args, **kwargs)
-    return wrapper
 
 # ────────────────────────────────────────────── 名额与奖励政策
 
@@ -458,9 +538,9 @@ def _protection_gate(uid):
             _heal_uid_cookie()
             r = UIDCrawler().query(uid, 'game')
         except Exception as e:
-            return False, f'保护期查询失败，无法确认保护期，不能绑定: {e}', False
+            return False, f'保护期查询异常（请稍后重试）: {e}', False
     except Exception as e:
-        return False, f'保护期查询失败，无法确认保护期，不能绑定: {e}', False
+        return False, f'保护期查询异常（请稍后重试）: {e}', False
     if not r.get('found'):
         return False, '未查到该 UID 的数据，保护期无法确认，不能绑定', False
     raw = (r.get('protection_end') or '').strip()
@@ -904,6 +984,8 @@ def bulk_import_trainers():
             created.append(uid)
         except Exception as e:
             if 'UNIQUE' in str(e):
+                # 已存在但角色不是 trainer（如先作为姐姐建档）：更新角色而不是跳过
+                conn.execute("UPDATE trainers SET role='trainer' WHERE uid=? AND role != 'trainer'", (uid,))
                 skipped.append(uid)
             else:
                 conn.rollback()
@@ -1468,7 +1550,10 @@ def set_remaining(bid):
 
 @app.get('/api/operations')
 def list_operations():
-    limit = min(int(request.args.get('limit', 50)), 200)
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+    except (TypeError, ValueError):
+        limit = 50
     conn = get_db()
     rows = conn.execute(
         'SELECT * FROM operation_log ORDER BY id DESC LIMIT ?', (limit,)).fetchall()

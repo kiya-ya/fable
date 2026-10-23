@@ -696,6 +696,7 @@ async function loadTrainers(page) {
         <td>${esc(t.note || '')}</td>
         <td>
           <button class="btn small" onclick="gotoUidQuery('${esc(t.uid)}')">速查</button>
+          <button class="btn small" onclick="refreshTrainerInfo(${t.id})">刷新</button>
           <button class="btn small" onclick='openPersonModal("trainers", ${JSON.stringify(t)})'>编辑</button>
           <button class="btn small danger" onclick="delPerson('trainers', ${t.id})">删除</button>
         </td>
@@ -794,7 +795,6 @@ function openPersonModal(kind, person) {
   $('#pm-hall').value = person ? (person.hall_name || '') : '';
   $('#pm-note').value = person ? (person.note || '') : '';
   $('#pm-slots-row').style.display = kind === 'trainers' ? '' : 'none';
-  $('#pm-setpwd').style.display = kind === 'trainers' && person ? '' : 'none';
   $('#pm-slots').value = person && person.base_slots != null ? person.base_slots : 2;
   $('#pm-status').innerHTML = Object.entries(conf.statuses)
     .map(([k, v]) => `<option value="${k}" ${person && person.status === k ? 'selected' : ''}>${v}</option>`)
@@ -804,18 +804,31 @@ function openPersonModal(kind, person) {
 
 $('#trainer-add').addEventListener('click', () => openPersonModal('trainers', null));
 
-// 管理员为培训师设置/重置密码
-$('#pm-setpwd').addEventListener('click', async () => {
-  const id = $('#pm-id').value;
-  if (!id) return;
-  const pwd = prompt('为该培训师设置新密码（至少 6 位，将覆盖旧密码）');
-  if (pwd === null) return;
-  if (pwd.length < 6) return toast('密码至少 6 位', true);
+// 刷新单个培训师信息（昵称/大厅）
+async function refreshTrainerInfo(id) {
   try {
-    await api(`/api/trainers/${id}/set-password`, { method: 'POST', body: { password: pwd } });
-    toast('密码已设置，请将其告知该培训师');
+    const r = await api(`/api/trainers/${id}/refresh`, { method: 'POST' });
+    toast(r.updated ? `已同步：${r.info.nickname}（${r.info.hall_name || '无大厅'}）` : '未查到可同步的信息');
+    loadTrainers();
   } catch (e) {
     toast(e.message, true);
+  }
+}
+
+// 批量补全昵称/大厅（只处理昵称为 UID 的记录）
+$('#trainer-refresh-all').addEventListener('click', async (e) => {
+  const btn = e.target;
+  btn.disabled = true;
+  btn.textContent = '补全中…';
+  try {
+    const r = await api('/api/trainers/refresh-all', { method: 'POST' });
+    toast(r.total ? `已补全 ${r.updated}/${r.total} 人${r.failed ? `，${r.failed} 人失败` : ''}` : '没有需要补全的记录');
+    loadTrainers();
+  } catch (e2) {
+    toast(e2.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '批量补全信息';
   }
 });
 $('#trainee-add').addEventListener('click', () => openPersonModal('trainees', null));

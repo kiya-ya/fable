@@ -117,7 +117,11 @@ r = requests.post(f'{B}/api/trainers/bulk-import', json={'uids': '90011,90014'})
 check('重复跳过', r.ok and r.json()['created_count'] == 1 and r.json()['skipped'] == ['90011'], r.text)
 r = requests.get(f'{B}/api/trainers', params={'kw': '90011'})
 check('批量导入可搜索到', len(r.json()['items']) == 1 and r.json()['items'][0]['base_slots'] == 2, r.text)
-for uid in ('90011', '90012', '90013', '90014'):
+# 角色冲突：先作为姐姐建档，批量导入后应更新为 trainer
+db_exec("INSERT INTO trainers (uid, nickname, role) VALUES ('90006', '角色测试', 'sister')")
+r = requests.post(f'{B}/api/trainers/bulk-import', json={'uids': '90006'})
+check('姐姐角色导入后更新为 trainer', db_one("SELECT role FROM trainers WHERE uid='90006'")[0] == 'trainer')
+for uid in ('90011', '90012', '90013', '90014', '90006'):
     for t in requests.get(f'{B}/api/trainers', params={'role': 'all', 'kw': uid}).json()['items']:
         if t['uid'] == uid:
             requests.delete(f"{B}/api/trainers/{t['id']}")
@@ -402,6 +406,11 @@ check('新建未设密码培训师', r.ok, r.text)
 cap = requests.get(f'{B}/api/portal/captcha').json()['code']
 r = requests.post(f'{B}/api/portal/login', json={'uid': '90004', 'code': cap, 'password': '90004'})
 check('未设密码可用 UID 后5位初始密码登录', r.ok, r.text)
+r = requests.post(f'{B}/api/portal/change-password', json={'old_password': '90004', 'new_password': 'abc123'})
+check('无哈希用户修改密码不报错', r.ok, r.text)
+cap = requests.get(f'{B}/api/portal/captcha').json()['code']
+r = requests.post(f'{B}/api/portal/login', json={'uid': '90004', 'code': cap, 'password': 'abc123'})
+check('改后新密码可登录', r.ok, r.text)
 r = requests.post(f'{B}/api/portal/bind', json={'trainee_uid': '80001'})
 check('自助绑定被保护期门槛拦截 422', r.status_code == 422 and r.json().get('gate'), r.text)
 cap = requests.get(f'{B}/api/portal/captcha').json()['code']
@@ -436,8 +445,12 @@ r = requests.get(f'{B}/api/portal/trainee-data', params={'uid': '80001'})
 check('查询他人妹妹数据 403', r.status_code == 403, f'got {r.status_code}')
 
 print('== 数据看板 ==')
+r = requests.get(f'{B}/api/operations', params={'limit': 'abc'})
+check('操作日志 limit 非数字容错', r.status_code == 200, f'got {r.status_code}')
 r = requests.get(f'{B}/api/operations', params={'limit': 5})
 check('操作日志有记录', r.ok and len(r.json()['items']) >= 1, r.text[:200])
+r = requests.post(f'{B}/api/trainers/999999/refresh')
+check('刷新不存在培训师 404', r.status_code == 404, f'got {r.status_code}')
 r = requests.get(f'{B}/api/dashboard/summary')
 d = r.json()
 check('看板结构', r.ok and len(d['weekly']) == 8 and 'dissolve_reasons' in d and 'active' in d, str(d.keys()))
@@ -458,7 +471,7 @@ check('刷新不存在学员 404（不打网络）', r.status_code == 404, f'got
 print(f'\n结果: {passed} passed, {failed} failed')
 
 # 清理测试数据（一律按测试 UID 精确匹配，绝不用可能错位的 id）
-TEST_TRAINER_UIDS = ('90001', '90002', '90003', '90004', '91001', '91002')
+TEST_TRAINER_UIDS = ('90001', '90002', '90003', '90004', '90005', '90006', '91001', '91002')
 TEST_TRAINEE_UIDS = ('80001', '80002', '80003')
 # 测试绑定记录直接删除（不留历史，避免污染看板统计）
 marks_tr = ','.join('?' * len(TEST_TRAINER_UIDS))
