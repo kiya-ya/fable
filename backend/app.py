@@ -137,8 +137,10 @@ def portal_login():
     if not tr:
         return err('该 UID 不在培训师名单中，不能进入系统', 403)
     if not tr['password_hash']:
-        return err('该账号尚未设置密码，请联系管理员设置', 403)
-    if not check_password_hash(tr['password_hash'], password):
+        # 初始密码 = UID 后 5 位（登录后请修改密码）
+        if password != uid[-5:]:
+            return err('初始密码为 UID 后 5 位，请输入正确的初始密码', 401)
+    elif not check_password_hash(tr['password_hash'], password):
         return err('密码错误', 401)
     session.pop('portal_code', None)
     session['portal_uid'] = uid

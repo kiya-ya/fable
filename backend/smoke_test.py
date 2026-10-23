@@ -397,6 +397,11 @@ check('修改密码', r.ok, r.text)
 cap = requests.get(f'{B}/api/portal/captcha').json()['code']
 r = requests.post(f'{B}/api/portal/login', json={'uid': '90001', 'code': cap, 'password': 'test456'})
 check('新密码可登录', r.ok, r.text)
+r = requests.post(f'{B}/api/trainers', json={'uid': '90004', 'nickname': '初始密码测试'})
+check('新建未设密码培训师', r.ok, r.text)
+cap = requests.get(f'{B}/api/portal/captcha').json()['code']
+r = requests.post(f'{B}/api/portal/login', json={'uid': '90004', 'code': cap, 'password': '90004'})
+check('未设密码可用 UID 后5位初始密码登录', r.ok, r.text)
 r = requests.post(f'{B}/api/portal/bind', json={'trainee_uid': '80001'})
 check('自助绑定被保护期门槛拦截 422', r.status_code == 422 and r.json().get('gate'), r.text)
 cap = requests.get(f'{B}/api/portal/captcha').json()['code']
@@ -453,7 +458,7 @@ check('刷新不存在学员 404（不打网络）', r.status_code == 404, f'got
 print(f'\n结果: {passed} passed, {failed} failed')
 
 # 清理测试数据（一律按测试 UID 精确匹配，绝不用可能错位的 id）
-TEST_TRAINER_UIDS = ('90001', '90002', '90003', '91001', '91002')
+TEST_TRAINER_UIDS = ('90001', '90002', '90003', '90004', '91001', '91002')
 TEST_TRAINEE_UIDS = ('80001', '80002', '80003')
 # 测试绑定记录直接删除（不留历史，避免污染看板统计）
 marks_tr = ','.join('?' * len(TEST_TRAINER_UIDS))
