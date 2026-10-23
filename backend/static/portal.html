@@ -76,7 +76,18 @@ body.logged-in { display: block; }
       <div id="p-slots-help" class="muted hidden" style="font-size:12px;margin:6px 0 8px">
         额外名额按学员当月排档周最高等级计算（初银+1/银牌+1/金牌+1，需当周排档天数&gt;0），当月达标当月生效，次月按新月等级重算
       </div>
-      <div id="p-trainees" class="p-trainee-list"></div>
+      <button id="p-trainees-toggle" class="help-toggle" type="button">学员列表 <span id="p-trainees-arrow">▸</span></button>
+      <div id="p-trainees" class="p-trainee-list hidden"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>已发放奖励</h2>
+        <button id="p-granted-refresh" class="btn small">刷新</button>
+      </div>
+      <div id="p-granted-first" class="p-trainee-list"></div>
+      <button id="p-granted-toggle" class="help-toggle hidden" type="button">展开全部 <span id="p-granted-arrow">▸</span></button>
+      <div id="p-granted" class="p-trainee-list hidden"></div>
     </div>
 
     <div class="card">
@@ -90,14 +101,6 @@ body.logged-in { display: block; }
         <button id="p-bind" class="btn primary">绑定</button>
       </div>
       <div id="p-bind-info" class="lookup-info"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-head">
-        <h2>已发放奖励</h2>
-        <button id="p-granted-refresh" class="btn small">刷新</button>
-      </div>
-      <div id="p-granted" class="p-trainee-list"></div>
     </div>
   </div>
 </div>

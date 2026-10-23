@@ -121,7 +121,25 @@ function renderSlots(s) {
       </div>
       <div id="td-${esc(t.uid)}" class="trainee-data hidden"></div>
     </div>`).join('') : '<div class="empty">还没有绑定妹妹，去下方绑定吧</div>';
+  // 学员超过 1 人时默认折叠成抽屉
+  const n = s.trainees.length;
+  const box = $('#p-trainees');
+  const toggle = $('#p-trainees-toggle');
+  if (n > 1) {
+    box.classList.add('hidden');
+    toggle.classList.remove('hidden');
+    toggle.innerHTML = `学员列表（${n} 人） <span id="p-trainees-arrow">▸</span>`;
+  } else {
+    box.classList.remove('hidden');
+    toggle.classList.add('hidden');
+  }
 }
+
+$('#p-trainees-toggle').addEventListener('click', () => {
+  const box = $('#p-trainees');
+  const collapsed = box.classList.toggle('hidden');
+  $('#p-trainees-arrow').textContent = collapsed ? '▸' : '▾';
+});
 
 // ────────────── 自助绑定 ──────────────
 let lookedUp = null;
@@ -266,7 +284,7 @@ async function unbindTrainee(bindingId, nickname) {
   }
 }
 
-// 已发放奖励（按妹妹分组，卡片式上下排布）
+// 已发放奖励（按妹妹分组，卡片式上下排布；超过 1 组时首组直出，其余折叠）
 async function loadGranted() {
   try {
     const r = await api('/api/portal/granted-rewards');
@@ -275,7 +293,7 @@ async function loadGranted() {
       if (!groups.has(g.trainee_uid)) groups.set(g.trainee_uid, []);
       groups.get(g.trainee_uid).push(g);
     });
-    $('#p-granted').innerHTML = groups.size ? [...groups.values()].map((items) => {
+    const cardList = [...groups.values()].map((items) => {
       const g0 = items[0];
       return `<div class="p-trainee-card">
         <div class="p-trainee-head">
@@ -294,11 +312,29 @@ async function loadGranted() {
             </div>`).join('')}
         </div>
       </div>`;
-    }).join('') : '<div class="empty">还没有已发放的奖励</div>';
+    });
+    const n = cardList.length;
+    $('#p-granted-first').innerHTML = n ? cardList[0] : '<div class="empty">还没有已发放的奖励</div>';
+    $('#p-granted').innerHTML = cardList.join('');
+    const toggle = $('#p-granted-toggle');
+    if (n > 1) {
+      toggle.classList.remove('hidden');
+      toggle.innerHTML = `展开全部（共 ${n} 组） <span id="p-granted-arrow">▸</span>`;
+      $('#p-granted').classList.add('hidden');
+    } else {
+      toggle.classList.add('hidden');
+      $('#p-granted').classList.remove('hidden');
+    }
   } catch (e) {
     toast(e.message, true);
   }
 }
+$('#p-granted-toggle').addEventListener('click', () => {
+  const box = $('#p-granted');
+  const collapsed = box.classList.toggle('hidden');
+  $('#p-granted-arrow').textContent = collapsed ? '▸' : '▾';
+  $('#p-granted-first').classList.toggle('hidden', !collapsed);
+});
 $('#p-granted-refresh').addEventListener('click', loadGranted);
 
 // 已登录则直接进主界面
