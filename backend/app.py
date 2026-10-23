@@ -57,7 +57,8 @@ ADMIN_USER, ADMIN_PASSWORD = _load_admin_config()
 PORTAL_CODE_TTL = 300  # 用户端验证码有效期（秒）
 
 PUBLIC_PATHS = {'/login', '/portal', '/api/login', '/api/portal/login', '/api/portal/captcha',
-                '/app.js', '/style.css', '/brand.css', '/portal.js', '/favicon.ico', '/logo.jpg'}
+                '/app.js', '/style.css', '/brand.css', '/portal.js', '/favicon.ico', '/logo.jpg',
+                '/wutong.png', '/ludeng.png'}
 
 
 @app.before_request

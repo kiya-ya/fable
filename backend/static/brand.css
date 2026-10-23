@@ -205,6 +205,12 @@
 }
 #back-top:hover { transform: translateY(-3px); box-shadow: var(--shadow-pop); }
 
+/* 联系二维码 */
+.qr-pair { display: flex; gap: 18px; margin-top: 10px; flex-wrap: wrap; }
+.qr-pair figure { margin: 0; text-align: center; }
+.qr-pair img { width: 130px; height: 130px; border-radius: 8px; background: #fff; }
+.qr-pair figcaption { font-size: 12px; color: rgba(91,42,6,.65); margin-top: 4px; }
+
 /* 移动端专项（触控目标与留白） */
 @media (max-width: 768px) {
   .btn, .btn.small { min-height: var(--btn-height-touch); padding: 8px 14px; }
