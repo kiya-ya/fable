@@ -488,6 +488,8 @@ r = requests.post(f'{B}/api/portal/unbind', json={'binding_id': bid_p2})
 check('解散他人绑定 403', r.status_code == 403, f'got {r.status_code}')
 r = requests.get(f'{B}/api/portal/trainee-data', params={'uid': '80001'})
 check('查询他人妹妹数据 403', r.status_code == 403, f'got {r.status_code}')
+r = requests.get(f'{B}/api/uid-lookup', params={'uid': '80001'})
+check('用户端登录态可用 uid-lookup（不再被守卫拦截）', r.status_code in (200, 401, 502), f'got {r.status_code}')
 
 print('== 数据看板 ==')
 r = requests.get(f'{B}/api/operations', params={'limit': 'abc'})

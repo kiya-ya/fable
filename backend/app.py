@@ -61,12 +61,18 @@ PUBLIC_PATHS = {'/login', '/portal', '/api/login', '/api/portal/login', '/api/po
                 '/wutong.png', '/ludeng.png'}
 
 
+# 用户端登录态也允许访问的只读接口（自助绑定需要查妹妹信息）
+PORTAL_ALLOWED_APIS = {'/api/uid-lookup'}
+
+
 @app.before_request
 def _auth_guard():
     path = request.path
     if path in PUBLIC_PATHS or path.startswith('/portal/') or path.startswith('/api/portal/'):
         return None
     if session.get('admin'):
+        return None
+    if session.get('portal_trainer_id') and path in PORTAL_ALLOWED_APIS:
         return None
     if path.startswith('/api/'):
         return jsonify({'ok': False, 'msg': '未登录或登录已过期'}, ), 401
