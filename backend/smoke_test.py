@@ -121,6 +121,24 @@ check('批量导入可搜索到', len(r.json()['items']) == 1 and r.json()['item
 db_exec("INSERT INTO trainers (uid, nickname, role) VALUES ('90006', '角色测试', 'sister')")
 r = requests.post(f'{B}/api/trainers/bulk-import', json={'uids': '90006'})
 check('姐姐角色导入后更新为 trainer', db_one("SELECT role FROM trainers WHERE uid='90006'")[0] == 'trainer')
+# 姐姐冲突检查：造 team_detail 快照，验证 空/同 UID/异 UID
+SNAP = datetime.now().strftime('%Y-%m-%d')
+db_exec("DELETE FROM team_detail WHERE snapshot_date=?", (SNAP,))
+db_exec('''INSERT INTO team_detail (team_id, form_date, hall_name, sister_uid, sister_nickname, sister_uid2, sister_nickname2, dissolve_date, snapshot_date)
+           VALUES (999001, '2026-10-01', '测试厅', 88888, '别的姐姐', 80001, '测试妹妹甲', '', ?)''', (SNAP,))
+import sys as _sys
+_sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from app import check_sister_conflict as _csc  # noqa
+from db import get_db as _gdb  # noqa
+_conn = _gdb()
+ok1 = _csc(_conn, '80001', '90001')
+check('异姐姐拒绝绑定', ok1[0] is False and '不能绑定其他培训师' in ok1[1], str(ok1))
+ok2 = _csc(_conn, '80001', '88888')
+check('同姐姐允许绑定', ok2[0] is True, str(ok2))
+db_exec("DELETE FROM team_detail WHERE snapshot_date=?", (SNAP,))
+ok3 = _csc(_conn, '80001', '90001')
+check('无姐妹团记录允许绑定', ok3[0] is True, str(ok3))
+_conn.close()
 for uid in ('90011', '90012', '90013', '90014', '90006'):
     for t in requests.get(f'{B}/api/trainers', params={'role': 'all', 'kw': uid}).json()['items']:
         if t['uid'] == uid:

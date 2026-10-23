@@ -236,6 +236,10 @@ def portal_bind():
 
     conn = get_db()
     try:
+        ok2, msg2, _, _, _ = check_sister_conflict(conn, trainee_uid, tr['uid'])
+        if not ok2:
+            conn.close()
+            return jsonify({'ok': False, 'msg': msg2, 'gate': True, 'conflict_sister': True}), 409
         trainee_id, trainee_created = _upsert_person(
             conn, 'trainees', trainee_uid,
             str(data.get('trainee_nickname', '') or '').strip(),
@@ -526,6 +530,26 @@ def judge_retained(data):
     def empty(v):
         return v is None or str(v).strip() in ('', '-')
     return not (empty(data.get('schedule_hall')) and empty(data.get('week_level')))
+
+
+def check_sister_conflict(conn, trainee_uid, trainer_uid):
+    """姐姐冲突检查：该妹妹在最新姐妹团快照里若绑定了其他姐姐（不同 UID），则拒绝绑定。
+    返回 (allowed, msg, sister_uid, sister_nickname, snapshot_date)"""
+    snap = conn.execute('SELECT MAX(snapshot_date) FROM team_detail').fetchone()[0]
+    if not snap:
+        return True, '姐妹团快照为空，跳过姐姐冲突检查', None, None, None
+    today = datetime.now().strftime('%Y-%m-%d')
+    row = conn.execute(
+        '''SELECT sister_uid, sister_nickname FROM team_detail
+           WHERE snapshot_date=? AND CAST(sister_uid2 AS TEXT)=?
+             AND (dissolve_date IS NULL OR dissolve_date='' OR dissolve_date>?)
+           ORDER BY id DESC LIMIT 1''', (snap, str(trainee_uid), today)).fetchone()
+    if not row:
+        return True, '未在姐妹团中查到该妹妹', None, None, snap
+    sister_uid = str(row['sister_uid'] or '')
+    if sister_uid == str(trainer_uid):
+        return True, '已绑定同一姐姐，允许', sister_uid, row['sister_nickname'], snap
+    return False, f"该妹妹当前已绑定姐姐「{row['sister_nickname']}」（UID:{sister_uid}），不能绑定其他培训师（基于 {snap} 快照）", sister_uid, row['sister_nickname'], snap
 
 
 def _protection_gate(uid):
@@ -1433,6 +1457,11 @@ def create_binding_by_uid():
 
     conn = get_db()
     try:
+        if bind_type == 'trainer':
+            ok2, msg2, _, _, _ = check_sister_conflict(conn, trainee_uid, trainer_uid)
+            if not ok2:
+                conn.close()
+                return jsonify({'ok': False, 'msg': msg2, 'gate': True, 'conflict_sister': True}), 409
         trainer_id, trainer_created = _upsert_person(
             conn, 'trainers', trainer_uid,
             str(data.get('trainer_nickname', '') or '').strip(),
