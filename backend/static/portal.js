@@ -337,6 +337,11 @@ $('#p-granted-toggle').addEventListener('click', () => {
 });
 $('#p-granted-refresh').addEventListener('click', loadGranted);
 
+// 一键回到顶部
+$('#back-top').addEventListener('click', () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
 // 已登录则直接进主界面
 (async function init() {
   try {
