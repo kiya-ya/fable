@@ -236,7 +236,7 @@ def portal_bind():
 
     conn = get_db()
     try:
-        ok2, msg2, _, _, _ = check_sister_conflict(conn, trainee_uid, tr['uid'])
+        ok2, msg2, _, _, _ = live_sister_conflict(conn, trainee_uid, tr['uid'])
         if not ok2:
             conn.close()
             return jsonify({'ok': False, 'msg': msg2, 'gate': True, 'conflict_sister': True}), 409
@@ -550,6 +550,33 @@ def check_sister_conflict(conn, trainee_uid, trainer_uid):
     if sister_uid == str(trainer_uid):
         return True, '已绑定同一姐姐，允许', sister_uid, row['sister_nickname'], snap
     return False, f"该妹妹当前已绑定姐姐「{row['sister_nickname']}」（UID:{sister_uid}），不能绑定其他培训师（基于 {snap} 快照）", sister_uid, row['sister_nickname'], snap
+
+
+def _refresh_bigdata_detail():
+    """现场刷新 bigdata 明细快照到 team_detail（用于绑定前姐姐冲突检查）。返回抓取条数"""
+    from crawler import SistersCrawler
+    from auto_login import refresh_bigdata_cookie
+    c = SistersCrawler()
+    try:
+        data = c.crawl_detail()
+    except Exception as e:
+        if 'Cookie已过期' in str(e) or '登录' in str(e):
+            refresh_bigdata_cookie()
+            data = SistersCrawler().crawl_detail()
+        else:
+            raise
+    SistersCrawler().save_detail(data)
+    return len(data)
+
+
+def live_sister_conflict(conn, trainee_uid, trainer_uid):
+    """绑定前姐姐冲突检查：先现场刷新 bigdata 快照，再按最新数据判断"""
+    try:
+        count = _refresh_bigdata_detail()
+        print(f'[SisterCheck] 已刷新 bigdata 明细 {count} 条', flush=True)
+    except Exception as e:
+        print(f'[SisterCheck-WARN] bigdata 刷新失败，回退本地快照: {e}', flush=True)
+    return check_sister_conflict(conn, trainee_uid, trainer_uid)
 
 
 def _protection_gate(uid):
@@ -1458,7 +1485,7 @@ def create_binding_by_uid():
     conn = get_db()
     try:
         if bind_type == 'trainer':
-            ok2, msg2, _, _, _ = check_sister_conflict(conn, trainee_uid, trainer_uid)
+            ok2, msg2, _, _, _ = live_sister_conflict(conn, trainee_uid, trainer_uid)
             if not ok2:
                 conn.close()
                 return jsonify({'ok': False, 'msg': msg2, 'gate': True, 'conflict_sister': True}), 409
