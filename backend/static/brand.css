@@ -179,6 +179,15 @@
 .granted-row b { color: var(--brown-700); }
 .granted-row .muted { margin-left: auto; font-size: 12px; }
 
+/* 学员列表大字抽屉开关 */
+#p-trainees-toggle {
+  display: block; width: 100%; text-align: left;
+  font-size: 17px; font-weight: 700; color: var(--brown-900);
+  padding: 10px 2px 4px; margin-top: 4px;
+}
+#p-trainees-toggle span { font-size: 18px; }
+#p-trainees-toggle:hover { color: var(--gold-500); text-decoration: none; }
+
 /* 移动端专项（触控目标与留白） */
 @media (max-width: 768px) {
   .btn, .btn.small { min-height: var(--btn-height-touch); padding: 8px 14px; }
