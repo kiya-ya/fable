@@ -27,6 +27,7 @@ body {
   font-weight: 700; color: #1f2937;
 }
 .portal-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+.portal-top-actions { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
 .portal-top h2 { margin: 0; }
 main { width: 100%; }
 body.logged-in { display: block; }
@@ -66,7 +67,7 @@ body.logged-in { display: block; }
           <div class="sub">我的学员与名额</div>
         </div>
       </div>
-      <div>
+      <div class="portal-top-actions">
         <button id="p-change-pwd" class="btn small">修改密码</button>
         <button id="p-logout" class="btn small">退出登录</button>
       </div>
