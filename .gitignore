@@ -5,6 +5,7 @@ data/cookie_bigdata.json
 data/keepalive_status.json
 data/weekly_refresh_status.json
 data/flask_secret.txt
+data/admin_config.json
 
 # 数据库与日志
 *.db
