@@ -68,7 +68,7 @@ $('#share-modal').addEventListener('click', (e) => {
       const card = document.createElement('div');
       card.className = 'share-card';
       card.innerHTML = `<div class="sc-title">${esc(s.title)}</div>`
-        + `<div class="sc-meta">${esc(shareMeta(s))}</div>`
+        + `<div class="sc-meta">小队长 · ${esc(s.author)}</div>`
         + `<div class="sc-brief">${esc(s.brief)}</div>`
         + `<div class="sc-more">查看全文 →</div>`;
       card.addEventListener('click', () => openShare(s));
