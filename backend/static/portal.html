@@ -45,12 +45,11 @@ body.logged-in .landing-only { display: none !important; }
 .md-body { font-size: 13px; line-height: 1.9; color: rgba(91, 42, 6, .75); }
 .md-body .qr-pair { margin-top: 14px; }
 
-/* 中间：slogan + 带教经验分享滚动栏 */
+/* 中间：带教经验分享滚动栏 + slogan */
 .landing-hero { width: 100%; max-width: 720px; text-align: center; margin: 20px 0 22px; }
-.hero-slogan { font-size: 24px; font-weight: 700; color: var(--brown-900, #5b2a06); letter-spacing: 1px; }
-.hero-sub { margin-top: 8px; font-size: 13px; color: rgba(91, 42, 6, .55); letter-spacing: 2px; }
+.hero-slogan { margin-top: 18px; font-size: 24px; font-weight: 700; color: var(--brown-900, #5b2a06); letter-spacing: 1px; }
 .share-scroll {
-  margin-top: 18px; overflow: hidden;
+  overflow: hidden;
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
   mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
 }
@@ -77,7 +76,7 @@ body.logged-in .landing-only { display: none !important; }
 .share-detail { font-size: 14px; line-height: 2; color: #3f2a14; white-space: pre-wrap; }
 .share-detail-meta { font-size: 12px; color: rgba(91, 42, 6, .55); margin: -8px 0 12px; }
 
-.portal-login { width: 360px; max-width: 92vw; }
+.portal-login { width: 300px; max-width: 92vw; padding: 18px 20px; }
 .portal-login label { display: block; margin-bottom: 12px; font-size: 13px; color: #6b7280; }
 .portal-login input { width: 100%; margin-top: 4px; }
 .portal-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
@@ -118,16 +117,14 @@ main { width: 100%; }
     </div>
   </div>
 
-  <!-- 中间：slogan + 带教经验分享滚动栏 -->
+  <!-- 中间：带教经验分享滚动栏 + slogan -->
   <div class="landing-hero landing-only">
-    <div class="hero-slogan">把每一位新人，带成能独当一面的王牌</div>
-    <div class="hero-sub">小队长带教经验分享 · 点击卡片查看全文</div>
     <div class="share-scroll"><div class="share-track" id="share-track"></div></div>
+    <div class="hero-slogan">把每一位新人，带成能独当一面的王牌</div>
   </div>
 
   <!-- 登录窗口 -->
   <div id="portal-login" class="card portal-login landing-only">
-    <div class="muted" style="margin-bottom:12px">输入你的 UID 和密码；仅培训师可进入</div>
     <label>UID <input id="p-uid" type="text" placeholder="请输入你的 UID"></label>
     <label>密码 <input id="p-password" type="password" placeholder="初始密码为 UID 后 5 位，登录后请修改密码"></label>
     <button id="p-login" class="btn primary" style="width:100%;padding:10px">进入系统</button>
