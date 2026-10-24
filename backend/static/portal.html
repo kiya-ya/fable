@@ -15,15 +15,11 @@ body {
 body.logged-in { display: block; padding-top: 0; }
 body.logged-in .landing-only { display: none !important; }
 
-/* 顶栏：LOGO 左 + 三条横线菜单右 */
+/* 顶栏：LOGO 左 + 三条横线右（无背景玻璃条，用 div 避免 style.css 的 header 全局样式干扰） */
 .landing-header {
   position: fixed; top: 0; left: 0; right: 0; z-index: 80;
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; flex-direction: row; align-items: center; justify-content: space-between;
   height: 56px; padding: 0 16px;
-  background: rgba(255, 255, 255, .55);
-  backdrop-filter: blur(16px) saturate(1.4);
-  -webkit-backdrop-filter: blur(16px) saturate(1.4);
-  border-bottom: 1px solid rgba(255, 255, 255, .65);
 }
 .lh-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; color: var(--brown-900, #5b2a06); }
 .lh-brand img { width: 32px; height: 32px; border-radius: 8px; box-shadow: 0 4px 10px rgba(122, 62, 18, .18); }
@@ -33,16 +29,17 @@ body.logged-in .landing-only { display: none !important; }
 }
 .menu-btn i { display: block; width: 22px; height: 2px; border-radius: 2px; background: var(--brown-900, #5b2a06); }
 
-/* 右侧抽屉：系统说明 */
+/* 顶部下拉：系统说明 */
 .menu-drawer { position: fixed; inset: 0; z-index: 95; }
 .md-mask { position: absolute; inset: 0; background: rgba(63, 42, 20, .35); }
 .md-panel {
-  position: absolute; top: 0; right: 0; bottom: 0; width: 320px; max-width: 86vw;
-  background: #fffaf2; box-shadow: -8px 0 28px rgba(122, 62, 18, .18);
-  padding: 18px 20px; overflow-y: auto;
-  transform: translateX(100%); transition: transform .25s ease;
+  position: absolute; top: 0; left: 0; right: 0; max-height: 78vh;
+  background: #fffaf2; box-shadow: 0 10px 28px rgba(122, 62, 18, .18);
+  border-radius: 0 0 18px 18px;
+  padding: 18px 20px 22px; overflow-y: auto;
+  transform: translateY(-102%); transition: transform .25s ease;
 }
-.menu-drawer.open .md-panel { transform: translateX(0); }
+.menu-drawer.open .md-panel { transform: translateY(0); }
 .md-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; color: var(--brown-900, #5b2a06); font-size: 16px; }
 .md-head button { background: none; border: none; font-size: 18px; cursor: pointer; color: inherit; padding: 4px 8px; }
 .md-body { font-size: 13px; line-height: 1.9; color: rgba(91, 42, 6, .75); }
@@ -97,10 +94,10 @@ main { width: 100%; }
 <div class="bg-decor"><i class="d1"></i><i class="d2"></i><i class="d3"></i><i class="d4"></i><i class="d5"></i></div>
 
   <!-- 顶栏：LOGO 左 + 三条横线右（仅登录页显示） -->
-  <header class="landing-header landing-only">
-    <div class="lh-brand"><img src="/logo.jpg" alt="点点开黑 LOGO"><span>点点开黑 · 培训师系统</span></div>
+  <div class="landing-header landing-only">
+    <div class="lh-brand"><img src="/logo.jpg" alt="点点开黑 LOGO"><span>点点开黑</span></div>
     <button id="menu-btn" class="menu-btn" aria-label="系统说明"><i></i><i></i><i></i></button>
-  </header>
+  </div>
 
   <!-- 右侧抽屉：系统说明 -->
   <div id="menu-drawer" class="menu-drawer hidden">
@@ -130,7 +127,6 @@ main { width: 100%; }
 
   <!-- 登录窗口 -->
   <div id="portal-login" class="card portal-login landing-only">
-    <h2>培训师登录</h2>
     <div class="muted" style="margin-bottom:12px">输入你的 UID 和密码；仅培训师可进入</div>
     <label>UID <input id="p-uid" type="text" placeholder="请输入你的 UID"></label>
     <label>密码 <input id="p-password" type="password" placeholder="初始密码为 UID 后 5 位，登录后请修改密码"></label>
