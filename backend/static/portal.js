@@ -32,11 +32,46 @@ async function api(url, options = {}) {
 }
 
 // ────────────── 登录 ──────────────
-$('#p-sysinfo-toggle').addEventListener('click', () => {
-  const box = $('#p-sysinfo');
-  const collapsed = box.classList.toggle('hidden');
-  $('#p-sysinfo-arrow').textContent = collapsed ? '▸' : '▾';
+// 顶栏「三条横线」→ 系统说明抽屉
+const drawer = $('#menu-drawer');
+function openDrawer() {
+  drawer.classList.remove('hidden');
+  requestAnimationFrame(() => drawer.classList.add('open'));
+}
+function closeDrawer() {
+  drawer.classList.remove('open');
+  setTimeout(() => drawer.classList.add('hidden'), 250);
+}
+$('#menu-btn').addEventListener('click', openDrawer);
+$('#menu-close').addEventListener('click', closeDrawer);
+$('#menu-mask').addEventListener('click', closeDrawer);
+
+// 带教经验分享滚动栏：渲染两份实现首尾无缝循环，点击卡片看全文
+function openShare(s) {
+  $('#share-title').textContent = s.title;
+  $('#share-author').textContent = s.author || '';
+  $('#share-body').textContent = s.body;
+  $('#share-modal').classList.remove('hidden');
+}
+$('#share-close').addEventListener('click', () => $('#share-modal').classList.add('hidden'));
+$('#share-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'share-modal') $('#share-modal').classList.add('hidden');
 });
+(function renderShares() {
+  const track = $('#share-track');
+  if (!track || typeof PORTAL_SHARES === 'undefined' || !PORTAL_SHARES.length) return;
+  for (let round = 0; round < 2; round++) {
+    for (const s of PORTAL_SHARES) {
+      const card = document.createElement('div');
+      card.className = 'share-card';
+      card.innerHTML = `<div class="sc-title">${esc(s.title)}</div>`
+        + `<div class="sc-brief">${esc(s.brief)}</div>`
+        + `<div class="sc-more">查看全文 →</div>`;
+      card.addEventListener('click', () => openShare(s));
+      track.appendChild(card);
+    }
+  }
+})();
 
 async function doLogin() {
   const uid = $('#p-uid').value.trim();
@@ -46,7 +81,6 @@ async function doLogin() {
   try {
     await api('/api/portal/login', { method: 'POST', body: { uid, password } });
     $('#portal-login').classList.add('hidden');
-    $('#portal-login-logo').classList.add('hidden');
     document.body.classList.add('logged-in');
     $('#portal-main').classList.remove('hidden');
     loadMe();
@@ -68,7 +102,6 @@ async function loadMe() {
     if (e.status === 401) {
       $('#portal-main').classList.add('hidden');
       $('#portal-login').classList.remove('hidden');
-      $('#portal-login-logo').classList.remove('hidden');
       document.body.classList.remove('logged-in');
     } else {
       toast(e.message, true);
@@ -361,7 +394,6 @@ $('#back-top').addEventListener('click', () => {
   try {
     const r = await api('/api/portal/me');
     $('#portal-login').classList.add('hidden');
-    $('#portal-login-logo').classList.add('hidden');
     document.body.classList.add('logged-in');
     $('#portal-main').classList.remove('hidden');
     $('#p-welcome').textContent = `${r.trainer.nickname}（${r.trainer.uid}）`;
