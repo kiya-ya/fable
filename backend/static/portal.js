@@ -47,9 +47,12 @@ $('#menu-close').addEventListener('click', closeDrawer);
 $('#menu-mask').addEventListener('click', closeDrawer);
 
 // 带教经验分享滚动栏：渲染两份实现首尾无缝循环，点击卡片看全文
+function shareMeta(s) {
+  return [s.author, s.hall, s.uid ? `UID ${s.uid}` : ''].filter(Boolean).join(' · ');
+}
 function openShare(s) {
   $('#share-title').textContent = s.title;
-  $('#share-author').textContent = s.author || '';
+  $('#share-author').textContent = shareMeta(s);
   $('#share-body').textContent = s.body;
   $('#share-modal').classList.remove('hidden');
 }
@@ -65,6 +68,7 @@ $('#share-modal').addEventListener('click', (e) => {
       const card = document.createElement('div');
       card.className = 'share-card';
       card.innerHTML = `<div class="sc-title">${esc(s.title)}</div>`
+        + `<div class="sc-meta">${esc(shareMeta(s))}</div>`
         + `<div class="sc-brief">${esc(s.brief)}</div>`
         + `<div class="sc-more">查看全文 →</div>`;
       card.addEventListener('click', () => openShare(s));
