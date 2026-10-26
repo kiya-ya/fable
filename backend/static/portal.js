@@ -320,9 +320,16 @@ async function toggleTraineeData(uid, nickname, bindingId, btn, boundAt, lastQue
   try {
     const r = await api(`/api/portal/trainee-data?uid=${encodeURIComponent(uid)}`);
     const res = r.result;
+    const LEVEL_KEYS = new Set(['week_level', 'best_4week_level']);  // 等级类卡片只显示牌子
     const cards = Object.entries(PORTAL_COMPARE_LABELS).map(([key, label]) => {
       const c = res.compare[key];
       if (!c) return '';
+      if (LEVEL_KEYS.has(key)) {
+        return `<div class="uq-item">
+          <div class="k">${label}</div>
+          <div class="v">${esc(c.this)}</div>
+        </div>`;
+      }
       return `<div class="uq-item">
         <div class="k">${label}</div>
         <div class="v">本周 ${esc(c.this)} ｜ 上周 ${esc(c.last)}</div>

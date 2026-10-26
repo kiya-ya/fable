@@ -189,10 +189,12 @@ main { width: 100%; }
       <div class="card-head">
         <h2>我的名额</h2>
       </div>
-      <div id="p-slots-summary" class="slot-summary"></div>
       <button id="p-slots-help-toggle" class="help-toggle" type="button">名额计算说明 <span id="p-help-arrow">▸</span></button>
-      <div id="p-slots-help" class="muted hidden" style="font-size:12px;margin:6px 0 8px">
-        额外名额按学员当月排档周最高等级计算（初银+1/银牌+1/金牌+1，需当周排档天数&gt;0），当月达标当月生效，次月按新月等级重算
+      <div id="p-slots-help" class="hidden" style="margin:6px 0 8px">
+        <div id="p-slots-summary" class="slot-summary"></div>
+        <div class="muted" style="font-size:12px">
+          额外名额按学员当月排档周最高等级计算（初银+1/银牌+1/金牌+1，需当周排档天数&gt;0），当月达标当月生效，次月按新月等级重算
+        </div>
       </div>
       <button id="p-trainees-toggle" class="help-toggle" type="button">学员列表 <span id="p-trainees-arrow">▸</span></button>
       <div id="p-trainees" class="p-trainee-list hidden"></div>
