@@ -93,9 +93,19 @@ body:not(.logged-in) #back-top { display: none; }
 .portal-login { width: 300px; max-width: 92vw; padding: 18px 20px; }
 .portal-login label { display: block; margin-bottom: 12px; font-size: 13px; color: #6b7280; }
 .portal-login input { width: 100%; margin-top: 4px; }
-.portal-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
-.portal-top-actions { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
-.portal-top h2 { margin: 0; }
+.portal-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 4px; }
+/* 右上角三横线下拉菜单 */
+.p-menu { position: relative; }
+.p-menu-panel {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 90;
+  display: flex; flex-direction: column; gap: 8px; min-width: 148px;
+  background: #fffaf2; border-radius: 14px; padding: 10px;
+  box-shadow: 0 12px 32px rgba(122, 62, 18, .18);
+  border: 1px solid rgba(255, 255, 255, .8);
+}
+.p-menu-panel .btn { width: 100%; }
+.btn.logout-red { background: #dc2626; border-color: transparent; color: #fff; font-weight: 600; }
+.btn.logout-red:hover:not(:disabled) { background: #b91c1c; }
 main { width: 100%; }
 @media (max-width: 768px) {
   .hero-slogan { font-size: 20px; }
@@ -157,7 +167,7 @@ main { width: 100%; }
   <!-- 主界面 -->
   <div id="preview-banner" class="hidden">管理员预览模式 · 正在以该培训师身份查看用户端 <button id="preview-exit" class="btn small">退出预览</button></div>
   <div id="portal-main" class="hidden">
-    <div class="card portal-top">
+    <div class="portal-top">
       <div class="portal-welcome">
         <img src="/logo.jpg" alt="LOGO">
         <div>
@@ -165,16 +175,19 @@ main { width: 100%; }
           <div class="sub">我的学员与名额</div>
         </div>
       </div>
-      <div class="portal-top-actions">
-        <button id="p-change-pwd" class="btn small">修改密码</button>
-        <button id="p-logout" class="btn small">退出登录</button>
+      <div class="p-menu">
+        <button id="p-menu-btn" class="menu-btn" aria-label="菜单"><i></i><i></i><i></i></button>
+        <div id="p-menu-panel" class="p-menu-panel hidden">
+          <button id="p-change-pwd" class="btn">修改密码</button>
+          <button id="p-refresh" class="btn">刷新数据</button>
+          <button id="p-logout" class="btn logout-red">退出登录</button>
+        </div>
       </div>
     </div>
 
     <div class="card">
       <div class="card-head">
         <h2>我的名额</h2>
-        <button id="p-refresh" class="btn">刷新数据</button>
       </div>
       <div id="p-slots-summary" class="slot-summary"></div>
       <button id="p-slots-help-toggle" class="help-toggle" type="button">名额计算说明 <span id="p-help-arrow">▸</span></button>
@@ -188,7 +201,6 @@ main { width: 100%; }
     <div class="card">
       <div class="card-head">
         <h2>已发放奖励</h2>
-        <button id="p-granted-refresh" class="btn small">刷新</button>
       </div>
       <button id="p-granted-toggle" class="help-toggle hidden" type="button">展开全部 <span id="p-granted-arrow">▸</span></button>
       <div id="p-granted-first" class="p-trainee-list"></div>

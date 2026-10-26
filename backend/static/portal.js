@@ -234,6 +234,7 @@ $('#preview-exit').addEventListener('click', async () => {
 
 // 修改密码
 $('#p-change-pwd').addEventListener('click', () => {
+  pMenuPanel.classList.add('hidden');
   $('#pwd-old').value = '';
   $('#pwd-new').value = '';
   $('#pwd-modal').classList.remove('hidden');
@@ -252,7 +253,19 @@ $('#pwd-save').addEventListener('click', async () => {
   }
 });
 
-// 刷新自己学员数据
+// 右上角三横线菜单：开合 + 点击外部关闭
+const pMenuPanel = $('#p-menu-panel');
+$('#p-menu-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  pMenuPanel.classList.toggle('hidden');
+});
+document.addEventListener('click', (e) => {
+  if (!pMenuPanel.classList.contains('hidden') && !e.target.closest('.p-menu')) {
+    pMenuPanel.classList.add('hidden');
+  }
+});
+
+// 刷新学员数据与奖励（合并原两个刷新按钮）
 $('#p-refresh').addEventListener('click', async () => {
   const btn = $('#p-refresh');
   btn.disabled = true;
@@ -261,11 +274,13 @@ $('#p-refresh').addEventListener('click', async () => {
     const r = await api('/api/portal/refresh', { method: 'POST' });
     toast(`已刷新 ${r.queried.length} 人${r.errors.length ? `，${r.errors.length} 人失败` : ''}`);
     loadMe();
+    loadGranted();
   } catch (e) {
     toast(e.message, true);
   } finally {
     btn.disabled = false;
     btn.textContent = '刷新数据';
+    pMenuPanel.classList.add('hidden');
   }
 });
 
@@ -391,7 +406,6 @@ $('#p-granted-toggle').addEventListener('click', () => {
   const collapsed = box.classList.toggle('hidden');
   $('#p-granted-arrow').textContent = collapsed ? '▸' : '▾';
 });
-$('#p-granted-refresh').addEventListener('click', loadGranted);
 
 // 一键回到顶部
 $('#back-top').addEventListener('click', () => {
