@@ -128,9 +128,16 @@ function renderUidResult(res) {
     box.innerHTML = '<div class="empty">未找到该 UID 的数据</div>';
     return;
   }
+  const LEVEL_KEYS = new Set(['week_level', 'best_4week_level']);  // 等级类卡片只显示牌子
   const cards = Object.entries(COMPARE_LABELS).map(([key, label]) => {
     const c = res.compare[key];
     if (!c) return '';
+    if (LEVEL_KEYS.has(key)) {
+      return `<div class="uq-item">
+        <div class="k">${label}</div>
+        <div class="v">${esc(c.this)}</div>
+      </div>`;
+    }
     return `<div class="uq-item">
       <div class="k">${label}</div>
       <div class="v">本周 ${esc(c.this)} ｜ 上周 ${esc(c.last)}</div>
