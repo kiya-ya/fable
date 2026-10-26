@@ -216,7 +216,7 @@ $('#p-bind').addEventListener('click', async () => {
     $('#p-bind-info').innerHTML = '';
     loadMe();
   } catch (e) {
-    toast('请检查绑定妹妹是否排挡进厅或在保护期内或已绑定其他姐姐', true);
+    toast(e.message, true);
   }
 });
 
