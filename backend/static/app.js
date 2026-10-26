@@ -705,11 +705,23 @@ async function loadTrainers(page) {
           <button class="btn small" onclick="gotoUidQuery('${esc(t.uid)}')">速查</button>
           <button class="btn small" onclick="refreshTrainerInfo(${t.id})">刷新</button>
           <button class="btn small" onclick='openPersonModal("trainers", ${JSON.stringify(t)})'>编辑</button>
+          <button class="btn small" onclick="previewPortal(${t.id}, '${esc(t.nickname)}')">预览</button>
           <button class="btn small danger" onclick="delPerson('trainers', ${t.id})">删除</button>
         </td>
       </tr>`).join('');
   }
   renderPager('#trainers-pager', data.page, data.page_size, data.total, (p) => loadTrainers(p));
+}
+
+// 管理员以该培训师身份预览用户端（新标签页打开）
+async function previewPortal(trainerId, nickname) {
+  try {
+    await api('/api/admin/preview-portal', { method: 'POST', body: { trainer_id: trainerId } });
+    window.open('/portal', '_blank');
+    toast(`正以「${nickname}」的身份预览用户端`);
+  } catch (e) {
+    toast(e.message, true);
+  }
 }
 
 async function loadTrainees(page) {

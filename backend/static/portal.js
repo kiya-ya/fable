@@ -101,6 +101,7 @@ async function loadMe() {
   try {
     const r = await api('/api/portal/me');
     $('#p-welcome').textContent = `${r.trainer.nickname}（${r.trainer.uid}）`;
+    $('#preview-banner').classList.toggle('hidden', !r.preview);
     renderSlots(r.slots);
   } catch (e) {
     if (e.status === 401) {
@@ -222,6 +223,11 @@ $('#p-bind').addEventListener('click', async () => {
 
 $('#p-logout').addEventListener('click', async (e) => {
   e.preventDefault();
+  await api('/api/portal/logout', { method: 'POST' });
+  location.reload();
+});
+// 管理员预览模式：退出预览 = 退出当前身份，回到登录页
+$('#preview-exit').addEventListener('click', async () => {
   await api('/api/portal/logout', { method: 'POST' });
   location.reload();
 });
@@ -400,6 +406,7 @@ $('#back-top').addEventListener('click', () => {
     document.body.classList.add('logged-in');
     $('#portal-main').classList.remove('hidden');
     $('#p-welcome').textContent = `${r.trainer.nickname}（${r.trainer.uid}）`;
+    $('#preview-banner').classList.toggle('hidden', !r.preview);
     renderSlots(r.slots);
     loadGranted();
   } catch (e) {

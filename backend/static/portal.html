@@ -77,6 +77,15 @@ body.logged-in .landing-only { display: none !important; }
 .share-detail { font-size: 14px; line-height: 2; color: #3f2a14; white-space: pre-wrap; }
 .share-detail-meta { font-size: 12px; color: rgba(91, 42, 6, .55); margin: -8px 0 12px; }
 
+/* 管理员预览横幅 */
+#preview-banner {
+  position: sticky; top: 0; z-index: 85;
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  padding: 8px 14px; font-size: 13px; font-weight: 600;
+  background: var(--brown-900, #5b2a06); color: #ffe9b8;
+}
+#preview-banner.hidden { display: none; }
+
 /* 页脚沉底；登录页不显示回到顶部 */
 .app-footer { margin-top: auto; padding-top: 28px; }
 body:not(.logged-in) #back-top { display: none; }
@@ -146,6 +155,7 @@ main { width: 100%; }
   </div>
 
   <!-- 主界面 -->
+  <div id="preview-banner" class="hidden">管理员预览模式 · 正在以该培训师身份查看用户端 <button id="preview-exit" class="btn small">退出预览</button></div>
   <div id="portal-main" class="hidden">
     <div class="card portal-top">
       <div class="portal-welcome">

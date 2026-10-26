@@ -128,6 +128,7 @@ def portal_login():
     # 每次登录尝试先清除旧登录态，防止失败后沿用上一个身份
     session.pop('portal_uid', None)
     session.pop('portal_trainer_id', None)
+    session.pop('portal_preview', None)
     uid = str(data.get('uid', '')).strip()
     password = str(data.get('password', ''))
     if not uid:
@@ -155,7 +156,28 @@ def portal_login():
 def portal_logout():
     session.pop('portal_uid', None)
     session.pop('portal_trainer_id', None)
+    session.pop('portal_preview', None)
     return ok()
+
+
+@app.post('/api/admin/preview-portal')
+def preview_portal():
+    """管理员以指定培训师身份预览用户端（不改变该培训师的任何数据）"""
+    data = request.get_json(force=True)
+    try:
+        tid = int(data.get('trainer_id'))
+    except (TypeError, ValueError):
+        return err('trainer_id 无效')
+    conn = get_db()
+    tr = conn.execute("SELECT * FROM trainers WHERE id=? AND role='trainer'", (tid,)).fetchone()
+    conn.close()
+    if not tr:
+        return err('培训师不存在', 404)
+    session['portal_uid'] = tr['uid']
+    session['portal_trainer_id'] = tr['id']
+    session['portal_preview'] = True
+    log_operation('admin', None, 'preview', 'trainer', tr['uid'], None, '管理员预览用户端')
+    return ok({'uid': tr['uid'], 'nickname': tr['nickname']})
 
 
 def _portal_trainer():
@@ -219,7 +241,7 @@ def portal_me():
     panel = build_slots_panel(conn, tr['id'])
     conn.close()
     return ok({'trainer': {'uid': tr['uid'], 'nickname': tr['nickname'], 'hall_name': tr['hall_name']},
-               'slots': panel})
+               'slots': panel, 'preview': bool(session.get('portal_preview'))})
 
 
 @app.post('/api/portal/bind')
