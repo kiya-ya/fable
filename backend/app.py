@@ -806,8 +806,8 @@ def build_slots_panel(conn, trainer_id):
         # 每条绑定附奖励窗口与剩余周数
         start, end, wstatus = reward_window_status(r['bound_at'])
         if wstatus == 'in_window':
-            cal_weeks = min(max(-(-(end - datetime.now()).days // 7), 0), REWARD_WINDOW_WEEKS)
-            weeks_left = max(cal_weeks - (r['weeks_consumed'] or 0), 0)
+            # 剩余周数 = 窗口周数 - 已发放周数（人工计数，不再重复扣日历时间）
+            weeks_left = max(REWARD_WINDOW_WEEKS - (r['weeks_consumed'] or 0), 0)
         elif wstatus == 'not_started':
             weeks_left = REWARD_WINDOW_WEEKS
         else:
@@ -1385,8 +1385,8 @@ def list_bindings():
         b['window_status'] = status
         b['retained'] = retained_map.get(b['trainee_uid'])  # None=本月未查询
         if status == 'in_window':
-            cal_weeks = min(max(-(-(end - datetime.now()).days // 7), 0), REWARD_WINDOW_WEEKS)
-            b['weeks_left'] = max(cal_weeks - (b['weeks_consumed'] or 0), 0)
+            # 剩余周数 = 窗口周数 - 已发放周数（人工计数，不再重复扣日历时间）
+            b['weeks_left'] = max(REWARD_WINDOW_WEEKS - (b['weeks_consumed'] or 0), 0)
         elif status == 'not_started':
             b['weeks_left'] = REWARD_WINDOW_WEEKS
         else:
@@ -1650,8 +1650,7 @@ def set_remaining(bid):
     if status != 'in_window':
         conn.close()
         return err('只能修改窗口内的绑定（未开始/已结束不可改）', 409)
-    cal_weeks = min(max(-(-(end - datetime.now()).days // 7), 0), REWARD_WINDOW_WEEKS)
-    consumed = max(cal_weeks - remaining, 0)
+    consumed = max(REWARD_WINDOW_WEEKS - remaining, 0)
     conn.execute('UPDATE bindings SET weeks_consumed=? WHERE id=?', (consumed, bid))
     conn.commit()
     conn.close()

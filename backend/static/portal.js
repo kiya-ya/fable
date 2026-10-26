@@ -366,7 +366,7 @@ async function loadGranted() {
     });
     const n = cardList.length;
     $('#p-granted-first').innerHTML = n ? cardList[0] : '<div class="empty">还没有已发放的奖励</div>';
-    $('#p-granted').innerHTML = cardList.join('');
+    $('#p-granted').innerHTML = cardList.slice(1).join('');
     const toggle = $('#p-granted-toggle');
     if (n > 1) {
       toggle.classList.remove('hidden');
@@ -384,7 +384,6 @@ $('#p-granted-toggle').addEventListener('click', () => {
   const box = $('#p-granted');
   const collapsed = box.classList.toggle('hidden');
   $('#p-granted-arrow').textContent = collapsed ? '▸' : '▾';
-  $('#p-granted-first').classList.toggle('hidden', !collapsed);
 });
 $('#p-granted-refresh').addEventListener('click', loadGranted);
 
