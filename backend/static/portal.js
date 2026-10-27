@@ -101,7 +101,6 @@ async function loadMe() {
   try {
     const r = await api('/api/portal/me');
     $('#p-welcome').textContent = `${r.trainer.nickname}（${r.trainer.uid}）`;
-    myUid = r.trainer.uid;
     $('#preview-banner').classList.toggle('hidden', !r.preview);
     renderSlots(r.slots);
   } catch (e) {
@@ -420,31 +419,6 @@ $('#back-top').addEventListener('click', () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
-// ────────────── 底部导航栏 ──────────────
-let EXAM_URL = 'http://192.168.100.117:5001';  // 考试系统地址（后端 /api/client-config 可配）
-let myUid = '';
-fetch('/api/client-config').then((r) => r.json()).then((c) => {
-  if (c.exam_url) EXAM_URL = c.exam_url;
-}).catch(() => {});
-
-function switchTab(tab) {
-  document.querySelectorAll('.bnav-item').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
-  $('#p-home').classList.toggle('hidden', tab === 'mine');
-  $('#p-mine').classList.toggle('hidden', tab !== 'mine');
-}
-document.querySelectorAll('.bnav-item').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    const tab = btn.dataset.tab;
-    if (tab === 'learn') {
-      location.href = EXAM_URL + '/';
-    } else if (tab === 'query') {
-      location.href = EXAM_URL + '/query' + (myUid ? `?uid=${encodeURIComponent(myUid)}` : '');
-    } else {
-      switchTab(tab);
-    }
-  });
-});
-
 // 已登录则直接进主界面
 (async function init() {
   try {
@@ -453,7 +427,6 @@ document.querySelectorAll('.bnav-item').forEach((btn) => {
     document.body.classList.add('logged-in');
     $('#portal-main').classList.remove('hidden');
     $('#p-welcome').textContent = `${r.trainer.nickname}（${r.trainer.uid}）`;
-    myUid = r.trainer.uid;
     $('#preview-banner').classList.toggle('hidden', !r.preview);
     renderSlots(r.slots);
     loadGranted();
