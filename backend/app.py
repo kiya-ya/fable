@@ -58,11 +58,23 @@ PORTAL_CODE_TTL = 300  # 用户端验证码有效期（秒）
 
 PUBLIC_PATHS = {'/login', '/portal', '/api/login', '/api/portal/login', '/api/portal/captcha',
                 '/app.js', '/style.css', '/brand.css', '/portal.js', '/shares.js', '/favicon.ico', '/logo.jpg',
-                '/wutong.png', '/ludeng.png'}
+                '/wutong.png', '/ludeng.png', '/api/client-config'}
 
 
 # 用户端登录态也允许访问的只读接口（自助绑定需要查妹妹信息）
 PORTAL_ALLOWED_APIS = {'/api/uid-lookup'}
+
+
+@app.get('/api/client-config')
+def client_config():
+    """前端公共配置：考试系统地址等（改 data/client_config.json 即可，无需改代码）"""
+    default = {'exam_url': 'http://192.168.100.117:5001'}
+    try:
+        with open('data/client_config.json', encoding='utf-8') as f:
+            default.update(json.load(f))
+    except Exception:
+        pass
+    return jsonify(default)
 
 
 @app.before_request
