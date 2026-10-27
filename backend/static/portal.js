@@ -103,6 +103,7 @@ async function loadMe() {
     $('#p-welcome').textContent = `${r.trainer.nickname}（${r.trainer.uid}）`;
     myUid = r.trainer.uid;
     $('#preview-banner').classList.toggle('hidden', !r.preview);
+    applyHashTab();
     renderSlots(r.slots);
   } catch (e) {
     if (e.status === 401) {
@@ -432,6 +433,13 @@ function switchTab(tab) {
   $('#p-home').classList.toggle('hidden', tab === 'mine');
   $('#p-mine').classList.toggle('hidden', tab !== 'mine');
 }
+// 支持外部链接直达指定 tab（如考试系统的「我的」→ /portal#mine）
+function applyHashTab() {
+  if (location.hash === '#mine') {
+    switchTab('mine');
+    history.replaceState(null, '', location.pathname);
+  }
+}
 document.querySelectorAll('.bnav-item').forEach((btn) => {
   btn.addEventListener('click', () => {
     const tab = btn.dataset.tab;
@@ -455,8 +463,10 @@ document.querySelectorAll('.bnav-item').forEach((btn) => {
     $('#p-welcome').textContent = `${r.trainer.nickname}（${r.trainer.uid}）`;
     myUid = r.trainer.uid;
     $('#preview-banner').classList.toggle('hidden', !r.preview);
+    applyHashTab();
     renderSlots(r.slots);
     loadGranted();
+    applyHashTab();
   } catch (e) {
     // 未登录则停留在登录页
   }
