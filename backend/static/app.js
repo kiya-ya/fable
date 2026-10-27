@@ -110,8 +110,8 @@ $('#uq-submit').addEventListener('click', async () => {
     renderUidResult(r.result);
     if (r.retention) {
       const banner = r.retention.retained
-        ? `<div class="retention-banner ok">✓ ${esc(r.retention.msg)}</div>`
-        : `<div class="retention-banner bad">✗ ${esc(r.retention.msg)}</div>`;
+        ? `<div class="retention-banner ok">${esc(r.retention.msg)}</div>`
+        : `<div class="retention-banner bad">${esc(r.retention.msg)}</div>`;
       $('#uq-result').insertAdjacentHTML('afterbegin', banner);
     }
   } catch (e) {
