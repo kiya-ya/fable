@@ -451,7 +451,16 @@ r = requests.post(f'{B}/api/portal/bind', json={'trainee_uid': '80001'})
 check('自助绑定被保护期门槛拦截 422', r.status_code == 422 and r.json().get('gate'), r.text)
 cap = requests.get(f'{B}/api/portal/captcha').json()['code']
 r = requests.post(f'{B}/api/portal/login', json={'uid': '80001', 'code': cap, 'password': 'x'})
-check('非培训师拒绝进入 403', r.status_code == 403, f'got {r.status_code}')
+check('未知 UID 密码错误拒绝 401（统一账号后不再 403）', r.status_code in (401, 422), f'got {r.status_code}')
+# 统一账号：未知 UID + 正确初始密码 + 手填昵称 → 自动建档新人
+r = requests.post(f'{B}/api/portal/login', json={'uid': '80001', 'password': '80001', 'nickname': '测试新人80001'})
+check('新人首次登录自动建档 role=new', r.ok and r.json().get('role') == 'new' and r.json().get('is_new_user'), r.text)
+r = requests.get(f'{B}/api/portal/me')
+check('新人 portal/me 返回 role=new 且无名额面板', r.ok and r.json().get('role') == 'new' and r.json().get('slots') is None, r.text)
+r = requests.post(f'{B}/api/portal/bind', json={'trainee_uid': '90001'})
+check('新人无权绑定（401）', r.status_code == 401, f'got {r.status_code}')
+r = requests.post(f'{B}/api/portal/logout')
+db_exec("DELETE FROM trainers WHERE uid='80001' AND role='new'")
 cap = requests.get(f'{B}/api/portal/captcha').json()['code']
 r = requests.post(f'{B}/api/portal/login', json={'uid': '90001', 'code': 'xxxxx', 'password': 'test456'})
 check('验证码环节已取消（任意验证码不拦截）', r.ok, r.text)

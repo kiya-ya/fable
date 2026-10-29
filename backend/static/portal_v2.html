@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>点点开黑 · 统一入口（v2 测试）</title>
+<link rel="icon" href="/logo.jpg" type="image/jpeg">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/brand.css">
+<style>
+body {
+  display: flex; flex-direction: column; align-items: center;
+  min-height: 100vh; padding-top: 70px;
+}
+.landing-header {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 80;
+  display: flex; flex-direction: row; align-items: center; justify-content: space-between;
+  height: 56px; padding: 0 16px;
+}
+.lh-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; color: var(--brown-900, #5b2a06); }
+.lh-brand img { width: 32px; height: 32px; border-radius: 8px; box-shadow: 0 4px 10px rgba(122, 62, 18, .18); }
+.v2-login { width: 320px; max-width: 92vw; }
+.v2-login label { display: block; margin-bottom: 12px; font-size: 13px; color: #6b7280; }
+.v2-login input { width: 100%; margin-top: 4px; }
+.v2-tip { margin-top: 12px; font-size: 12px; color: rgba(91,42,6,.6); text-align: center; line-height: 1.8; }
+.guide-step { display: flex; gap: 12px; align-items: flex-start; padding: 14px 0; border-top: 1px dashed rgba(122,62,18,.15); }
+.guide-step:first-of-type { border-top: none; }
+.guide-num {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  background: var(--brown-700, #7a3e12); color: #fff7ea;
+  display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;
+}
+.guide-body { flex: 1; }
+.guide-body b { font-size: 14px; color: var(--brown-900, #5b2a06); }
+.guide-body p { font-size: 12px; color: rgba(91,42,6,.6); margin-top: 3px; line-height: 1.6; }
+main.v2-main { width: 100%; max-width: 480px; padding: 0 16px; }
+.v2-badge { font-size: 11px; color: rgba(91,42,6,.45); text-align: center; margin-bottom: 10px; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+<div class="bg-decor"><i class="d1"></i><i class="d2"></i><i class="d3"></i><i class="d4"></i><i class="d5"></i></div>
+<div class="landing-header">
+  <div class="lh-brand"><img src="/logo.jpg" alt="点点开黑 LOGO"><span>点点开黑</span></div>
+  <button id="v2-logout" class="btn small hidden">退出登录</button>
+</div>
+
+<main class="v2-main">
+  <div class="v2-badge">V2 灰度测试版</div>
+
+  <!-- 登录框（A+：单框 + 新人引导文案） -->
+  <div id="v2-login" class="card v2-login">
+    <label>UID <input id="v2-uid" type="text" placeholder="请输入你的 UID"></label>
+    <label>密码 <input id="v2-password" type="password" placeholder="初始密码为 UID 后 5 位"></label>
+    <label id="v2-nick-row" class="hidden">昵称（首次登录需补充一次）
+      <input id="v2-nickname" type="text" placeholder="请输入你的点点昵称">
+    </label>
+    <button id="v2-submit" class="btn primary" style="width:100%;padding:10px">进入系统</button>
+    <div class="v2-tip">新人？首次登录密码为 UID 后 5 位<br>登录后按指引学习考试</div>
+  </div>
+
+  <!-- 新人引导视图 -->
+  <div id="v2-guide" class="card hidden">
+    <h2 id="v2-welcome">欢迎你</h2>
+    <div class="muted" style="font-size:12px;margin-bottom:6px">按以下步骤获得资质</div>
+    <div class="guide-step">
+      <div class="guide-num">1</div>
+      <div class="guide-body">
+        <b>课程学习</b>
+        <p>完成姐妹团必修课（视频看到 90% / 图文读够时长）</p>
+        <button id="v2-go-learn" class="btn primary small" style="margin-top:8px">去学习</button>
+      </div>
+    </div>
+    <div class="guide-step">
+      <div class="guide-num">2</div>
+      <div class="guide-body">
+        <b>参加考试</b>
+        <p>必修课全部完成后解锁，60 分及格</p>
+        <button id="v2-go-query" class="btn small" style="margin-top:8px">查询我的成绩</button>
+      </div>
+    </div>
+    <div class="guide-step">
+      <div class="guide-num">3</div>
+      <div class="guide-body">
+        <b>申请资质</b>
+        <p>考试通过后提交申请，管理员审核通过即激活</p>
+        <button class="btn small" disabled style="margin-top:8px">申请资质（阶段 2 上线）</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="toast" class="hidden"></div>
+<script>
+const $ = (s) => document.querySelector(s);
+let EXAM_URL = 'http://192.168.100.117:5001';
+let myUid = '';
+
+function toast(msg, isError = false) {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.className = isError ? 'error' : '';
+  setTimeout(() => el.classList.add('hidden'), 3000);
+}
+async function api(url, options = {}) {
+  if (options.body) {
+    options.headers = { 'Content-Type': 'application/json' };
+    options.body = JSON.stringify(options.body);
+  }
+  const resp = await fetch(url, options);
+  const data = await resp.json().catch(() => ({ ok: false, msg: '响应解析失败' }));
+  return { status: resp.status, data };
+}
+
+fetch('/api/client-config').then((r) => r.json()).then((c) => {
+  if (c.exam_url) EXAM_URL = c.exam_url;
+}).catch(() => {});
+
+async function doLogin() {
+  const uid = $('#v2-uid').value.trim();
+  const password = $('#v2-password').value;
+  const nickname = $('#v2-nickname').value.trim();
+  if (!uid) return toast('请输入 UID', true);
+  if (!password) return toast('请输入密码', true);
+  const { status, data } = await api('/api/portal/login', {
+    method: 'POST', body: { uid, password, nickname },
+  });
+  if (data.need_nickname) {
+    $('#v2-nick-row').classList.remove('hidden');
+    toast(data.msg || '请补充昵称', true);
+    return;
+  }
+  if (!data.ok) return toast(data.msg || '登录失败', true);
+  enterApp(data);
+}
+
+function enterApp(me) {
+  myUid = me.uid;
+  if (me.role === 'trainer') {
+    // 培训师：进入现有管理视图
+    location.href = '/portal';
+    return;
+  }
+  // 新人/其他角色：引导视图
+  $('#v2-login').classList.add('hidden');
+  $('#v2-guide').classList.remove('hidden');
+  $('#v2-logout').classList.remove('hidden');
+  $('#v2-welcome').textContent = `欢迎你，${me.nickname || myUid}`;
+  if (me.is_new_user) toast('已为你自动建档，欢迎加入！');
+}
+
+$('#v2-submit').addEventListener('click', doLogin);
+$('#v2-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+$('#v2-go-learn').addEventListener('click', () => {
+  location.href = EXAM_URL + '/learn?uid=' + encodeURIComponent(myUid);
+});
+$('#v2-go-query').addEventListener('click', () => {
+  location.href = EXAM_URL + '/query?uid=' + encodeURIComponent(myUid);
+});
+$('#v2-logout').addEventListener('click', async () => {
+  await api('/api/portal/logout', { method: 'POST' });
+  location.reload();
+});
+
+// 已登录：按身份分流
+(async function init() {
+  const { status, data } = await api('/api/portal/me');
+  if (status === 200 && data.ok) {
+    enterApp({ uid: data.trainer.uid, nickname: data.trainer.nickname, role: data.role });
+  }
+})();
+</script>
+</body>
+</html>

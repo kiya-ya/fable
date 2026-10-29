@@ -56,13 +56,34 @@ def _load_admin_config():
 ADMIN_USER, ADMIN_PASSWORD = _load_admin_config()
 PORTAL_CODE_TTL = 300  # 用户端验证码有效期（秒）
 
-PUBLIC_PATHS = {'/login', '/portal', '/api/login', '/api/portal/login', '/api/portal/captcha',
-                '/app.js', '/style.css', '/brand.css', '/portal.js', '/shares.js', '/favicon.ico', '/logo.jpg',
-                '/wutong.png', '/ludeng.png'}
+PUBLIC_PATHS = {'/login', '/portal', '/portal-v2', '/api/login', '/api/portal/login', '/api/portal/captcha',
+                '/app.js', '/style.css', '/brand.css', '/portal.js', '/portal_v2.js', '/shares.js', '/favicon.ico', '/logo.jpg',
+                '/wutong.png', '/ludeng.png', '/api/client-config'}
 
 
 # 用户端登录态也允许访问的只读接口（自助绑定需要查妹妹信息）
 PORTAL_ALLOWED_APIS = {'/api/uid-lookup'}
+
+
+@app.after_request
+def _no_cache(resp):
+    """静态页面/脚本不缓存，防止微信浏览器长期持有旧版页面"""
+    p = request.path
+    if p.endswith(('.html', '.js', '.css')) or p in ('/', '/login', '/portal', '/portal-v2'):
+        resp.headers['Cache-Control'] = 'no-cache'
+    return resp
+
+
+@app.get('/api/client-config')
+def client_config():
+    """前端公共配置：考试系统地址等（改 data/client_config.json 即可，无需改代码）"""
+    default = {'exam_url': 'http://192.168.100.117:5001'}
+    try:
+        with open('data/client_config.json', encoding='utf-8') as f:
+            default.update(json.load(f))
+    except Exception:
+        pass
+    return jsonify(default)
 
 
 @app.before_request
@@ -108,6 +129,12 @@ def portal_page():
     return app.send_static_file('portal.html')
 
 
+@app.get('/portal-v2')
+def portal_v2_page():
+    """新版用户端（灰度测试路径）：统一账号登录 + 按身份分流"""
+    return app.send_static_file('portal_v2.html')
+
+
 def _new_portal_code():
     import random
     import string
@@ -122,8 +149,26 @@ def portal_captcha():
     return ok({'code': _new_portal_code()})
 
 
+def _fetch_nickname_by_uid(uid):
+    """用 UID 查询爬虫抓昵称/大厅（新人首次登录自动建档用）。失败返回 (None, None)"""
+    try:
+        r = UIDCrawler().query(uid, 'game')
+    except CookieExpiredError:
+        try:
+            _heal_uid_cookie()
+            r = UIDCrawler().query(uid, 'game')
+        except Exception:
+            return None, None
+    except Exception:
+        return None, None
+    if not r.get('found'):
+        return None, None
+    return (r.get('nickname') or '').strip(), (r.get('schedule_hall') or r.get('auth_hall') or '').strip()
+
+
 @app.post('/api/portal/login')
 def portal_login():
+    """统一账号登录：任意 UID 可登录；新人首次登录自动建档（role=new），昵称优先爬虫抓取，抓不到需手填一次"""
     data = request.get_json(force=True)
     # 每次登录尝试先清除旧登录态，防止失败后沿用上一个身份
     session.pop('portal_uid', None)
@@ -131,25 +176,49 @@ def portal_login():
     session.pop('portal_preview', None)
     uid = str(data.get('uid', '')).strip()
     password = str(data.get('password', ''))
+    nickname = str(data.get('nickname', '') or '').strip()
     if not uid:
         return err('UID 不能为空')
     if not password:
         return err('请输入密码')
+
     conn = get_db()
-    tr = conn.execute("SELECT * FROM trainers WHERE uid=? AND role='trainer'", (uid,)).fetchone()
-    conn.close()
+    tr = conn.execute("SELECT * FROM trainers WHERE uid=?", (uid,)).fetchone()
+
+    # 新人首次登录：自动建档（role=new）
+    is_new_user = False
     if not tr:
-        return err('该 UID 不在培训师名单中，不能进入系统', 403)
+        nick, hall = (nickname, '') if nickname else _fetch_nickname_by_uid(uid)
+        if not nick:
+            conn.close()
+            return jsonify({'ok': False, 'need_nickname': True,
+                            'msg': '首次登录未能自动获取昵称，请补充昵称后重试'}), 422
+        # 初始密码 = UID 后 5 位，先校验再建档
+        if password != uid[-5:]:
+            conn.close()
+            return err('初始密码为 UID 后 5 位，请输入正确的初始密码', 401)
+        cur = conn.execute(
+            "INSERT INTO trainers (uid, nickname, hall_name, role, base_slots, note) VALUES (?,?,?,?,0,'新人自动建档')",
+            (uid, nick, hall, 'new'))
+        conn.commit()
+        tr = conn.execute('SELECT * FROM trainers WHERE id=?', (cur.lastrowid,)).fetchone()
+        is_new_user = True
+        log_operation('portal', uid, 'auto_signup', 'new', uid, None, f'新人首次登录自动建档（{nick}）')
+
+    role = tr['role'] or 'trainer'
     if not tr['password_hash']:
         # 初始密码 = UID 后 5 位（登录后请修改密码）
         if password != uid[-5:]:
+            conn.close()
             return err('初始密码为 UID 后 5 位，请输入正确的初始密码', 401)
     elif not check_password_hash(tr['password_hash'], password):
+        conn.close()
         return err('密码错误', 401)
+    conn.close()
     session.pop('portal_code', None)
     session['portal_uid'] = uid
     session['portal_trainer_id'] = tr['id']
-    return ok({'uid': uid, 'nickname': tr['nickname']})
+    return ok({'uid': uid, 'nickname': tr['nickname'], 'role': role, 'is_new_user': is_new_user})
 
 
 @app.post('/api/portal/logout')
@@ -190,6 +259,17 @@ def _portal_trainer():
     return tr
 
 
+def _portal_user():
+    """当前登录的用户（任意角色：trainer/sister/new），未登录返回 None"""
+    tid = session.get('portal_trainer_id')
+    if not tid:
+        return None
+    conn = get_db()
+    tr = conn.execute('SELECT * FROM trainers WHERE id=?', (tid,)).fetchone()
+    conn.close()
+    return tr
+
+
 @app.post('/api/trainers/<int:tid>/set-password')
 def set_trainer_password(tid):
     """管理员为培训师设置/重置密码（只写哈希，不显示旧密码）"""
@@ -209,8 +289,8 @@ def set_trainer_password(tid):
 
 @app.post('/api/portal/change-password')
 def portal_change_password():
-    """用户端修改密码：校验旧密码后更新哈希"""
-    tr = _portal_trainer()
+    """用户端修改密码：校验旧密码后更新哈希（所有角色可用）"""
+    tr = _portal_user()
     if not tr:
         return err('未登录', 401)
     data = request.get_json(force=True)
@@ -234,14 +314,18 @@ def portal_change_password():
 
 @app.get('/api/portal/me')
 def portal_me():
-    tr = _portal_trainer()
+    """所有角色可调用；非培训师不返回名额面板"""
+    tr = _portal_user()
     if not tr:
         return err('未登录', 401)
-    conn = get_db()
-    panel = build_slots_panel(conn, tr['id'])
-    conn.close()
+    role = tr['role'] or 'trainer'
+    panel = None
+    if role == 'trainer':
+        conn = get_db()
+        panel = build_slots_panel(conn, tr['id'])
+        conn.close()
     return ok({'trainer': {'uid': tr['uid'], 'nickname': tr['nickname'], 'hall_name': tr['hall_name']},
-               'slots': panel, 'preview': bool(session.get('portal_preview'))})
+               'role': role, 'slots': panel, 'preview': bool(session.get('portal_preview'))})
 
 
 @app.post('/api/portal/bind')
