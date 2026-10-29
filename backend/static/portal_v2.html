@@ -72,13 +72,42 @@ main.v2-main { width: 100%; max-width: 680px; padding: 0 16px; }
 .guide-body { flex: 1; }
 .guide-body b { font-size: 14px; color: var(--brown-900, #5b2a06); }
 .guide-body p { font-size: 12px; color: rgba(91,42,6,.6); margin-top: 3px; line-height: 1.6; }
+
+/* 底部导航栏（登录后显示） */
+body.v2-in { padding-bottom: 74px; }
+#bottom-nav {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 88;
+  display: flex; justify-content: space-around;
+  background: rgba(255, 255, 255, .82);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border-top: 1px solid rgba(255, 255, 255, .65);
+  box-shadow: 0 -4px 16px rgba(122, 62, 18, .08);
+  padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
+}
+body:not(.v2-in) #bottom-nav { display: none; }
+.bnav-item {
+  flex: 1; max-width: 140px; padding: 9px 0; border: none; background: none;
+  font-size: 14px; font-weight: 600; color: rgba(91, 42, 6, .5); cursor: pointer;
+  border-radius: 12px; transition: color .15s ease, background .15s ease;
+}
+.bnav-item.active { color: var(--brown-900, #5b2a06); background: rgba(245, 179, 1, .16); }
+
+/* 我的·申请状态 */
+.apply-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px dashed rgba(122,62,18,.12); }
+.apply-row:first-of-type { border-top: none; }
+.apply-row .st { font-size: 12px; font-weight: 700; }
+.st-pending { color: #b45309; }
+.st-approved { color: #16a34a; }
+.st-rejected { color: #dc2626; }
+.btn.logout-red { background: #dc2626; border-color: transparent; color: #fff; font-weight: 600; }
+.btn.logout-red:hover:not(:disabled) { background: #b91c1c; }
 </style>
 </head>
 <body>
 <div class="bg-decor"><i class="d1"></i><i class="d2"></i><i class="d3"></i><i class="d4"></i><i class="d5"></i></div>
 <div class="landing-header">
   <div class="lh-brand"><img src="/logo.jpg" alt="点点开黑 LOGO"><span>点点开黑</span></div>
-  <button id="v2-logout" class="btn small hidden">退出登录</button>
 </div>
 
 <main class="v2-main">
@@ -95,7 +124,7 @@ main.v2-main { width: 100%; max-width: 680px; padding: 0 16px; }
     <div class="v2-tip">新人？首次登录密码为 UID 后 5 位<br>登录后按指引学习考试</div>
   </div>
 
-  <!-- 主页面（登录后所有人可见）：双大卡 + 真实课程数据 -->
+  <!-- 主页面（首页 tab）：双大卡 + 真实课程数据 -->
   <div id="v2-main" class="hidden">
     <div class="v2-hello">
       <span id="v2-welcome">欢迎你</span>
@@ -104,8 +133,33 @@ main.v2-main { width: 100%; max-width: 680px; padding: 0 16px; }
     <div class="pkg-grid" id="v2-pkg-grid">
       <div class="card" style="text-align:center;color:rgba(91,42,6,.4);grid-column:1/-1">课程加载中…</div>
     </div>
-    <div class="card" style="text-align:center">
-      <button id="v2-go-query" class="btn">查询我的成绩</button>
+  </div>
+
+  <!-- 我的 tab：申请状态 + 账号 -->
+  <div id="v2-mine" class="hidden">
+    <div class="card">
+      <h2>我的资质</h2>
+      <div id="v2-apply-list" class="muted" style="font-size:13px">加载中…</div>
+    </div>
+    <div class="card">
+      <h2>账号</h2>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
+        <button id="v2-chpwd" class="btn">修改密码</button>
+        <button id="v2-logout" class="btn logout-red">退出登录</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 修改密码弹窗 -->
+  <div id="v2-pwd-modal" class="modal-mask hidden">
+    <div class="modal">
+      <h3>修改密码</h3>
+      <label>原密码 <input id="v2-pwd-old" type="password"></label>
+      <label>新密码（至少 6 位） <input id="v2-pwd-new" type="password"></label>
+      <div class="modal-actions">
+        <button id="v2-pwd-cancel" class="btn">取消</button>
+        <button id="v2-pwd-save" class="btn primary">保存</button>
+      </div>
     </div>
   </div>
 
@@ -131,7 +185,7 @@ main.v2-main { width: 100%; max-width: 680px; padding: 0 16px; }
         <div class="guide-num">3</div>
         <div class="guide-body">
           <b>申请资质</b>
-          <p>考试通过后提交申请，管理员审核通过即激活</p>
+          <p>考试通过后在「查询」页提交申请，管理员审核通过即激活</p>
         </div>
       </div>
       <div class="modal-actions">
@@ -141,6 +195,14 @@ main.v2-main { width: 100%; max-width: 680px; padding: 0 16px; }
     </div>
   </div>
 </main>
+
+<!-- 底部导航栏（登录后显示） -->
+<nav id="bottom-nav">
+  <button class="bnav-item active" data-tab="home">首页</button>
+  <button class="bnav-item" data-tab="learn">学习</button>
+  <button class="bnav-item" data-tab="query">查询</button>
+  <button class="bnav-item" data-tab="mine">我的</button>
+</nav>
 
 <div id="toast" class="hidden"></div>
 <script>
@@ -255,7 +317,7 @@ function enterApp(me) {
   // 新人/其他角色：进主页面（双大卡），新人强制弹指引（可关闭）
   $('#v2-login').classList.add('hidden');
   $('#v2-main').classList.remove('hidden');
-  $('#v2-logout').classList.remove('hidden');
+  document.body.classList.add('v2-in');
   $('#v2-welcome').textContent = `欢迎你，${me.nickname || myUid}`;
   if (me.role === 'new') {
     $('#v2-open-guide').classList.remove('hidden');
@@ -271,16 +333,66 @@ function v2GoPackage(key) {
 
 $('#v2-submit').addEventListener('click', doLogin);
 $('#v2-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
-$('#v2-go-query').addEventListener('click', () => {
-  location.href = EXAM_URL + '/query?uid=' + encodeURIComponent(myUid);
+$('#v2-guide-close').addEventListener('click', () => $('#v2-guide-modal').classList.add('hidden'));
+$('#v2-guide-golearn').addEventListener('click', () => v2GoPackage('sister'));
+$('#v2-open-guide').addEventListener('click', () => $('#v2-guide-modal').classList.remove('hidden'));
+
+// ── 底部导航 ──
+function switchTab(tab) {
+  document.querySelectorAll('.bnav-item').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  $('#v2-main').classList.toggle('hidden', tab === 'mine');
+  $('#v2-mine').classList.toggle('hidden', tab !== 'mine');
+  if (tab === 'mine') loadApplyStatus();
+}
+document.querySelectorAll('.bnav-item').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    if (tab === 'learn') location.href = EXAM_URL + '/learn?uid=' + encodeURIComponent(myUid);
+    else if (tab === 'query') location.href = EXAM_URL + '/query?uid=' + encodeURIComponent(myUid);
+    else switchTab(tab);
+  });
+});
+
+// ── 我的：资质申请状态 ──
+const APPLY_STATUS = { pending: ['审核中', 'st-pending'], approved: ['已通过（已激活）', 'st-approved'], rejected: ['已驳回', 'st-rejected'] };
+async function loadApplyStatus() {
+  const box = $('#v2-apply-list');
+  box.innerHTML = '加载中…';
+  const { data } = await api('/api/portal/apply-status?uid=' + encodeURIComponent(myUid));
+  const d = (data && data.data) || {};
+  const rows = [['sister', '姐妹团姐姐'], ['trainer', '培训师']].map(([key, label]) => {
+    const app = d[key];
+    if (!app) return `<div class="apply-row"><span>${label}</span><span class="muted" style="font-size:12px">未申请（考试通过后在「查询」页申请）</span></div>`;
+    const [txt, cls] = APPLY_STATUS[app.status] || [app.status, ''];
+    return `<div class="apply-row"><span>${label} <span class="muted" style="font-size:12px">考试 ${app.percentage} 分</span></span>
+      <span class="st ${cls}">${txt}${app.status === 'rejected' && app.reason ? `：${esc(app.reason)}` : ''}</span></div>`;
+  });
+  box.innerHTML = rows.join('');
+}
+
+// ── 我的：账号操作 ──
+$('#v2-chpwd').addEventListener('click', () => {
+  $('#v2-pwd-old').value = '';
+  $('#v2-pwd-new').value = '';
+  $('#v2-pwd-modal').classList.remove('hidden');
+});
+$('#v2-pwd-cancel').addEventListener('click', () => $('#v2-pwd-modal').classList.add('hidden'));
+$('#v2-pwd-save').addEventListener('click', async () => {
+  const { status, data } = await api('/api/portal/change-password', {
+    method: 'POST',
+    body: { old_password: $('#v2-pwd-old').value, new_password: $('#v2-pwd-new').value },
+  });
+  if (data.ok) {
+    toast('密码已修改');
+    $('#v2-pwd-modal').classList.add('hidden');
+  } else {
+    toast(data.msg || '修改失败', true);
+  }
 });
 $('#v2-logout').addEventListener('click', async () => {
   await api('/api/portal/logout', { method: 'POST' });
   location.reload();
 });
-$('#v2-guide-close').addEventListener('click', () => $('#v2-guide-modal').classList.add('hidden'));
-$('#v2-guide-golearn').addEventListener('click', () => v2GoPackage('sister'));
-$('#v2-open-guide').addEventListener('click', () => $('#v2-guide-modal').classList.remove('hidden'));
 
 // 已登录：按身份分流
 (async function init() {

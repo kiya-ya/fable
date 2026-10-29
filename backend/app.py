@@ -106,6 +106,19 @@ def learn_overview():
         return err(f'考试系统连接失败: {e}', 502)
 
 
+@app.get('/api/portal/apply-status')
+def apply_status():
+    """服务端代理 LUNA 资质申请状态（我的 tab 用）"""
+    if not session.get('portal_trainer_id'):
+        return err('未登录或登录已过期', 401)
+    uid = request.args.get('uid', '').strip()
+    try:
+        data = _luna_api(f'/api/apply/status?uid={uid}')
+        return jsonify(data)
+    except Exception as e:
+        return err(f'考试系统连接失败: {e}', 502)
+
+
 # ────────────────────────────────────────────── 资质审核（LUNA 考试系统联动）
 
 def _luna_api(path, method='GET', body=None):
