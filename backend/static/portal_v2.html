@@ -33,8 +33,28 @@ body {
 .guide-body { flex: 1; }
 .guide-body b { font-size: 14px; color: var(--brown-900, #5b2a06); }
 .guide-body p { font-size: 12px; color: rgba(91,42,6,.6); margin-top: 3px; line-height: 1.6; }
-main.v2-main { width: 100%; max-width: 480px; padding: 0 16px; }
+main.v2-main { width: 100%; max-width: 640px; padding: 0 16px; }
 .v2-badge { font-size: 11px; color: rgba(91,42,6,.45); text-align: center; margin-bottom: 10px; letter-spacing: 1px; }
+.v2-hello { display: flex; align-items: center; justify-content: space-between; margin: 4px 2px 12px; font-size: 15px; font-weight: 700; color: var(--brown-900, #5b2a06); }
+.pkg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+@media (max-width: 520px) { .pkg-grid { grid-template-columns: 1fr; } }
+.pkg-card { display: flex; flex-direction: column; }
+.pkg-head { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 10px; }
+.pkg-head b { font-size: 15px; color: var(--brown-900, #5b2a06); }
+.pkg-head p { font-size: 11px; color: rgba(91,42,6,.55); margin-top: 3px; line-height: 1.5; }
+.pkg-icon {
+  width: 46px; height: 46px; border-radius: 14px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 800; color: #fff;
+}
+.pkg-courses { flex: 1; }
+.pkg-cat { font-size: 11px; font-weight: 700; color: var(--brown-700, #7a3e12); margin: 8px 0 4px; }
+.pkg-course {
+  font-size: 13px; color: #3f2a14; padding: 7px 10px; margin-bottom: 4px;
+  background: rgba(142, 107, 200, .08); border-radius: 8px;
+}
+.pkg-course.opt { background: rgba(245, 179, 1, .10); }
+.pkg-card.locked .pkg-courses { opacity: .55; }
 </style>
 </head>
 <body>
@@ -58,16 +78,56 @@ main.v2-main { width: 100%; max-width: 480px; padding: 0 16px; }
     <div class="v2-tip">新人？首次登录密码为 UID 后 5 位<br>登录后按指引学习考试</div>
   </div>
 
-  <!-- 主页面（登录后所有人可见） -->
+  <!-- 主页面（登录后所有人可见）：双大卡 + 课程大纲（占位） -->
   <div id="v2-main" class="hidden">
-    <div class="card">
-      <h2 id="v2-welcome">欢迎你</h2>
-      <div id="v2-role-tip" class="muted" style="font-size:12px"></div>
-      <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
-        <button id="v2-go-learn" class="btn primary">课程学习</button>
-        <button id="v2-go-query" class="btn">成绩查询</button>
-        <button id="v2-open-guide" class="btn hidden">新人指引</button>
+    <div class="v2-hello">
+      <span id="v2-welcome">欢迎你</span>
+      <button id="v2-open-guide" class="btn small hidden">新人指引</button>
+    </div>
+    <div class="pkg-grid">
+      <!-- 姐妹团课包 -->
+      <div class="card pkg-card" id="v2-pkg-sister">
+        <div class="pkg-head">
+          <div class="pkg-icon" style="background:linear-gradient(135deg,#fbc2eb,#f48a8a)">姐妹团</div>
+          <div>
+            <b>姐妹团课包</b>
+            <p>新人必修课程，全部完成后解锁姐妹团考试</p>
+          </div>
+        </div>
+        <div class="pkg-courses">
+          <div class="pkg-cat">必修课</div>
+          <div class="pkg-course">新人第一课：认识点点</div>
+          <div class="pkg-course">排档流程详解</div>
+          <div class="pkg-course">老板维护技巧</div>
+          <div class="pkg-cat">选修课</div>
+          <div class="pkg-course opt">主持话术进阶</div>
+          <div class="pkg-course opt">盲盒玩法案例</div>
+        </div>
+        <button class="btn primary" style="width:100%;margin-top:12px" onclick="v2GoPackage('sister')">进入学习</button>
       </div>
+      <!-- 培训师课包 -->
+      <div class="card pkg-card locked" id="v2-pkg-trainer">
+        <div class="pkg-head">
+          <div class="pkg-icon" style="background:linear-gradient(135deg,#a18cd1,#8E6BC8)">培训师</div>
+          <div>
+            <b>培训师课包</b>
+            <p>晋级培训师必修课程，需先通过姐妹团考试</p>
+          </div>
+        </div>
+        <div class="pkg-courses">
+          <div class="pkg-cat">必修课</div>
+          <div class="pkg-course">带教方法论</div>
+          <div class="pkg-course">名额与奖励政策</div>
+          <div class="pkg-course">留存与复盘实操</div>
+          <div class="pkg-cat">选修课</div>
+          <div class="pkg-course opt">金牌学员案例拆解</div>
+          <div class="pkg-course opt">危机处理与防骗</div>
+        </div>
+        <button class="btn" style="width:100%;margin-top:12px" onclick="v2GoPackage('trainer')">进入学习（需先通过姐妹团考试）</button>
+      </div>
+    </div>
+    <div class="card" style="text-align:center">
+      <button id="v2-go-query" class="btn">查询我的成绩</button>
     </div>
   </div>
 
@@ -155,14 +215,11 @@ function enterApp(me) {
     location.href = '/portal';
     return;
   }
-  // 新人/其他角色：进主页面，新人强制弹指引（可关闭）
+  // 新人/其他角色：进主页面（双大卡），新人强制弹指引（可关闭）
   $('#v2-login').classList.add('hidden');
   $('#v2-main').classList.remove('hidden');
   $('#v2-logout').classList.remove('hidden');
   $('#v2-welcome').textContent = `欢迎你，${me.nickname || myUid}`;
-  $('#v2-role-tip').textContent = me.role === 'new'
-    ? '你还未获得资质，按新人指引完成学习和考试'
-    : '账号已激活';
   if (me.role === 'new') {
     $('#v2-open-guide').classList.remove('hidden');
     $('#v2-guide-modal').classList.remove('hidden');
@@ -170,11 +227,12 @@ function enterApp(me) {
   if (me.is_new_user) toast('已为你自动建档，欢迎加入！');
 }
 
+function v2GoPackage(key) {
+  location.href = EXAM_URL + '/learn/package/' + key + '?uid=' + encodeURIComponent(myUid);
+}
+
 $('#v2-submit').addEventListener('click', doLogin);
 $('#v2-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
-$('#v2-go-learn').addEventListener('click', () => {
-  location.href = EXAM_URL + '/learn?uid=' + encodeURIComponent(myUid);
-});
 $('#v2-go-query').addEventListener('click', () => {
   location.href = EXAM_URL + '/query?uid=' + encodeURIComponent(myUid);
 });
