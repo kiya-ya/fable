@@ -18,6 +18,7 @@
   <nav id="tabs">
     <button class="tab active" data-tab="bindings">绑定关系</button>
     <button class="tab" data-tab="uidquery">结果统计</button>
+    <button class="tab" data-tab="quals">资质审核</button>
     <button class="tab" data-tab="dashboard">数据看板</button>
   </nav>
 </header>
@@ -203,6 +204,23 @@
           </div>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- 资质审核 -->
+  <section id="tab-quals" class="panel">
+    <div class="card">
+      <div class="card-head">
+        <h2>资质审核（考试系统申请）</h2>
+        <div><button id="quals-refresh" class="btn">刷新</button></div>
+      </div>
+      <div class="muted" style="margin-bottom:8px">考试通过后用户主动申请；点「通过」自动建档/激活为姐姐或培训师（初始密码为 UID 后 5 位）</div>
+      <table>
+        <thead><tr>
+          <th>UID</th><th>昵称</th><th>申请资质</th><th>考试分数</th><th>申请时间</th><th>状态</th><th>本系统身份</th><th>操作</th>
+        </tr></thead>
+        <tbody id="quals-tbody"></tbody>
+      </table>
     </div>
   </section>
 </main>

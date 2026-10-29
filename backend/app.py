@@ -106,6 +106,91 @@ def learn_overview():
         return err(f'考试系统连接失败: {e}', 502)
 
 
+# ────────────────────────────────────────────── 资质审核（LUNA 考试系统联动）
+
+def _luna_api(path, method='GET', body=None):
+    """服务端调用 LUNA 考试系统 API"""
+    import urllib.request as _urlreq
+    url = _client_config()['exam_url'] + path
+    data = json.dumps(body, ensure_ascii=False).encode('utf-8') if body is not None else None
+    req = _urlreq.Request(url, data=data, method=method,
+                          headers={'Content-Type': 'application/json'})
+    with _urlreq.urlopen(req, timeout=15) as r:
+        return json.loads(r.read().decode('utf-8'))
+
+
+@app.get('/api/admin/qualifications')
+def qual_list():
+    """资质审核列表：LUNA 申请 + 本系统激活状态"""
+    try:
+        apps = _luna_api('/api/admin/applications').get('data') or []
+    except Exception as e:
+        return err(f'考试系统连接失败: {e}', 502)
+    conn = get_db()
+    uids = [a['uid'] for a in apps]
+    roles = {}
+    if uids:
+        marks = ','.join('?' * len(uids))
+        for r in conn.execute(f"SELECT uid, role, status FROM trainers WHERE uid IN ({marks})", uids):
+            roles[r['uid']] = {'role': r['role'], 'status': r['status']}
+    conn.close()
+    for a in apps:
+        a['local'] = roles.get(a['uid'])
+    return ok({'items': apps})
+
+
+@app.post('/api/admin/qualifications/<int:qid>/approve')
+def qual_approve(qid):
+    """通过：建档/激活为姐姐或培训师 + 回写 LUNA"""
+    try:
+        apps = _luna_api('/api/admin/applications').get('data') or []
+    except Exception as e:
+        return err(f'考试系统连接失败: {e}', 502)
+    app_item = next((a for a in apps if a['id'] == qid), None)
+    if not app_item:
+        return err('申请不存在', 404)
+    if app_item['status'] != 'pending':
+        return err('该申请已处理', 409)
+    role = 'sister' if app_item['package_key'] == 'sister' else 'trainer'
+    uid = str(app_item['uid'])
+    conn = get_db()
+    tr = conn.execute('SELECT * FROM trainers WHERE uid=?', (uid,)).fetchone()
+    if tr:
+        conn.execute("UPDATE trainers SET role=?, status='active', updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                     (role, tr['id']))
+    else:
+        nick, hall = _fetch_nickname_by_uid(uid)
+        if not nick or nick in ('-', uid):
+            nick = app_item.get('nickname') or uid
+        conn.execute(
+            "INSERT INTO trainers (uid, nickname, hall_name, role, base_slots, note) VALUES (?,?,?,?,2,'资质审核建档')",
+            (uid, nick or app_item.get('nickname') or uid, hall or '', role))
+    conn.commit()
+    conn.close()
+    try:
+        _luna_api(f'/api/admin/applications/{qid}/review', 'POST', {'action': 'approve'})
+    except Exception as e:
+        return err(f'本地已激活，但回写考试系统失败: {e}', 502)
+    log_operation('admin', None, 'qual_approve', role, uid, None,
+                  f"资质审核通过（{app_item.get('nickname') or ''} {app_item.get('percentage')}分）")
+    return ok()
+
+
+@app.post('/api/admin/qualifications/<int:qid>/reject')
+def qual_reject(qid):
+    """驳回：填写原因回写 LUNA，用户可重新申请"""
+    data = request.get_json(force=True, silent=True) or {}
+    reason = str(data.get('reason', '') or '').strip()
+    if not reason:
+        return err('驳回需填写原因')
+    try:
+        _luna_api(f'/api/admin/applications/{qid}/review', 'POST', {'action': 'reject', 'reason': reason})
+    except Exception as e:
+        return err(f'考试系统连接失败: {e}', 502)
+    log_operation('admin', None, 'qual_reject', None, str(qid), None, f'驳回资质申请：{reason}')
+    return ok()
+
+
 @app.before_request
 def _auth_guard():
     path = request.path

@@ -66,8 +66,75 @@ $$('#tabs .tab').forEach((btn) => {
     $(`#tab-${btn.dataset.tab}`).classList.add('active');
     if (btn.dataset.tab === 'bindings') loadBindingsTab();
     if (btn.dataset.tab === 'dashboard') loadDashboard();
+    if (btn.dataset.tab === 'quals') loadQuals();
   });
 });
+
+// ────────────── 资质审核（考试系统申请） ──────────────
+const QUAL_STATUS = { pending: '待审核', approved: '已通过', rejected: '已驳回' };
+const QUAL_ROLE = { sister: '姐妹团姐姐', trainer: '培训师' };
+const ROLE_LABEL = { new: '新人', sister: '姐姐', trainer: '培训师' };
+
+async function loadQuals() {
+  const tbody = $('#quals-tbody');
+  tbody.innerHTML = '<tr><td colspan="8" class="empty">加载中…</td></tr>';
+  try {
+    const r = await api('/api/admin/qualifications');
+    const items = r.items || [];
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty">暂无申请</td></tr>';
+      return;
+    }
+    tbody.innerHTML = items.map((a) => {
+      const local = a.local ? `${ROLE_LABEL[a.local.role] || a.local.role}` : '<span class="muted">未建档</span>';
+      const stCls = a.status === 'pending' ? 'plus' : a.status === 'approved' ? 'active' : 'over';
+      const stTag = `<span class="tag ${stCls}">${QUAL_STATUS[a.status] || a.status}</span>` +
+        (a.status === 'rejected' && a.reason ? `<div class="muted" style="font-size:12px">${esc(a.reason)}</div>` : '');
+      const actions = a.status === 'pending'
+        ? `<button class="btn small" onclick="qualApprove(${a.id}, '${esc(a.uid)}')">通过</button>
+           <button class="btn small danger" onclick="qualReject(${a.id})">驳回</button>`
+        : '<span class="muted">—</span>';
+      return `<tr>
+        <td>${esc(a.uid)}</td>
+        <td>${esc(a.nickname || '-')}</td>
+        <td>${QUAL_ROLE[a.package_key] || a.package_key}</td>
+        <td><b>${a.percentage}</b> 分</td>
+        <td>${esc(a.created_at || '-')}</td>
+        <td>${stTag}</td>
+        <td>${local}</td>
+        <td>${actions}</td>
+      </tr>`;
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty">${esc(e.message)}</td></tr>`;
+  }
+}
+
+async function qualApprove(id, uid) {
+  if (!confirm(`确认通过 UID ${uid} 的资质申请？\n将自动建档/激活并回写考试系统`)) return;
+  try {
+    await api(`/api/admin/qualifications/${id}/approve`, { method: 'POST', body: {} });
+    toast('已通过并激活');
+    loadQuals();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function qualReject(id) {
+  const reason = prompt('请输入驳回原因（用户端可见）：');
+  if (reason === null) return;
+  if (!reason.trim()) return toast('驳回需填写原因', true);
+  try {
+    await api(`/api/admin/qualifications/${id}/reject`, { method: 'POST', body: { reason: reason.trim() } });
+    toast('已驳回');
+    loadQuals();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+$('#quals-refresh').addEventListener('click', loadQuals);
 
 // ────────────── UID 速查 ──────────────
 const COMPARE_LABELS = {
