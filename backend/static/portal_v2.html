@@ -58,32 +58,47 @@ main.v2-main { width: 100%; max-width: 480px; padding: 0 16px; }
     <div class="v2-tip">新人？首次登录密码为 UID 后 5 位<br>登录后按指引学习考试</div>
   </div>
 
-  <!-- 新人引导视图 -->
-  <div id="v2-guide" class="card hidden">
-    <h2 id="v2-welcome">欢迎你</h2>
-    <div class="muted" style="font-size:12px;margin-bottom:6px">按以下步骤获得资质</div>
-    <div class="guide-step">
-      <div class="guide-num">1</div>
-      <div class="guide-body">
-        <b>课程学习</b>
-        <p>完成姐妹团必修课（视频看到 90% / 图文读够时长）</p>
-        <button id="v2-go-learn" class="btn primary small" style="margin-top:8px">去学习</button>
+  <!-- 主页面（登录后所有人可见） -->
+  <div id="v2-main" class="hidden">
+    <div class="card">
+      <h2 id="v2-welcome">欢迎你</h2>
+      <div id="v2-role-tip" class="muted" style="font-size:12px"></div>
+      <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
+        <button id="v2-go-learn" class="btn primary">课程学习</button>
+        <button id="v2-go-query" class="btn">成绩查询</button>
+        <button id="v2-open-guide" class="btn hidden">新人指引</button>
       </div>
     </div>
-    <div class="guide-step">
-      <div class="guide-num">2</div>
-      <div class="guide-body">
-        <b>参加考试</b>
-        <p>必修课全部完成后解锁，60 分及格</p>
-        <button id="v2-go-query" class="btn small" style="margin-top:8px">查询我的成绩</button>
+  </div>
+
+  <!-- 新人指引弹窗（首次登录强制弹出，点击关闭） -->
+  <div id="v2-guide-modal" class="modal-mask hidden">
+    <div class="modal" style="max-width:440px">
+      <h3>新人指引</h3>
+      <div class="guide-step">
+        <div class="guide-num">1</div>
+        <div class="guide-body">
+          <b>课程学习</b>
+          <p>完成姐妹团必修课（视频看到 90% / 图文读够时长）</p>
+        </div>
       </div>
-    </div>
-    <div class="guide-step">
-      <div class="guide-num">3</div>
-      <div class="guide-body">
-        <b>申请资质</b>
-        <p>考试通过后提交申请，管理员审核通过即激活</p>
-        <button class="btn small" disabled style="margin-top:8px">申请资质（阶段 2 上线）</button>
+      <div class="guide-step">
+        <div class="guide-num">2</div>
+        <div class="guide-body">
+          <b>参加考试</b>
+          <p>必修课全部完成后解锁，60 分及格；挂科 1 天后可重考</p>
+        </div>
+      </div>
+      <div class="guide-step">
+        <div class="guide-num">3</div>
+        <div class="guide-body">
+          <b>申请资质</b>
+          <p>考试通过后提交申请，管理员审核通过即激活</p>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="v2-guide-golearn" class="btn">去学习</button>
+        <button id="v2-guide-close" class="btn primary">我知道了</button>
       </div>
     </div>
   </div>
@@ -140,11 +155,18 @@ function enterApp(me) {
     location.href = '/portal';
     return;
   }
-  // 新人/其他角色：引导视图
+  // 新人/其他角色：进主页面，新人强制弹指引（可关闭）
   $('#v2-login').classList.add('hidden');
-  $('#v2-guide').classList.remove('hidden');
+  $('#v2-main').classList.remove('hidden');
   $('#v2-logout').classList.remove('hidden');
   $('#v2-welcome').textContent = `欢迎你，${me.nickname || myUid}`;
+  $('#v2-role-tip').textContent = me.role === 'new'
+    ? '你还未获得资质，按新人指引完成学习和考试'
+    : '账号已激活';
+  if (me.role === 'new') {
+    $('#v2-open-guide').classList.remove('hidden');
+    $('#v2-guide-modal').classList.remove('hidden');
+  }
   if (me.is_new_user) toast('已为你自动建档，欢迎加入！');
 }
 
@@ -160,6 +182,11 @@ $('#v2-logout').addEventListener('click', async () => {
   await api('/api/portal/logout', { method: 'POST' });
   location.reload();
 });
+$('#v2-guide-close').addEventListener('click', () => $('#v2-guide-modal').classList.add('hidden'));
+$('#v2-guide-golearn').addEventListener('click', () => {
+  location.href = EXAM_URL + '/learn?uid=' + encodeURIComponent(myUid);
+});
+$('#v2-open-guide').addEventListener('click', () => $('#v2-guide-modal').classList.remove('hidden'));
 
 // 已登录：按身份分流
 (async function init() {
