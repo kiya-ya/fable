@@ -23,6 +23,45 @@ body {
 .v2-login label { display: block; margin-bottom: 12px; font-size: 13px; color: #6b7280; }
 .v2-login input { width: 100%; margin-top: 4px; }
 .v2-tip { margin-top: 12px; font-size: 12px; color: rgba(91,42,6,.6); text-align: center; line-height: 1.8; }
+main.v2-main { width: 100%; max-width: 680px; padding: 0 16px; }
+.v2-badge { font-size: 11px; color: rgba(91,42,6,.45); text-align: center; margin-bottom: 10px; letter-spacing: 1px; }
+
+/* 欢迎条 */
+.v2-hello {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 4px 2px 14px; font-size: 16px; font-weight: 700; color: var(--brown-900, #5b2a06);
+}
+
+/* 课包大卡 */
+.pkg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+@media (max-width: 560px) { .pkg-grid { grid-template-columns: 1fr; } }
+.pkg-card { display: flex; flex-direction: column; padding: 18px; }
+.pkg-head { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+.pkg-icon {
+  width: 50px; height: 50px; border-radius: 16px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800; color: #fff; letter-spacing: 1px;
+}
+.pkg-head b { font-size: 16px; color: var(--brown-900, #5b2a06); }
+.pkg-head p { font-size: 11px; color: rgba(91,42,6,.55); margin-top: 3px; line-height: 1.5; }
+.pkg-progress { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.pkg-progress .bar { flex: 1; height: 8px; background: rgba(122,62,18,.08); border-radius: 999px; overflow: hidden; }
+.pkg-progress .bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #8E6BC8, #F5B301); transition: width .4s ease; }
+.pkg-progress .num { font-size: 12px; font-weight: 700; color: var(--brown-700, #7a3e12); }
+.pkg-courses { flex: 1; }
+.pkg-cat { font-size: 11px; font-weight: 700; color: var(--brown-700, #7a3e12); margin: 8px 0 4px; }
+.pkg-course {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 13px; color: #3f2a14; padding: 7px 10px; margin-bottom: 4px;
+  background: rgba(142, 107, 200, .08); border-radius: 8px;
+}
+.pkg-course.opt { background: rgba(245, 179, 1, .10); }
+.pkg-course .st { font-size: 11px; font-weight: 700; color: #16a34a; flex-shrink: 0; }
+.pkg-course .st.doing { color: #8E6BC8; }
+.pkg-course .st.todo { color: rgba(91,42,6,.35); }
+.pkg-card.locked .pkg-courses, .pkg-card.locked .pkg-progress { opacity: .5; }
+
+/* 新人指引弹窗 */
 .guide-step { display: flex; gap: 12px; align-items: flex-start; padding: 14px 0; border-top: 1px dashed rgba(122,62,18,.15); }
 .guide-step:first-of-type { border-top: none; }
 .guide-num {
@@ -33,28 +72,6 @@ body {
 .guide-body { flex: 1; }
 .guide-body b { font-size: 14px; color: var(--brown-900, #5b2a06); }
 .guide-body p { font-size: 12px; color: rgba(91,42,6,.6); margin-top: 3px; line-height: 1.6; }
-main.v2-main { width: 100%; max-width: 640px; padding: 0 16px; }
-.v2-badge { font-size: 11px; color: rgba(91,42,6,.45); text-align: center; margin-bottom: 10px; letter-spacing: 1px; }
-.v2-hello { display: flex; align-items: center; justify-content: space-between; margin: 4px 2px 12px; font-size: 15px; font-weight: 700; color: var(--brown-900, #5b2a06); }
-.pkg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
-@media (max-width: 520px) { .pkg-grid { grid-template-columns: 1fr; } }
-.pkg-card { display: flex; flex-direction: column; }
-.pkg-head { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 10px; }
-.pkg-head b { font-size: 15px; color: var(--brown-900, #5b2a06); }
-.pkg-head p { font-size: 11px; color: rgba(91,42,6,.55); margin-top: 3px; line-height: 1.5; }
-.pkg-icon {
-  width: 46px; height: 46px; border-radius: 14px; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 800; color: #fff;
-}
-.pkg-courses { flex: 1; }
-.pkg-cat { font-size: 11px; font-weight: 700; color: var(--brown-700, #7a3e12); margin: 8px 0 4px; }
-.pkg-course {
-  font-size: 13px; color: #3f2a14; padding: 7px 10px; margin-bottom: 4px;
-  background: rgba(142, 107, 200, .08); border-radius: 8px;
-}
-.pkg-course.opt { background: rgba(245, 179, 1, .10); }
-.pkg-card.locked .pkg-courses { opacity: .55; }
 </style>
 </head>
 <body>
@@ -78,53 +95,14 @@ main.v2-main { width: 100%; max-width: 640px; padding: 0 16px; }
     <div class="v2-tip">新人？首次登录密码为 UID 后 5 位<br>登录后按指引学习考试</div>
   </div>
 
-  <!-- 主页面（登录后所有人可见）：双大卡 + 课程大纲（占位） -->
+  <!-- 主页面（登录后所有人可见）：双大卡 + 真实课程数据 -->
   <div id="v2-main" class="hidden">
     <div class="v2-hello">
       <span id="v2-welcome">欢迎你</span>
       <button id="v2-open-guide" class="btn small hidden">新人指引</button>
     </div>
-    <div class="pkg-grid">
-      <!-- 姐妹团课包 -->
-      <div class="card pkg-card" id="v2-pkg-sister">
-        <div class="pkg-head">
-          <div class="pkg-icon" style="background:linear-gradient(135deg,#fbc2eb,#f48a8a)">姐妹团</div>
-          <div>
-            <b>姐妹团课包</b>
-            <p>新人必修课程，全部完成后解锁姐妹团考试</p>
-          </div>
-        </div>
-        <div class="pkg-courses">
-          <div class="pkg-cat">必修课</div>
-          <div class="pkg-course">新人第一课：认识点点</div>
-          <div class="pkg-course">排档流程详解</div>
-          <div class="pkg-course">老板维护技巧</div>
-          <div class="pkg-cat">选修课</div>
-          <div class="pkg-course opt">主持话术进阶</div>
-          <div class="pkg-course opt">盲盒玩法案例</div>
-        </div>
-        <button class="btn primary" style="width:100%;margin-top:12px" onclick="v2GoPackage('sister')">进入学习</button>
-      </div>
-      <!-- 培训师课包 -->
-      <div class="card pkg-card locked" id="v2-pkg-trainer">
-        <div class="pkg-head">
-          <div class="pkg-icon" style="background:linear-gradient(135deg,#a18cd1,#8E6BC8)">培训师</div>
-          <div>
-            <b>培训师课包</b>
-            <p>晋级培训师必修课程，需先通过姐妹团考试</p>
-          </div>
-        </div>
-        <div class="pkg-courses">
-          <div class="pkg-cat">必修课</div>
-          <div class="pkg-course">带教方法论</div>
-          <div class="pkg-course">名额与奖励政策</div>
-          <div class="pkg-course">留存与复盘实操</div>
-          <div class="pkg-cat">选修课</div>
-          <div class="pkg-course opt">金牌学员案例拆解</div>
-          <div class="pkg-course opt">危机处理与防骗</div>
-        </div>
-        <button class="btn" style="width:100%;margin-top:12px" onclick="v2GoPackage('trainer')">进入学习（需先通过姐妹团考试）</button>
-      </div>
+    <div class="pkg-grid" id="v2-pkg-grid">
+      <div class="card" style="text-align:center;color:rgba(91,42,6,.4);grid-column:1/-1">课程加载中…</div>
     </div>
     <div class="card" style="text-align:center">
       <button id="v2-go-query" class="btn">查询我的成绩</button>
@@ -176,6 +154,10 @@ function toast(msg, isError = false) {
   el.className = isError ? 'error' : '';
   setTimeout(() => el.classList.add('hidden'), 3000);
 }
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 async function api(url, options = {}) {
   if (options.body) {
     options.headers = { 'Content-Type': 'application/json' };
@@ -208,6 +190,61 @@ async function doLogin() {
   enterApp(data);
 }
 
+// 课包卡片渲染（真实数据来自考试系统代理）
+function pkgExamBtn(pkg) {
+  const es = pkg.exam_status || {};
+  const key = pkg.key;
+  if (pkg.chain_locked || es.chain_locked) {
+    return `<button class="btn" style="width:100%" disabled>进入学习（需先通过姐妹团考试）</button>`;
+  }
+  if (es.status === 'passed') {
+    return `<button class="btn" style="width:100%" disabled>考试已通过 ${esc(es.percentage)} 分</button>`;
+  }
+  return `<button class="btn primary" style="width:100%" onclick="v2GoPackage('${key}')">进入学习</button>`;
+}
+function pkgCourseRows(pkg) {
+  const req = (pkg.courses || []).filter((c) => c.category !== 'optional');
+  const opt = (pkg.courses || []).filter((c) => c.category === 'optional');
+  const row = (c) => {
+    const st = c.completed ? '<span class="st">已完成</span>'
+      : c.progress_percent > 0 ? `<span class="st doing">${Math.floor(c.progress_percent)}%</span>`
+      : '<span class="st todo">未开始</span>';
+    return `<div class="pkg-course ${c.category === 'optional' ? 'opt' : ''}"><span>${esc(c.title)}</span>${st}</div>`;
+  };
+  let html = '';
+  if (req.length) html += '<div class="pkg-cat">必修课</div>' + req.map(row).join('');
+  if (opt.length) html += '<div class="pkg-cat">选修课（不计入考试解锁）</div>' + opt.map(row).join('');
+  if (!req.length && !opt.length) html += '<div class="muted" style="font-size:12px;padding:8px 0">课程筹备中</div>';
+  return html;
+}
+function renderPackages(packages) {
+  const grid = $('#v2-pkg-grid');
+  grid.innerHTML = packages.map((pkg) => {
+    const pct = pkg.total_courses ? Math.round(pkg.completed_courses / pkg.total_courses * 100) : 0;
+    const lockedCls = (pkg.chain_locked || (pkg.exam_status || {}).chain_locked) ? 'locked' : '';
+    const iconBg = pkg.key === 'sister'
+      ? 'background:linear-gradient(135deg,#fbc2eb,#f48a8a)' : 'background:linear-gradient(135deg,#a18cd1,#8E6BC8)';
+    return `<div class="card pkg-card ${lockedCls}">
+      <div class="pkg-head">
+        <div class="pkg-icon" style="${iconBg}">${esc(pkg.name.slice(0, 3))}</div>
+        <div><b>${esc(pkg.name)}</b><p>${esc(pkg.description || '')}</p></div>
+      </div>
+      <div class="pkg-progress">
+        <div class="bar"><i style="width:${pct}%"></i></div>
+        <span class="num">${pkg.completed_courses}/${pkg.total_courses}</span>
+      </div>
+      <div class="pkg-courses">${pkgCourseRows(pkg)}</div>
+      <div style="margin-top:12px">${pkgExamBtn(pkg)}</div>
+    </div>`;
+  }).join('');
+}
+async function loadLearnOverview() {
+  const { status, data } = await api('/api/portal/learn-overview?uid=' + encodeURIComponent(myUid));
+  if (status === 200 && data.ok === false) return;
+  const d = data.data || data;
+  if (d && d.packages) renderPackages(d.packages);
+}
+
 function enterApp(me) {
   myUid = me.uid;
   if (me.role === 'trainer') {
@@ -225,6 +262,7 @@ function enterApp(me) {
     $('#v2-guide-modal').classList.remove('hidden');
   }
   if (me.is_new_user) toast('已为你自动建档，欢迎加入！');
+  loadLearnOverview();
 }
 
 function v2GoPackage(key) {
@@ -241,9 +279,7 @@ $('#v2-logout').addEventListener('click', async () => {
   location.reload();
 });
 $('#v2-guide-close').addEventListener('click', () => $('#v2-guide-modal').classList.add('hidden'));
-$('#v2-guide-golearn').addEventListener('click', () => {
-  location.href = EXAM_URL + '/learn?uid=' + encodeURIComponent(myUid);
-});
+$('#v2-guide-golearn').addEventListener('click', () => v2GoPackage('sister'));
 $('#v2-open-guide').addEventListener('click', () => $('#v2-guide-modal').classList.remove('hidden'));
 
 // 已登录：按身份分流

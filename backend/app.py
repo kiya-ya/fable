@@ -74,16 +74,36 @@ def _no_cache(resp):
     return resp
 
 
+def _client_config():
+    """读取前端公共配置（data/client_config.json 可覆盖默认值）"""
+    conf = {'exam_url': 'http://192.168.100.117:5001'}
+    try:
+        with open('data/client_config.json', encoding='utf-8') as f:
+            conf.update(json.load(f))
+    except Exception:
+        pass
+    return conf
+
+
 @app.get('/api/client-config')
 def client_config():
     """前端公共配置：考试系统地址等（改 data/client_config.json 即可，无需改代码）"""
-    default = {'exam_url': 'http://192.168.100.117:5001'}
+    return jsonify(_client_config())
+
+
+@app.get('/api/portal/learn-overview')
+def learn_overview():
+    """服务端代理 LUNA 学习概览（避免浏览器跨域），供 v2 首页展示真实课程数据"""
+    if not session.get('portal_trainer_id'):
+        return err('未登录或登录已过期', 401)
+    uid = request.args.get('uid', '').strip()
+    import urllib.request as _urlreq
+    url = f"{_client_config()['exam_url']}/api/learn/home?uid={uid}"
     try:
-        with open('data/client_config.json', encoding='utf-8') as f:
-            default.update(json.load(f))
-    except Exception:
-        pass
-    return jsonify(default)
+        with _urlreq.urlopen(url, timeout=10) as r:
+            return jsonify(json.loads(r.read().decode()))
+    except Exception as e:
+        return err(f'考试系统连接失败: {e}', 502)
 
 
 @app.before_request
