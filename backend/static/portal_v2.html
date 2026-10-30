@@ -112,9 +112,10 @@ body:not(.v2-in) #bottom-nav { display: none; }
 
 <main class="v2-main">
   <div class="v2-badge">V2 灰度测试版</div>
+  <div id="v2-loading" class="card" style="text-align:center;color:rgba(91,42,6,.45);padding:36px 0">加载中…</div>
 
   <!-- 登录框（A+：单框 + 新人引导文案） -->
-  <div id="v2-login" class="card v2-login">
+  <div id="v2-login" class="card v2-login hidden">
     <label>UID <input id="v2-uid" type="text" placeholder="请输入你的 UID"></label>
     <label>密码 <input id="v2-password" type="password" placeholder="初始密码为 UID 后 5 位"></label>
     <label id="v2-nick-row" class="hidden">昵称（首次登录需补充一次）
@@ -200,7 +201,7 @@ body:not(.v2-in) #bottom-nav { display: none; }
 <nav id="bottom-nav">
   <button class="bnav-item active" data-tab="home">首页</button>
   <button class="bnav-item" data-tab="learn">学习</button>
-  <button class="bnav-item" data-tab="query">查询</button>
+  <button class="bnav-item" data-tab="exam">考试</button>
   <button class="bnav-item" data-tab="mine">我的</button>
 </nav>
 
@@ -316,6 +317,7 @@ function enterApp(me) {
   }
   // 新人/其他角色：进主页面（双大卡），新人强制弹指引（可关闭）
   $('#v2-login').classList.add('hidden');
+  $('#v2-loading').classList.add('hidden');
   $('#v2-main').classList.remove('hidden');
   document.body.classList.add('v2-in');
   $('#v2-welcome').textContent = `欢迎你，${me.nickname || myUid}`;
@@ -348,7 +350,7 @@ document.querySelectorAll('.bnav-item').forEach((btn) => {
   btn.addEventListener('click', () => {
     const tab = btn.dataset.tab;
     if (tab === 'learn') location.href = EXAM_URL + '/learn?uid=' + encodeURIComponent(myUid);
-    else if (tab === 'query') location.href = EXAM_URL + '/query?uid=' + encodeURIComponent(myUid);
+    else if (tab === 'exam') location.href = EXAM_URL + '/exam-center?uid=' + encodeURIComponent(myUid);
     else switchTab(tab);
   });
 });
@@ -399,6 +401,10 @@ $('#v2-logout').addEventListener('click', async () => {
   const { status, data } = await api('/api/portal/me');
   if (status === 200 && data.ok) {
     enterApp({ uid: data.trainer.uid, nickname: data.trainer.nickname, role: data.role });
+  } else {
+    // 确认未登录才显示登录框（避免已登录用户看到闪帧）
+    $('#v2-login').classList.remove('hidden');
+    $('#v2-loading').classList.add('hidden');
   }
 })();
 </script>
