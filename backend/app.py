@@ -119,17 +119,53 @@ def apply_status():
         return err(f'考试系统连接失败: {e}', 502)
 
 
+@app.get('/api/portal/my-results')
+def my_results():
+    """服务端代理 LUNA 我的成绩记录"""
+    if not session.get('portal_trainer_id'):
+        return err('未登录或登录已过期', 401)
+    uid = request.args.get('uid', '').strip()
+    try:
+        data = _luna_api(f'/api/results/by-uid?uid={uid}')
+        return jsonify(data)
+    except Exception as e:
+        return err(f'考试系统连接失败: {e}', 502)
+
+
+@app.post('/api/portal/apply')
+def portal_apply():
+    """服务端代理 LUNA 提交资质申请"""
+    if not session.get('portal_trainer_id'):
+        return err('未登录或登录已过期', 401)
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        resp = _luna_api('/api/apply', 'POST', {
+            'uid': str(data.get('uid', '')).strip(),
+            'nickname': str(data.get('nickname', '') or '').strip(),
+            'package_key': str(data.get('package_key', '')).strip(),
+        })
+        return jsonify(resp) if resp.get('success') else err(resp.get('error') or '申请失败', 400)
+    except Exception as e:
+        return err(f'考试系统连接失败: {e}', 502)
+
+
 # ────────────────────────────────────────────── 资质审核（LUNA 考试系统联动）
 
 def _luna_api(path, method='GET', body=None):
-    """服务端调用 LUNA 考试系统 API"""
+    """服务端调用 LUNA 考试系统 API（非 200 也会解析错误体返回）"""
     import urllib.request as _urlreq
     url = _client_config()['exam_url'] + path
     data = json.dumps(body, ensure_ascii=False).encode('utf-8') if body is not None else None
     req = _urlreq.Request(url, data=data, method=method,
                           headers={'Content-Type': 'application/json'})
-    with _urlreq.urlopen(req, timeout=15) as r:
-        return json.loads(r.read().decode('utf-8'))
+    try:
+        with _urlreq.urlopen(req, timeout=15) as r:
+            return json.loads(r.read().decode('utf-8'))
+    except _urlreq.HTTPError as e:
+        try:
+            return json.loads(e.read().decode('utf-8'))
+        except Exception:
+            return {'success': False, 'error': f'HTTP {e.code}'}
 
 
 @app.get('/api/admin/qualifications')

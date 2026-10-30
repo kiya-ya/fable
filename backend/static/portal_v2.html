@@ -136,12 +136,27 @@ body:not(.v2-in) #bottom-nav { display: none; }
     </div>
   </div>
 
-  <!-- 我的 tab：申请状态 + 账号 -->
+  <!-- 我的 tab：账号 + 资质进度 + 成绩记录 -->
   <div id="v2-mine" class="hidden">
+    <div class="card" style="display:flex;align-items:center;gap:12px">
+      <img src="/logo.jpg" alt="头像" style="width:48px;height:48px;border-radius:14px;box-shadow:0 4px 10px rgba(122,62,18,.18)">
+      <div style="flex:1;min-width:0">
+        <div id="v2-mine-name" style="font-weight:800;color:var(--brown-900,#5b2a06)"></div>
+        <div id="v2-mine-uid" style="font-size:12px;color:rgba(91,42,6,.5);margin-top:2px"></div>
+      </div>
+    </div>
+
     <div class="card">
-      <h2>我的资质</h2>
+      <h2>我的资质进度</h2>
+      <div class="muted" style="font-size:12px;margin-bottom:8px">学习 → 考试 → 申请 → 激活，四步走完即获得资质</div>
       <div id="v2-apply-list" class="muted" style="font-size:13px">加载中…</div>
     </div>
+
+    <div class="card">
+      <h2>我的成绩</h2>
+      <div id="v2-results" class="muted" style="font-size:13px">加载中…</div>
+    </div>
+
     <div class="card">
       <h2>账号</h2>
       <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
@@ -210,6 +225,7 @@ body:not(.v2-in) #bottom-nav { display: none; }
 const $ = (s) => document.querySelector(s);
 let EXAM_URL = 'http://192.168.100.117:5001';
 let myUid = '';
+let myNickname = '';
 
 function toast(msg, isError = false) {
   const el = $('#toast');
@@ -310,6 +326,7 @@ async function loadLearnOverview() {
 
 function enterApp(me) {
   myUid = me.uid;
+  myNickname = me.nickname || '';
   if (me.role === 'trainer') {
     // 培训师：进入现有管理视图
     location.href = '/portal';
@@ -344,7 +361,7 @@ function switchTab(tab) {
   document.querySelectorAll('.bnav-item').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   $('#v2-main').classList.toggle('hidden', tab === 'mine');
   $('#v2-mine').classList.toggle('hidden', tab !== 'mine');
-  if (tab === 'mine') loadApplyStatus();
+  if (tab === 'mine') loadMine();
 }
 document.querySelectorAll('.bnav-item').forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -355,21 +372,79 @@ document.querySelectorAll('.bnav-item').forEach((btn) => {
   });
 });
 
-// ── 我的：资质申请状态 ──
+// ── 我的：资质进度 + 申请 + 成绩 ──
 const APPLY_STATUS = { pending: ['审核中', 'st-pending'], approved: ['已通过（已激活）', 'st-approved'], rejected: ['已驳回', 'st-rejected'] };
-async function loadApplyStatus() {
+
+function stepHtml(steps) {
+  return `<div style="display:flex;align-items:center;margin-top:8px">` + steps.map((s, i) => `
+    <div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0">
+      <div style="width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;${s.done ? 'background:#16a34a;color:#fff' : s.active ? 'background:#8E6BC8;color:#fff' : 'background:rgba(122,62,18,.10);color:rgba(91,42,6,.4)'}">${s.done ? '✓' : i + 1}</div>
+      <span style="font-size:10px;font-weight:700;${s.done ? 'color:#16a34a' : s.active ? 'color:#8E6BC8' : 'color:rgba(91,42,6,.4)'}">${s.label}</span>
+    </div>
+    ${i < steps.length - 1 ? `<div style="flex:1;height:2px;margin:0 4px;border-radius:2px;background:${s.done ? 'rgba(22,163,74,.5)' : 'rgba(122,62,18,.10)'}"></div>` : ''}`).join('') + `</div>`;
+}
+
+async function loadMine() {
+  $('#v2-mine-name').textContent = myNickname || myUid;
+  $('#v2-mine-uid').textContent = 'UID: ' + myUid;
   const box = $('#v2-apply-list');
+  const rbox = $('#v2-results');
   box.innerHTML = '加载中…';
-  const { data } = await api('/api/portal/apply-status?uid=' + encodeURIComponent(myUid));
-  const d = (data && data.data) || {};
-  const rows = [['sister', '姐妹团姐姐'], ['trainer', '培训师']].map(([key, label]) => {
-    const app = d[key];
-    if (!app) return `<div class="apply-row"><span>${label}</span><span class="muted" style="font-size:12px">未申请（考试通过后在「查询」页申请）</span></div>`;
-    const [txt, cls] = APPLY_STATUS[app.status] || [app.status, ''];
-    return `<div class="apply-row"><span>${label} <span class="muted" style="font-size:12px">考试 ${app.percentage} 分</span></span>
-      <span class="st ${cls}">${txt}${app.status === 'rejected' && app.reason ? `：${esc(app.reason)}` : ''}</span></div>`;
+  // 并行拉取：学习概览 + 申请状态 + 成绩
+  const [ov, st, rs] = await Promise.all([
+    api('/api/portal/learn-overview?uid=' + encodeURIComponent(myUid)),
+    api('/api/portal/apply-status?uid=' + encodeURIComponent(myUid)),
+    api('/api/portal/my-results?uid=' + encodeURIComponent(myUid)),
+  ]);
+  // 资质进度
+  const pkgs = (ov.data && ov.data.data && ov.data.data.packages) || (ov.data && ov.data.packages) || [];
+  const apps = (st.data && st.data.data) || {};
+  box.innerHTML = pkgs.map((p, pi) => {
+    const es = p.exam_status || {};
+    const passed = es.status === 'passed';
+    const app = apps[p.key] || null;
+    const activated = app && app.status === 'approved';
+    let btn = '<button class="btn small" disabled>申请资质</button>';
+    if (activated) btn = '<button class="btn small" disabled>已激活</button>';
+    else if (app && app.status === 'pending') btn = '<button class="btn small" disabled>审核中</button>';
+    else if (passed) btn = `<button class="btn small primary" onclick="v2Apply('${p.key}','${esc(p.name)}')">${app && app.status === 'rejected' ? '重新申请' : '申请资质'}</button>`;
+    const steps = [
+      { label: `课程 ${p.completed_courses}/${p.total_courses}`, done: p.all_completed, active: !p.all_completed },
+      { label: passed ? `考试 ${es.percentage}分` : '考试', done: passed, active: p.all_completed && !passed },
+      { label: activated ? '已通过' : app && app.status === 'pending' ? '审核中' : '申请', done: Boolean(app && (app.status === 'pending' || activated)), active: passed && !app },
+      { label: '激活', done: activated, active: false },
+    ];
+    let extra = '';
+    if (app && app.status === 'rejected') extra = `<div style="font-size:12px;color:#dc2626;margin-top:6px">已驳回：${esc(app.reason || '未填写原因')}（可重新申请）</div>`;
+    else if (app && app.status === 'pending') extra = `<div style="font-size:12px;color:#8E6BC8;margin-top:6px">申请已提交（${esc(app.created_at || '')}），等待管理员审核</div>`;
+    return `<div style="padding:10px 0;${pi > 0 ? 'border-top:1px dashed rgba(122,62,18,.12);' : ''}">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <b style="font-size:13px;color:#3f2a14">${esc(p.name)}</b>${btn}
+      </div>${stepHtml(steps)}${extra}
+    </div>`;
+  }).join('') || '<span class="muted">暂无课包</span>';
+  // 成绩记录
+  const items = (rs.data && rs.data.data) || [];
+  rbox.innerHTML = items.length ? items.map((r, ri) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;${ri > 0 ? 'border-top:1px dashed rgba(122,62,18,.12);' : ''}">
+      <div><b style="font-size:13px;color:#3f2a14">${esc(r.exam_name || '未知试卷')}</b>
+      <div style="font-size:11px;color:rgba(91,42,6,.45);margin-top:2px">${esc((r.created_at || '').slice(0, 16))}</div></div>
+      <span style="font-size:13px;font-weight:800;color:${r.percentage >= 60 ? '#16a34a' : '#dc2626'}">${r.percentage} 分</span>
+    </div>`).join('')
+    : '<span class="muted">暂无考试记录</span>';
+}
+
+async function v2Apply(key, name) {
+  if (!confirm(`确认申请「${name}」资质？管理员审核通过后即激活`)) return;
+  const { data } = await api('/api/portal/apply', {
+    method: 'POST', body: { uid: myUid, nickname: myNickname, package_key: key },
   });
-  box.innerHTML = rows.join('');
+  if (data.ok || data.success) {
+    toast('申请已提交，请等待审核');
+  } else {
+    toast(data.msg || data.error || '申请失败', true);
+  }
+  loadMine();
 }
 
 // ── 我的：账号操作 ──
