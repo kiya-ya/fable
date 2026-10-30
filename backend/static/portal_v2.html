@@ -220,10 +220,12 @@ body.v2-in { padding-bottom: 74px; }
 }
 body:not(.v2-in) #bottom-nav { display: none; }
 .bnav-item {
-  flex: 1; max-width: 140px; padding: 9px 0; border: none; background: none;
-  font-size: 14px; font-weight: 600; color: rgba(91, 42, 6, .5); cursor: pointer;
+  flex: 1; max-width: 140px; padding: 5px 0 4px; border: none; background: none;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  font-size: 11px; font-weight: 600; color: rgba(91, 42, 6, .5); cursor: pointer;
   border-radius: 12px; transition: color .15s ease, background .15s ease;
 }
+.bnav-item svg { width: 22px; height: 22px; }
 .bnav-item.active { color: var(--brown-900, #5b2a06); background: rgba(245, 179, 1, .16); }
 
 /* 我的·申请状态 */
@@ -397,10 +399,10 @@ body:not(.v2-in) #bottom-nav { display: none; }
 
 <!-- 底部导航栏（登录后显示） -->
 <nav id="bottom-nav">
-  <button class="bnav-item active" data-tab="home">首页</button>
-  <button class="bnav-item" data-tab="learn">学习</button>
-  <button class="bnav-item" data-tab="exam">考试</button>
-  <button class="bnav-item" data-tab="mine">我的</button>
+  <button class="bnav-item active" data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V9.5"/><path d="M9.5 21v-6h5v6"/></svg><span>首页</span></button>
+  <button class="bnav-item" data-tab="learn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 5.5S5 4 8.5 4s6 1.5 6 1.5v15s-2.5-1.5-6-1.5-6 1.5-6 1.5z"/><path d="M21.5 5.5S19 4 15.5 4s-6 1.5-6 1.5v15"/></svg><span>学习</span></button>
+  <button class="bnav-item" data-tab="exam"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4.5V3h6v1.5"/><path d="m9.5 13.5 2 2 4-4.5"/></svg><span>考试</span></button>
+  <button class="bnav-item" data-tab="mine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c1.5-3.5 4.5-5 7.5-5s6 1.5 7.5 5"/></svg><span>我的</span></button>
 </nav>
 
 <div id="toast" class="hidden"></div>
@@ -489,7 +491,9 @@ function renderPackages(packages) {
       ? 'background:linear-gradient(135deg,#fbc2eb,#f48a8a)' : 'background:linear-gradient(135deg,#a18cd1,#8E6BC8)';
     return `<div class="card pkg-card ${lockedCls}">
       <div class="pkg-head">
-        <div class="pkg-icon" style="${iconBg}">${esc(pkg.name.slice(0, 3))}</div>
+        <div class="pkg-icon" style="${iconBg}">${pkg.key === 'sister'
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px"><circle cx="8.5" cy="8" r="3.2"/><circle cx="16" cy="9" r="2.6"/><path d="M3.5 19c1-3.2 3-4.5 5-4.5s4 1.3 5 4.5"/><path d="M14.2 15.2c2.3.2 4 1.6 4.8 4"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px"><path d="M2.5 9 12 4.5 21.5 9 12 13.5z"/><path d="M6.5 11.2v4.3c0 1.6 2.5 3 5.5 3s5.5-1.4 5.5-3v-4.3"/><path d="M21 9.2v5"/></svg>'}</div>
         <div><b>${esc(pkg.name)}</b><p>${esc(pkg.description || '')}</p></div>
       </div>
       <div class="pkg-progress">
