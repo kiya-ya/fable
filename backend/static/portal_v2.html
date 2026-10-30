@@ -66,6 +66,54 @@ body:not(.v2-in) .v2-login input:focus { border-color: #F5B301; box-shadow: 0 0 
 body:not(.v2-in) .v2-tip { color: rgba(255, 247, 234, .5); }
 body:not(.v2-in) .v2-badge { color: rgba(255, 247, 234, .35); }
 body.v2-in #v2-hero { display: none; }
+body.v2-in .landing-only-v2 { display: none; }
+/* 夜幕下的加载卡 */
+body:not(.v2-in) #v2-loading {
+  background: rgba(42, 33, 64, .55); border: 1px solid rgba(255, 247, 234, .14);
+  color: rgba(255, 247, 234, .55);
+}
+
+/* 带教经验分享滚动栏（夜幕版） */
+.share-scroll {
+  width: 100%; overflow: hidden; margin-top: 20px;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+.share-track { display: flex; gap: 14px; width: max-content; padding: 6px 0; animation: share-marquee 46s linear infinite; }
+.share-scroll:hover .share-track, .share-scroll:active .share-track { animation-play-state: paused; }
+@keyframes share-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .share-track { animation: none; } }
+.share-hint { text-align: center; font-size: 11px; letter-spacing: 2px; color: rgba(255, 247, 234, .45); margin-top: 10px; }
+.share-card {
+  width: 300px; flex-shrink: 0; text-align: left; cursor: pointer;
+  background: rgba(255, 247, 234, .08); border: 1px solid rgba(255, 247, 234, .12);
+  border-radius: 16px; padding: 16px 18px;
+  backdrop-filter: blur(12px);
+  transition: transform .15s ease, background .15s ease;
+}
+.share-card:hover { transform: translateY(-2px); background: rgba(255, 247, 234, .13); }
+.share-card .sc-title { font-size: 15px; font-weight: 800; color: #FFF7EA; }
+.share-card .sc-meta { margin-top: 5px; font-size: 11px; color: rgba(255, 247, 234, .5); }
+.share-card .sc-brief {
+  margin-top: 7px; font-size: 13px; line-height: 1.8; color: rgba(255, 247, 234, .78);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.share-card .sc-more { margin-top: 9px; font-size: 12px; color: #F5B301; font-weight: 700; }
+@media (max-width: 768px) { .share-card { width: 250px; } }
+
+/* 分享详情弹窗（夜幕版） */
+.share-detail { font-size: 14px; line-height: 2; color: #3f2a14; white-space: pre-wrap; }
+.share-detail-meta { font-size: 12px; color: rgba(91, 42, 6, .55); margin: -8px 0 12px; }
+
+/* 底部装饰（夜幕版） */
+.v2-footer { margin: 26px 0 18px; text-align: center; }
+.v2-footer .footer-lines { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
+.v2-footer .footer-lines span { display: block; border-radius: 999px; height: 4px; }
+.v2-footer .footer-lines span:nth-child(1) { width: 64px; background: linear-gradient(90deg, #ffc53d, #f5b301); }
+.v2-footer .footer-lines span:nth-child(2) { width: 32px; height: 3px; background: #B39DF0; opacity: .75; }
+.v2-footer .footer-lines span:nth-child(3) { width: 16px; height: 3px; background: #f48a8a; opacity: .85; }
+.v2-footer .footer-text { font-size: 12px; color: rgba(255, 247, 234, .45); letter-spacing: 3px; }
+body.v2-in .v2-footer .footer-text { color: rgba(91, 42, 6, .6); }
 /* 夜幕下主按钮改金底深字（棕色按钮在深色上会糊） */
 body:not(.v2-in) .v2-login .btn.primary {
   background: linear-gradient(160deg, #FFC53D, #F5B301);
@@ -239,8 +287,7 @@ body:not(.v2-in) #bottom-nav { display: none; }
     </div>
   </div>
 
-  <!-- 修改密码弹窗 -->
-  <div id="v2-pwd-modal" class="modal-mask hidden">
+    <div id="v2-pwd-modal" class="modal-mask hidden">
     <div class="modal">
       <h3>修改密码</h3>
       <label>原密码 <input id="v2-pwd-old" type="password"></label>
@@ -250,6 +297,18 @@ body:not(.v2-in) #bottom-nav { display: none; }
         <button id="v2-pwd-save" class="btn primary">保存</button>
       </div>
     </div>
+  </div>
+
+  <!-- 带教经验分享滚动栏 -->
+  <div id="v2-share-wrap" class="landing-only-v2">
+    <div class="share-scroll"><div class="share-track" id="v2-share-track"></div></div>
+    <div class="share-hint">小队长带教经验分享 · 点击卡片查看全文</div>
+  </div>
+
+  <!-- 底部装饰 -->
+  <div class="v2-footer">
+    <div class="footer-lines"><span></span><span></span><span></span></div>
+    <div class="footer-text">点点开黑 · 享受开黑乐趣</div>
   </div>
 
   <!-- 新人指引弹窗（首次登录强制弹出，点击关闭） -->
@@ -285,6 +344,16 @@ body:not(.v2-in) #bottom-nav { display: none; }
   </div>
 </main>
 
+  <!-- 分享详情弹窗 -->
+  <div id="v2-share-modal" class="modal-mask hidden">
+    <div class="modal">
+      <h3 id="v2-share-title"></h3>
+      <div id="v2-share-author" class="share-detail-meta"></div>
+      <p id="v2-share-body" class="share-detail"></p>
+      <div class="modal-actions"><button id="v2-share-close" class="btn primary">关闭</button></div>
+    </div>
+  </div>
+
 <!-- 底部导航栏（登录后显示） -->
 <nav id="bottom-nav">
   <button class="bnav-item active" data-tab="home">首页</button>
@@ -294,6 +363,7 @@ body:not(.v2-in) #bottom-nav { display: none; }
 </nav>
 
 <div id="toast" class="hidden"></div>
+<script src="/shares.js"></script>
 <script>
 const $ = (s) => document.querySelector(s);
 let EXAM_URL = 'http://192.168.100.117:5001';
@@ -428,6 +498,34 @@ $('#v2-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') do
 $('#v2-guide-close').addEventListener('click', () => $('#v2-guide-modal').classList.add('hidden'));
 $('#v2-guide-golearn').addEventListener('click', () => v2GoPackage('sister'));
 $('#v2-open-guide').addEventListener('click', () => $('#v2-guide-modal').classList.remove('hidden'));
+
+// ── 带教经验分享滚动栏 ──
+(function renderShares() {
+  const track = $('#v2-share-track');
+  if (!track || typeof PORTAL_SHARES === 'undefined' || !PORTAL_SHARES.length) return;
+  const meta = (s) => ['小队长 · ' + (s.author || '')].join('');
+  for (let round = 0; round < 2; round++) {
+    for (const s of PORTAL_SHARES) {
+      const card = document.createElement('div');
+      card.className = 'share-card';
+      card.innerHTML = `<div class="sc-title">${esc(s.title)}</div>`
+        + `<div class="sc-meta">${esc(meta(s))}</div>`
+        + `<div class="sc-brief">${esc(s.brief)}</div>`
+        + `<div class="sc-more">查看全文 →</div>`;
+      card.addEventListener('click', () => {
+        $('#v2-share-title').textContent = s.title;
+        $('#v2-share-author').textContent = [s.author, s.hall, s.uid ? `UID ${s.uid}` : ''].filter(Boolean).join(' · ');
+        $('#v2-share-body').textContent = s.body;
+        $('#v2-share-modal').classList.remove('hidden');
+      });
+      track.appendChild(card);
+    }
+  }
+})();
+$('#v2-share-close').addEventListener('click', () => $('#v2-share-modal').classList.add('hidden'));
+$('#v2-share-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'v2-share-modal') $('#v2-share-modal').classList.add('hidden');
+});
 
 // ── 底部导航 ──
 function switchTab(tab) {
