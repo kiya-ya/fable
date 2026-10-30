@@ -124,6 +124,22 @@ body:not(.v2-in) .v2-login .btn.primary:hover:not(:disabled) {
   background: linear-gradient(160deg, #FFD35C, #F5B301);
   box-shadow: 0 10px 26px rgba(245, 179, 1, .45);
 }
+/* 顶部下拉：系统说明 */
+.menu-drawer { position: fixed; inset: 0; z-index: 95; }
+.md-mask { position: absolute; inset: 0; background: rgba(20, 12, 40, .45); }
+.md-panel {
+  position: absolute; top: 0; left: 0; right: 0; max-height: 78vh;
+  background: #fffaf2; box-shadow: 0 10px 28px rgba(20, 12, 40, .35);
+  border-radius: 0 0 18px 18px;
+  padding: 18px 20px 22px; overflow-y: auto;
+  transform: translateY(-102%); transition: transform .25s ease;
+}
+.menu-drawer.open .md-panel { transform: translateY(0); }
+.md-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; color: var(--brown-900, #5b2a06); font-size: 16px; }
+.md-head button { background: none; border: none; font-size: 18px; cursor: pointer; color: inherit; padding: 4px 8px; }
+.md-body { font-size: 13px; line-height: 1.9; color: rgba(91, 42, 6, .75); }
+.md-body .qr-pair { margin-top: 14px; }
+
 .landing-header {
   position: fixed; top: 0; left: 0; right: 0; z-index: 80;
   display: flex; flex-direction: row; align-items: center; justify-content: space-between;
@@ -131,7 +147,12 @@ body:not(.v2-in) .v2-login .btn.primary:hover:not(:disabled) {
 }
 .lh-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; color: var(--brown-900, #5b2a06); }
 .lh-brand img { width: 32px; height: 32px; border-radius: 8px; box-shadow: 0 4px 10px rgba(122, 62, 18, .18); }
-.v2-login { width: 320px; max-width: 92vw; }
+.menu-btn {
+  background: none; border: none; cursor: pointer; padding: 10px 6px;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.menu-btn i { display: block; width: 22px; height: 2px; border-radius: 2px; background: var(--brown-900, #5b2a06); }
+.v2-login { width: 320px; max-width: 92vw; margin: 0 auto; }
 .v2-login label { display: block; margin-bottom: 12px; font-size: 13px; color: #6b7280; }
 .v2-login input { width: 100%; margin-top: 4px; }
 .v2-tip { margin-top: 12px; font-size: 12px; color: rgba(91,42,6,.6); text-align: center; line-height: 1.8; }
@@ -220,6 +241,26 @@ body:not(.v2-in) #bottom-nav { display: none; }
 <div class="bg-decor"><i class="d1"></i><i class="d2"></i><i class="d3"></i><i class="d4"></i><i class="d5"></i></div>
 <div class="landing-header">
   <div class="lh-brand"><img src="/logo.jpg" alt="点点开黑 LOGO"><span>点点开黑</span></div>
+  <button id="v2-menu-btn" class="menu-btn" aria-label="系统说明"><i></i><i></i><i></i></button>
+</div>
+
+<!-- 顶部下拉：系统说明 -->
+<div id="v2-menu-drawer" class="menu-drawer hidden">
+  <div class="md-mask" id="v2-menu-mask"></div>
+  <div class="md-panel">
+    <div class="md-head"><b>系统说明</b><button id="v2-menu-close" aria-label="关闭">×</button></div>
+    <div class="md-body">
+      <div>· 本站使用内网穿透，域名不固定（免费版地址可能变化），请收藏最新地址</div>
+      <div>· 若出现网站失效或登录失败，请联系 <b>梧桐</b> 或 <b>卢登</b></div>
+      <div>· 初始密码为 UID 后 5 位，首次登录后请及时修改密码</div>
+      <div>· 新人流程：课程学习 → 考试 → 申请资质 → 审核通过后即可绑定妹妹</div>
+      <div class="qr-pair">
+        <figure><img src="/wutong.png" alt="梧桐联系二维码"><figcaption>梧桐</figcaption></figure>
+        <figure><img src="/ludeng.png" alt="卢登联系二维码"><figcaption>卢登</figcaption></figure>
+      </div>
+      <div style="text-align:center;font-size:11px;color:rgba(91,42,6,.5);margin-top:6px">design by Ludeng</div>
+    </div>
+  </div>
 </div>
 
 <main class="v2-main">
@@ -492,6 +533,19 @@ function enterApp(me) {
 function v2GoPackage(key) {
   location.href = EXAM_URL + '/learn/package/' + key + '?uid=' + encodeURIComponent(myUid);
 }
+
+// 三横线 → 系统说明下拉
+const v2drawer = $('#v2-menu-drawer');
+$('#v2-menu-btn').addEventListener('click', () => {
+  v2drawer.classList.remove('hidden');
+  requestAnimationFrame(() => v2drawer.classList.add('open'));
+});
+function v2CloseDrawer() {
+  v2drawer.classList.remove('open');
+  setTimeout(() => v2drawer.classList.add('hidden'), 250);
+}
+$('#v2-menu-close').addEventListener('click', v2CloseDrawer);
+$('#v2-menu-mask').addEventListener('click', v2CloseDrawer);
 
 $('#v2-submit').addEventListener('click', doLogin);
 $('#v2-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
