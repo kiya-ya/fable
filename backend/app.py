@@ -243,7 +243,7 @@ def qual_reject(qid):
 @app.before_request
 def _auth_guard():
     path = request.path
-    if path in PUBLIC_PATHS or path.startswith('/portal/') or path.startswith('/api/portal/'):
+    if path in PUBLIC_PATHS or path.startswith(('/portal/', '/api/portal/', '/img/')):
         return None
     if session.get('admin'):
         return None

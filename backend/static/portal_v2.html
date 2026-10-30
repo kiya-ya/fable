@@ -172,8 +172,7 @@ main.v2-main { width: 100%; max-width: 680px; padding: 0 16px; }
 .pkg-head { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
 .pkg-icon {
   width: 50px; height: 50px; border-radius: 16px; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: 800; color: #fff; letter-spacing: 1px;
+  overflow: hidden;
 }
 .pkg-head b { font-size: 16px; color: var(--brown-900, #5b2a06); }
 .pkg-head p { font-size: 11px; color: rgba(91,42,6,.55); margin-top: 3px; line-height: 1.5; }
@@ -487,13 +486,12 @@ function renderPackages(packages) {
   grid.innerHTML = packages.map((pkg) => {
     const pct = pkg.total_courses ? Math.round(pkg.completed_courses / pkg.total_courses * 100) : 0;
     const lockedCls = (pkg.chain_locked || (pkg.exam_status || {}).chain_locked) ? 'locked' : '';
-    const iconBg = pkg.key === 'sister'
-      ? 'background:linear-gradient(135deg,#fbc2eb,#f48a8a)' : 'background:linear-gradient(135deg,#a18cd1,#8E6BC8)';
+    const iconImg = pkg.key === 'sister'
+      ? '<img src="/img/pkg-sister.jpg" alt="姐妹团课包" style="width:100%;height:100%;object-fit:cover">'
+      : '<img src="/img/pkg-trainer.jpg" alt="培训师课包" style="width:100%;height:100%;object-fit:cover">';
     return `<div class="card pkg-card ${lockedCls}">
       <div class="pkg-head">
-        <div class="pkg-icon" style="${iconBg}">${pkg.key === 'sister'
-        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px"><circle cx="8.5" cy="8" r="3.2"/><circle cx="16" cy="9" r="2.6"/><path d="M3.5 19c1-3.2 3-4.5 5-4.5s4 1.3 5 4.5"/><path d="M14.2 15.2c2.3.2 4 1.6 4.8 4"/></svg>'
-        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px"><path d="M2.5 9 12 4.5 21.5 9 12 13.5z"/><path d="M6.5 11.2v4.3c0 1.6 2.5 3 5.5 3s5.5-1.4 5.5-3v-4.3"/><path d="M21 9.2v5"/></svg>'}</div>
+        <div class="pkg-icon">${iconImg}</div>
         <div><b>${esc(pkg.name)}</b><p>${esc(pkg.description || '')}</p></div>
       </div>
       <div class="pkg-progress">
