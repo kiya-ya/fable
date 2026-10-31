@@ -13,7 +13,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 
-from flask import Flask, jsonify, request, send_file, session
+from flask import redirect, Flask, jsonify, request, send_file, session
 from werkzeug.security import generate_password_hash, check_password_hash
 
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -285,7 +285,14 @@ def portal_page():
 
 @app.get('/portal-v2')
 def portal_v2_page():
-    """新版用户端（灰度测试路径）：统一账号登录 + 按身份分流"""
+    """新版用户端（灰度测试路径）：统一账号登录 + 按身份分流；培训师服务端直跳管理页"""
+    tid = session.get('portal_trainer_id')
+    if tid:
+        conn = get_db()
+        tr = conn.execute('SELECT role FROM trainers WHERE id=?', (tid,)).fetchone()
+        conn.close()
+        if tr and (tr['role'] or 'trainer') == 'trainer':
+            return redirect('/portal')
     return app.send_static_file('portal_v2.html')
 
 

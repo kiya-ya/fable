@@ -10,10 +10,11 @@
 <style>
 body {
   display: flex; flex-direction: column; align-items: center;
-  min-height: 100vh; padding-top: 70px;
+  min-height: 100vh; padding-top: 70px; background: #ffffff;
 }
+body.v2-guest { background: none; }
 /* 登录页：夜幕紫强视觉（内页保持淡紫金，明暗分工） */
-body:not(.v2-in) {
+body.v2-guest {
   background: linear-gradient(160deg, #2A2140 0%, #4A3663 45%, #6B4FA0 80%, #8E6BC8 100%);
   background-size: 200% 200%;
   animation: nightflow 14s ease-in-out infinite alternate;
@@ -22,9 +23,11 @@ body:not(.v2-in) {
   from { background-position: 0% 0%; }
   to { background-position: 100% 100%; }
 }
-body:not(.v2-in) .bg-decor i { opacity: .3; }
-body:not(.v2-in) .lh-brand { color: #FFF7EA; }
-body:not(.v2-in) .menu-btn i { background: #FFF7EA; }
+.bg-decor { display: none; }
+body.v2-guest .bg-decor { display: block; }
+body.v2-guest .bg-decor i { opacity: .3; }
+body.v2-guest .lh-brand { color: #FFF7EA; }
+body.v2-guest .menu-btn i { background: #FFF7EA; }
 
 /* 签名元素：声波条（语音厅的声音具象化） */
 .wave-hero { text-align: center; margin: 8px 0 22px; }
@@ -48,29 +51,30 @@ body:not(.v2-in) .menu-btn i { background: #FFF7EA; }
   to { height: 30px; opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  body:not(.v2-in) { animation: none; }
+  body.v2-guest { animation: none; }
   .wave-bars i { animation: none; height: 14px; }
 }
 
 /* 深色玻璃登录卡 */
-body:not(.v2-in) .v2-login {
+body.v2-guest .v2-login {
   background: rgba(42, 33, 64, .55);
   border: 1px solid rgba(255, 247, 234, .14);
   box-shadow: 0 20px 50px rgba(20, 12, 40, .45);
   backdrop-filter: blur(20px);
 }
-body:not(.v2-in) .v2-login label { color: rgba(255, 247, 234, .75); }
-body:not(.v2-in) .v2-login input { background: rgba(255, 247, 234, .10); border-color: rgba(255, 247, 234, .18); color: #FFF7EA; }
-body:not(.v2-in) .v2-login input::placeholder { color: rgba(255, 247, 234, .35); }
-body:not(.v2-in) .v2-login input:focus { border-color: #F5B301; box-shadow: 0 0 0 3px rgba(245, 179, 1, .18); }
-body:not(.v2-in) .v2-tip { color: rgba(255, 247, 234, .5); }
-body:not(.v2-in) .v2-badge { color: rgba(255, 247, 234, .35); }
+body.v2-guest .v2-login label { color: rgba(255, 247, 234, .75); }
+body.v2-guest .v2-login input { background: rgba(255, 247, 234, .10); border-color: rgba(255, 247, 234, .18); color: #FFF7EA; }
+body.v2-guest .v2-login input::placeholder { color: rgba(255, 247, 234, .35); }
+body.v2-guest .v2-login input:focus { border-color: #F5B301; box-shadow: 0 0 0 3px rgba(245, 179, 1, .18); }
+body.v2-guest .v2-tip { color: rgba(255, 247, 234, .5); }
+body.v2-guest .v2-badge { color: rgba(255, 247, 234, .35); }
+body.v2-guest #v2-loading { color: rgba(255,247,234,.6); }
 body.v2-in { background: #ffffff; animation: none; }
 body.v2-in #v2-hero { display: none; }
 body.v2-in .landing-only-v2 { display: none; }
 body.v2-in .bg-decor { display: none; }
 /* 夜幕下的加载卡 */
-body:not(.v2-in) #v2-loading {
+body.v2-guest #v2-loading {
   background: rgba(42, 33, 64, .55); border: 1px solid rgba(255, 247, 234, .14);
   color: rgba(255, 247, 234, .55);
 }
@@ -117,12 +121,12 @@ body:not(.v2-in) #v2-loading {
 .v2-footer .footer-text { font-size: 12px; color: rgba(255, 247, 234, .45); letter-spacing: 3px; }
 body.v2-in .v2-footer .footer-text { color: rgba(91, 42, 6, .6); }
 /* 夜幕下主按钮改金底深字（棕色按钮在深色上会糊） */
-body:not(.v2-in) .v2-login .btn.primary {
+body.v2-guest .v2-login .btn.primary {
   background: linear-gradient(160deg, #FFC53D, #F5B301);
   color: #2A2140; font-weight: 800;
   box-shadow: 0 6px 20px rgba(245, 179, 1, .35);
 }
-body:not(.v2-in) .v2-login .btn.primary:hover:not(:disabled) {
+body.v2-guest .v2-login .btn.primary:hover:not(:disabled) {
   background: linear-gradient(160deg, #FFD35C, #F5B301);
   box-shadow: 0 10px 26px rgba(245, 179, 1, .45);
 }
@@ -219,7 +223,7 @@ body.v2-in { padding-bottom: 74px; }
   box-shadow: 0 -4px 16px rgba(122, 62, 18, .08);
   padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
 }
-body:not(.v2-in) #bottom-nav { display: none; }
+body.v2-guest #bottom-nav { display: none; }
 .bnav-item {
   flex: 1; max-width: 140px; padding: 5px 0 4px; border: none; background: none;
   display: flex; flex-direction: column; align-items: center; gap: 2px;
@@ -706,7 +710,8 @@ $('#v2-logout').addEventListener('click', async () => {
   if (status === 200 && data.ok) {
     enterApp({ uid: data.trainer.uid, nickname: data.trainer.nickname, role: data.role });
   } else {
-    // 确认未登录才显示登录框和门面内容（避免已登录用户看到闪帧）
+    // 确认未登录才上门面皮肤和内容（避免已登录用户看到闪帧）
+    document.body.classList.add('v2-guest');
     $('#v2-login').classList.remove('hidden');
     $('#v2-hero').classList.remove('hidden');
     $('#v2-share-wrap').classList.remove('hidden');
