@@ -233,6 +233,13 @@ body.v2-guest #bottom-nav { display: none; }
 .bnav-item svg { width: 22px; height: 22px; }
 .bnav-item.active { color: var(--brown-900, #5b2a06); background: rgba(245, 179, 1, .16); }
 
+.v2-result-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 12px; margin-bottom: 8px; cursor: pointer;
+  background: rgba(122, 62, 18, .04); border: 1px solid rgba(122, 62, 18, .08); border-radius: 12px;
+}
+.v2-result-row:hover { background: rgba(122, 62, 18, .08); }
+
 /* 我的·申请状态 */
 .apply-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px dashed rgba(122,62,18,.12); }
 .apply-row:first-of-type { border-top: none; }
@@ -659,13 +666,26 @@ async function loadMine() {
   }).join('') || '<span class="muted">暂无课包</span>';
   // 成绩记录
   const items = (rs.data && rs.data.data) || [];
-  rbox.innerHTML = items.length ? items.map((r, ri) => `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;${ri > 0 ? 'border-top:1px dashed rgba(122,62,18,.12);' : ''}">
+  const fmtT = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+  rbox.innerHTML = items.length ? items.map((r) => `
+    <div class="v2-result-row" onclick="v2GoMine()">
       <div><b style="font-size:13px;color:#3f2a14">${esc(r.exam_name || '未知试卷')}</b>
-      <div style="font-size:11px;color:rgba(91,42,6,.45);margin-top:2px">${esc((r.created_at || '').slice(0, 16))}</div></div>
-      <span style="font-size:13px;font-weight:800;color:${r.percentage >= 60 ? '#16a34a' : '#dc2626'}">${r.percentage} 分</span>
-    </div>`).join('')
+      <div style="font-size:11px;color:rgba(91,42,6,.45);margin-top:2px">${fmtT(r.created_at)}</div></div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:14px;font-weight:800;color:${r.percentage >= 60 ? '#16a34a' : '#dc2626'}">${r.percentage}分</span>
+        <span class="tag ${r.percentage >= 60 ? 'active' : 'over'}">${r.percentage >= 60 ? '及格' : '未及格'}</span>
+      </div>
+    </div>`).join('') + '<div style="font-size:11px;color:rgba(91,42,6,.45);text-align:center;padding-top:8px">点击记录可查看每题明细</div>'
     : '<span class="muted">暂无考试记录</span>';
+}
+
+function v2GoMine() {
+  location.href = EXAM_URL + '/mine?uid=' + encodeURIComponent(myUid);
 }
 
 async function v2Apply(key, name) {
