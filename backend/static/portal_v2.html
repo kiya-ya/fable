@@ -65,6 +65,7 @@ body:not(.v2-in) .v2-login input::placeholder { color: rgba(255, 247, 234, .35);
 body:not(.v2-in) .v2-login input:focus { border-color: #F5B301; box-shadow: 0 0 0 3px rgba(245, 179, 1, .18); }
 body:not(.v2-in) .v2-tip { color: rgba(255, 247, 234, .5); }
 body:not(.v2-in) .v2-badge { color: rgba(255, 247, 234, .35); }
+body.v2-in { background: #ffffff; animation: none; }
 body.v2-in #v2-hero { display: none; }
 body.v2-in .landing-only-v2 { display: none; }
 /* 夜幕下的加载卡 */
@@ -266,7 +267,7 @@ body:not(.v2-in) #bottom-nav { display: none; }
 
 <main class="v2-main">
   <div class="v2-badge">V2 灰度测试版</div>
-  <div id="v2-loading" class="card" style="text-align:center;color:rgba(91,42,6,.45);padding:36px 0">加载中…</div>
+  <div id="v2-loading" style="text-align:center;color:rgba(91,42,6,.45);padding:48px 0;font-size:13px;letter-spacing:2px">加载中…</div>
 
   <!-- 签名区：标语 + 声波条 -->
   <div class="wave-hero" id="v2-hero">
@@ -301,15 +302,15 @@ body:not(.v2-in) #bottom-nav { display: none; }
 
   <!-- 我的 tab：账号 + 资质进度 + 成绩记录 -->
   <div id="v2-mine" class="hidden">
-    <div class="card" style="display:flex;align-items:center;gap:12px">
-      <img src="/logo.jpg" alt="头像" style="width:48px;height:48px;border-radius:14px;box-shadow:0 4px 10px rgba(122,62,18,.18)">
+    <div style="margin:0 -16px;border-radius:0 0 28px 28px;background:linear-gradient(135deg,#f9a8d4 0%,#f6b26b 60%,#f5b301 100%);padding:20px 16px 44px;display:flex;align-items:center;gap:12px">
+      <img src="/logo.jpg" alt="头像" style="width:56px;height:56px;border-radius:16px;box-shadow:0 6px 14px rgba(122,62,18,.25);border:2px solid rgba(255,255,255,.6)">
       <div style="flex:1;min-width:0">
-        <div id="v2-mine-name" style="font-weight:800;color:var(--brown-900,#5b2a06)"></div>
-        <div id="v2-mine-uid" style="font-size:12px;color:rgba(91,42,6,.5);margin-top:2px"></div>
+        <div id="v2-mine-name" style="font-weight:800;font-size:17px;color:#fff;text-shadow:0 1px 6px rgba(122,62,18,.3)"></div>
+        <div id="v2-mine-uid" style="font-size:12px;color:rgba(255,255,255,.8);margin-top:2px"></div>
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" style="margin-top:-32px;position:relative;z-index:2">
       <h2>我的资质进度</h2>
       <div class="muted" style="font-size:12px;margin-bottom:8px">学习 → 考试 → 申请 → 激活，四步走完即获得资质</div>
       <div id="v2-apply-list" class="muted" style="font-size:13px">加载中…</div>
