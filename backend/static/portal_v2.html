@@ -68,6 +68,7 @@ body:not(.v2-in) .v2-badge { color: rgba(255, 247, 234, .35); }
 body.v2-in { background: #ffffff; animation: none; }
 body.v2-in #v2-hero { display: none; }
 body.v2-in .landing-only-v2 { display: none; }
+body.v2-in .bg-decor { display: none; }
 /* 夜幕下的加载卡 */
 body:not(.v2-in) #v2-loading {
   background: rgba(42, 33, 64, .55); border: 1px solid rgba(255, 247, 234, .14);
@@ -270,7 +271,7 @@ body:not(.v2-in) #bottom-nav { display: none; }
   <div id="v2-loading" style="text-align:center;color:rgba(91,42,6,.45);padding:48px 0;font-size:13px;letter-spacing:2px">加载中…</div>
 
   <!-- 签名区：标语 + 声波条 -->
-  <div class="wave-hero" id="v2-hero">
+  <div class="wave-hero hidden" id="v2-hero">
     <div class="wave-slogan">把每一位新人<br>带成<em>独当一面</em>的王牌</div>
     <div class="wave-bars" aria-hidden="true">
       <i style="animation-delay:0s"></i><i style="animation-delay:.12s"></i><i style="animation-delay:.24s"></i><i style="animation-delay:.06s"></i><i style="animation-delay:.3s"></i><i style="animation-delay:.18s"></i><i style="animation-delay:.36s"></i><i style="animation-delay:.09s"></i><i style="animation-delay:.27s"></i><i style="animation-delay:.15s"></i><i style="animation-delay:.33s"></i>
@@ -322,7 +323,7 @@ body:not(.v2-in) #bottom-nav { display: none; }
     </div>
 
     <div class="card">
-      <h2>账号</h2>
+      <h2>更多功能</h2>
       <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
         <button id="v2-chpwd" class="btn">修改密码</button>
         <button id="v2-logout" class="btn logout-red">退出登录</button>
@@ -343,7 +344,7 @@ body:not(.v2-in) #bottom-nav { display: none; }
   </div>
 
   <!-- 带教经验分享滚动栏 -->
-  <div id="v2-share-wrap" class="landing-only-v2">
+  <div id="v2-share-wrap" class="landing-only-v2 hidden">
     <div class="share-scroll"><div class="share-track" id="v2-share-track"></div></div>
     <div class="share-hint">小队长带教经验分享 · 点击卡片查看全文</div>
   </div>
@@ -705,8 +706,10 @@ $('#v2-logout').addEventListener('click', async () => {
   if (status === 200 && data.ok) {
     enterApp({ uid: data.trainer.uid, nickname: data.trainer.nickname, role: data.role });
   } else {
-    // 确认未登录才显示登录框（避免已登录用户看到闪帧）
+    // 确认未登录才显示登录框和门面内容（避免已登录用户看到闪帧）
     $('#v2-login').classList.remove('hidden');
+    $('#v2-hero').classList.remove('hidden');
+    $('#v2-share-wrap').classList.remove('hidden');
     $('#v2-loading').classList.add('hidden');
   }
 })();
