@@ -307,7 +307,7 @@ body.v2-guest #bottom-nav { display: none; }
 
   <!-- 我的 tab：账号 + 资质进度 + 成绩记录 -->
   <div id="v2-mine" class="hidden">
-    <div style="margin:0 -16px;border-radius:0 0 28px 28px;background:linear-gradient(135deg,#f9a8d4 0%,#f6b26b 60%,#f5b301 100%);padding:20px 16px 44px;display:flex;align-items:center;gap:12px">
+    <div style="margin:-70px -16px 0;border-radius:0 0 28px 28px;background:linear-gradient(135deg,#f9a8d4 0%,#f6b26b 60%,#f5b301 100%);padding:88px 16px 44px;display:flex;align-items:center;gap:12px">
       <img src="/logo.jpg" alt="头像" style="width:56px;height:56px;border-radius:16px;box-shadow:0 6px 14px rgba(122,62,18,.25);border:2px solid rgba(255,255,255,.6)">
       <div style="flex:1;min-width:0">
         <div id="v2-mine-name" style="font-weight:800;font-size:17px;color:#fff;text-shadow:0 1px 6px rgba(122,62,18,.3)"></div>
@@ -528,6 +528,7 @@ function enterApp(me) {
   $('#v2-login').classList.add('hidden');
   $('#v2-loading').classList.add('hidden');
   $('#v2-main').classList.remove('hidden');
+  document.body.classList.remove('v2-guest');  // 游客态与登录态互斥，摘掉游客类（否则导航隐藏/顶栏白字）
   document.body.classList.add('v2-in');
   $('#v2-welcome').textContent = `欢迎你，${me.nickname || myUid}`;
   if (me.role === 'new') {
