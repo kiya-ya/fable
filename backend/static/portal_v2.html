@@ -70,6 +70,8 @@ body.v2-guest .v2-tip { color: rgba(255, 247, 234, .5); }
 body.v2-guest .v2-badge { color: rgba(255, 247, 234, .35); }
 body.v2-guest #v2-loading { color: rgba(255,247,234,.6); }
 body.v2-in { background: #ffffff; animation: none; }
+body.v2-mine { padding-top: 0; }
+body.v2-mine .landing-header { display: none; }
 body.v2-in #v2-hero { display: none; }
 body.v2-in .landing-only-v2 { display: none; }
 body.v2-in .bg-decor { display: none; }
@@ -313,8 +315,9 @@ body.v2-guest #bottom-nav { display: none; }
   </div>
 
   <!-- 我的 tab：账号 + 资质进度 + 成绩记录 -->
-  <div id="v2-mine" class="hidden">
-    <div style="margin:-70px -16px 0;border-radius:0 0 28px 28px;background:linear-gradient(135deg,#f9a8d4 0%,#f6b26b 60%,#f5b301 100%);padding:88px 16px 44px;display:flex;align-items:center;gap:12px">
+  <div id="v2-mine" class="hidden" style="position:relative">
+    <button id="v2-mine-menu-btn" class="menu-btn" aria-label="菜单" style="position:absolute;top:14px;right:16px;z-index:30;display:none"><i style="background:#fff"></i><i style="background:#fff"></i><i style="background:#fff"></i></button>
+    <div style="margin:0 -16px;border-radius:0 0 28px 28px;background:linear-gradient(135deg,#f9a8d4 0%,#f6b26b 60%,#f5b301 100%);padding:24px 16px 44px;display:flex;align-items:center;gap:12px">
       <img src="/logo.jpg" alt="头像" style="width:56px;height:56px;border-radius:16px;box-shadow:0 6px 14px rgba(122,62,18,.25);border:2px solid rgba(255,255,255,.6)">
       <div style="flex:1;min-width:0">
         <div id="v2-mine-name" style="font-weight:800;font-size:17px;color:#fff;text-shadow:0 1px 6px rgba(122,62,18,.3)"></div>
@@ -552,6 +555,10 @@ function v2GoPackage(key) {
 
 // 三横线 → 系统说明下拉
 const v2drawer = $('#v2-menu-drawer');
+$('#v2-mine-menu-btn').addEventListener('click', () => {
+  v2drawer.classList.remove('hidden');
+  requestAnimationFrame(() => v2drawer.classList.add('open'));
+});
 $('#v2-menu-btn').addEventListener('click', () => {
   v2drawer.classList.remove('hidden');
   requestAnimationFrame(() => v2drawer.classList.add('open'));
@@ -602,6 +609,8 @@ function switchTab(tab) {
   document.querySelectorAll('.bnav-item').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   $('#v2-main').classList.toggle('hidden', tab === 'mine');
   $('#v2-mine').classList.toggle('hidden', tab !== 'mine');
+  document.body.classList.toggle('v2-mine', tab === 'mine');
+  $('#v2-mine-menu-btn').style.display = tab === 'mine' ? 'flex' : 'none';
   if (tab === 'mine') loadMine();
 }
 document.querySelectorAll('.bnav-item').forEach((btn) => {
