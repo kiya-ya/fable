@@ -132,6 +132,19 @@ def my_results():
         return err(f'考试系统连接失败: {e}', 502)
 
 
+@app.get('/api/portal/result-detail')
+def result_detail():
+    """服务端代理 LUNA 单条成绩明细（我的页内直接查看，不再跳转）"""
+    if not session.get('portal_trainer_id'):
+        return err('未登录或登录已过期', 401)
+    rid = request.args.get('id', '').strip()
+    try:
+        data = _luna_api(f'/api/results/{rid}')
+        return jsonify(data)
+    except Exception as e:
+        return err(f'考试系统连接失败: {e}', 502)
+
+
 @app.post('/api/portal/apply')
 def portal_apply():
     """服务端代理 LUNA 提交资质申请"""
@@ -285,14 +298,7 @@ def portal_page():
 
 @app.get('/portal-v2')
 def portal_v2_page():
-    """新版用户端（灰度测试路径）：统一账号登录 + 按身份分流；培训师服务端直跳管理页"""
-    tid = session.get('portal_trainer_id')
-    if tid:
-        conn = get_db()
-        tr = conn.execute('SELECT role FROM trainers WHERE id=?', (tid,)).fetchone()
-        conn.close()
-        if tr and (tr['role'] or 'trainer') == 'trainer':
-            return redirect('/portal')
+    """新版用户端（灰度测试路径）：统一账号登录，绑定入口按资质解锁"""
     return app.send_static_file('portal_v2.html')
 
 

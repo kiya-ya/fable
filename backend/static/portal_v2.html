@@ -312,6 +312,18 @@ body.v2-guest #bottom-nav { display: none; }
     <div class="pkg-grid" id="v2-pkg-grid">
       <div class="card" style="text-align:center;color:rgba(91,42,6,.4);grid-column:1/-1">课程加载中…</div>
     </div>
+
+    <!-- 绑定妹妹（通过资质后解锁） -->
+    <div class="card" id="v2-bind-card" style="display:flex;align-items:center;gap:14px">
+      <div id="v2-bind-icon" style="width:46px;height:46px;border-radius:14px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:rgba(122,62,18,.08)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="rgba(91,42,6,.45)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      </div>
+      <div style="flex:1;min-width:0">
+        <b style="font-size:15px;color:var(--brown-900,#5b2a06)">绑定妹妹</b>
+        <div id="v2-bind-tip" class="muted" style="font-size:12px;margin-top:2px">通过姐妹团考试并申请资质后解锁</div>
+      </div>
+      <button id="v2-bind-btn" class="btn primary" disabled style="flex-shrink:0">去绑定</button>
+    </div>
   </div>
 
   <!-- 我的 tab：账号 + 资质进度 + 成绩记录 -->
@@ -401,6 +413,16 @@ body.v2-guest #bottom-nav { display: none; }
     </div>
   </div>
 </main>
+
+  <!-- 成绩明细弹窗 -->
+  <div id="v2-rd-modal" class="modal-mask hidden">
+    <div class="modal wide" style="max-width:560px">
+      <h3>答题明细</h3>
+      <div id="v2-rd-head" style="font-size:14px;margin-bottom:12px"></div>
+      <div id="v2-rd-list" style="max-height:55vh;overflow-y:auto"></div>
+      <div class="modal-actions"><button class="btn primary" onclick="document.querySelector('#v2-rd-modal').classList.add('hidden')">关闭</button></div>
+    </div>
+  </div>
 
   <!-- 分享详情弹窗 -->
   <div id="v2-share-modal" class="modal-mask hidden">
@@ -530,9 +552,13 @@ function enterApp(me) {
   myUid = me.uid;
   myNickname = me.nickname || '';
   if (me.role === 'trainer') {
-    // 培训师：进入现有管理视图
-    location.href = '/portal';
-    return;
+    // 培训师：绑定卡点亮，可进入绑定管理
+    const tip = $('#v2-bind-tip');
+    const btn = $('#v2-bind-btn');
+    tip.textContent = '管理你的学员、名额与奖励';
+    btn.disabled = false;
+    btn.textContent = '进入绑定管理';
+    btn.onclick = () => { location.href = '/portal'; };
   }
   // 新人/其他角色：进主页面（双大卡），新人强制弹指引（可关闭）
   $('#v2-login').classList.add('hidden');
@@ -682,7 +708,7 @@ async function loadMine() {
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
   };
   rbox.innerHTML = items.length ? items.map((r) => `
-    <div class="v2-result-row" onclick="v2GoMine()">
+    <div class="v2-result-row" onclick="v2ResultDetail(${r.id})">
       <div><b style="font-size:13px;color:#3f2a14">${esc(r.exam_name || '未知试卷')}</b>
       <div style="font-size:11px;color:rgba(91,42,6,.45);margin-top:2px">${fmtT(r.created_at)}</div></div>
       <div style="display:flex;align-items:center;gap:8px">
@@ -693,8 +719,31 @@ async function loadMine() {
     : '<span class="muted">暂无考试记录</span>';
 }
 
-function v2GoMine() {
-  location.href = EXAM_URL + '/mine?uid=' + encodeURIComponent(myUid);
+async function v2ResultDetail(rid) {
+  const modal = $('#v2-rd-modal');
+  $('#v2-rd-head').innerHTML = '加载中…';
+  $('#v2-rd-list').innerHTML = '';
+  modal.classList.remove('hidden');
+  const { data } = await api('/api/portal/result-detail?id=' + encodeURIComponent(rid));
+  const r = (data && data.data) || null;
+  if (!r) { $('#v2-rd-head').innerHTML = '<span class="muted">加载失败</span>'; return; }
+  const cls = r.percentage >= 60 ? '#16a34a' : '#dc2626';
+  $('#v2-rd-head').innerHTML = `
+    <b>${esc(r.exam_name || '未知试卷')}</b> ·
+    <b style="color:${cls}">${r.percentage} 分</b> ·
+    <span class="muted" style="font-size:12px">${esc((r.created_at || '').slice(0, 16))}</span>`;
+  const fmtAns = (a) => (typeof a === 'object' && a !== null)
+    ? Object.entries(a).map(([k, v]) => `空${k}:${v}`).join(' ') : String(a ?? '');
+  $('#v2-rd-list').innerHTML = (r.details || []).map((d, i) => `
+    <div style="padding:10px 12px;margin-bottom:8px;border-radius:12px;border:1px solid ${d.is_correct ? 'rgba(22,163,74,.3)' : 'rgba(220,38,38,.3)'};background:${d.is_correct ? 'rgba(22,163,74,.05)' : 'rgba(220,38,38,.05)'}">
+      <div style="display:flex;justify-content:space-between;gap:8px">
+        <b style="font-size:13px;color:#3f2a14">${i + 1}. ${esc(d.title || '题目 ' + d.q_id)}</b>
+        <span style="font-size:11px;font-weight:700;color:${d.is_correct ? '#16a34a' : '#dc2626'};flex-shrink:0">${d.is_correct ? '正确' : '错误'}</span>
+      </div>
+      <div style="font-size:12px;margin-top:6px;color:rgba(91,42,6,.8)">你的答案：<b style="color:${d.is_correct ? '#16a34a' : '#dc2626'}">${esc(fmtAns(d.user_answer) || '(未作答)')}</b></div>
+      <div style="font-size:12px;margin-top:2px;color:rgba(91,42,6,.8)">正确答案：<b style="color:#16a34a">${esc(fmtAns(d.correct_answer) || '-')}</b></div>
+      ${d.key_points ? `<div style="font-size:12px;margin-top:4px;color:rgba(91,42,6,.55)">解析：${esc(d.key_points)}</div>` : ''}
+    </div>`).join('') || '<div class="empty">暂无明细</div>';
 }
 
 async function v2Apply(key, name) {
@@ -739,6 +788,10 @@ $('#v2-logout').addEventListener('click', async () => {
   const { status, data } = await api('/api/portal/me');
   if (status === 200 && data.ok) {
     enterApp({ uid: data.trainer.uid, nickname: data.trainer.nickname, role: data.role });
+    if (location.hash === '#mine') {
+      switchTab('mine');
+      history.replaceState(null, '', location.pathname);
+    }
   } else {
     // 确认未登录才上门面皮肤和内容（避免已登录用户看到闪帧）
     document.body.classList.add('v2-guest');
