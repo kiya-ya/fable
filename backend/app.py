@@ -1674,12 +1674,59 @@ def list_bindings():
 BIND_TYPES = {'trainer': '培训师', 'sister': '姐妹团三胎'}
 
 
+def _check_third_child(conn, trainer_row):
+    """三胎（第3个姐妹团绑定）条件校验。返回 (ok, missing_list)
+    ① 姐姐最近连续两周排档且金牌及以上 ② 60天内有一位妹妹达到金牌及以上 ③ 系统已绑定两个妹妹（调用方保证）
+    """
+    missing = []
+    uid = trainer_row['uid']
+
+    # ① 姐姐连续两周金牌：现场查 UID 双周数据
+    try:
+        r = UIDCrawler().query_with_compare(uid, 'game')
+    except CookieExpiredError:
+        try:
+            _heal_uid_cookie()
+            r = UIDCrawler().query_with_compare(uid, 'game')
+        except Exception:
+            r = {}
+    except Exception:
+        r = {}
+    tw = (r.get('this_week') or {}).get('data') or {}
+    lw = (r.get('last_week') or {}).get('data') or {}
+    def _gold_with_schedule(d):
+        return level_rank(d.get('week_level', '')) >= 4 and (d.get('week_schedule_days') or 0) > 0
+    if not (_gold_with_schedule(tw) and _gold_with_schedule(lw)):
+        missing.append('姐姐最近连续两周排档且金牌及以上（本周：%s，上周：%s）' % (
+            tw.get('week_level') or '未排档', lw.get('week_level') or '未排档'))
+
+    # ② 60 天内（本月+上月）有一位妹妹金牌以上
+    sisters = conn.execute(
+        '''SELECT te.uid, te.nickname FROM bindings b JOIN trainees te ON te.id=b.trainee_id
+           WHERE b.trainer_id=? AND b.unbound_at IS NULL''',
+        (trainer_row['id'],)).fetchall()
+    month, last = _current_month(), _last_month()
+    gold_sister = None
+    for s in sisters:
+        row = conn.execute(
+            '''SELECT best_level, best_rank FROM trainee_level_monthly
+               WHERE trainee_uid=? AND month IN (?,?) ORDER BY best_rank DESC LIMIT 1''',
+            (s['uid'], month, last)).fetchone()
+        if row and (row['best_rank'] or 0) >= 4:
+            gold_sister = s['nickname']
+            break
+    if not gold_sister:
+        missing.append('60 天内有一位妹妹达到金牌及以上（当前名下妹妹均未达标）')
+
+    return (len(missing) == 0), missing
+
+
 def _bind_core(conn, trainer_id, trainee_id, note, force, bind_type='trainer'):
     """绑定核心逻辑（调用方负责 commit/rollback）。返回 (payload, http_code)"""
     side_label = BIND_TYPES.get(bind_type)
     if not side_label:
         return {'ok': False, 'msg': 'bind_type 必须是 trainer / sister'}, 400
-    trainer = conn.execute('SELECT id, nickname FROM trainers WHERE id=?', (trainer_id,)).fetchone()
+    trainer = conn.execute('SELECT id, uid, nickname FROM trainers WHERE id=?', (trainer_id,)).fetchone()
     trainee = conn.execute('SELECT id, nickname FROM trainees WHERE id=?', (trainee_id,)).fetchone()
     if not trainer:
         return {'ok': False, 'msg': '左侧人员（培训师/姐姐）不存在'}, 404
@@ -1687,20 +1734,22 @@ def _bind_core(conn, trainer_id, trainee_id, note, force, bind_type='trainer'):
         return {'ok': False, 'msg': '妹妹不存在'}, 404
 
     rebound = False
-    # 姐妹团三胎：一个姐姐同时只能绑一个妹妹
     if bind_type == 'sister':
-        busy = conn.execute(
+        active = conn.execute(
             '''SELECT b.id, t.nickname FROM bindings b JOIN trainees t ON t.id=b.trainee_id
                WHERE b.trainer_id=? AND b.bind_type='sister' AND b.unbound_at IS NULL''',
-            (trainer_id,)).fetchone()
-        if busy:
-            if not force:
+            (trainer_id,)).fetchall()
+        if len(active) >= 3:
+            return {'ok': False, 'msg': '姐妹团最多绑定 3 个妹妹（含三胎），请先解绑'}, 409
+        if len(active) == 2:
+            # 第三胎：需满足三条件，或管理员特批
+            ok3, missing = _check_third_child(conn, trainer)
+            if not ok3 and not force:
                 return {
-                    'ok': False, 'conflict': True,
-                    'msg': f"姐姐「{trainer['nickname']}」已绑定妹妹「{busy['nickname']}」（三胎只能一对一），确认换绑？",
+                    'ok': False, 'conflict': True, 'third_unmet': True,
+                    'msg': '三胎条件未满足：\n· ' + '\n· '.join(missing) + '\n确认管理员特批绑定？',
                 }, 409
-            conn.execute('UPDATE bindings SET unbound_at=CURRENT_TIMESTAMP WHERE id=?', (busy['id'],))
-            rebound = True
+            note = (note + ' ' if note else '') + ('三胎（管理员特批）' if not ok3 else '三胎（条件达标）')
 
     # 同一妹妹同类型最多一条生效绑定（培训师与姐妹团相互独立，可各有一条）
     current = conn.execute(

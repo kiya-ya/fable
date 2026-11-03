@@ -77,7 +77,7 @@ def bind(uid_a, uid_b, **kw):
 
 # 预清理：上次异常退出可能残留的测试档案（按 UID 精确匹配；绑定记录直接删除）
 db_exec('''DELETE FROM bindings WHERE trainer_id IN (SELECT id FROM trainers WHERE uid IN ('90001','90002','90003','91001','91002'))
-           OR trainee_id IN (SELECT id FROM trainees WHERE uid IN ('80001','80002','80003'))''')
+           OR trainee_id IN (SELECT id FROM trainees WHERE uid IN ('80001','80002','80003','80004','80005'))''')
 for uid in ('90001', '90002', '90003', '91001', '91002'):
     for t in requests.get(f'{B}/api/trainers', params={'role': 'all', 'kw': uid}).json().get('items', []):
         if t['uid'] == uid:
@@ -182,12 +182,18 @@ check('妹妹可同时有培训师+姐妹团绑定', r.ok and d.get('bind_type')
 sis_a = db_one("SELECT id, role FROM trainers WHERE uid='91001'")
 check('姐姐自动建档 role=sister', sis_a and sis_a[1] == 'sister', str(sis_a))
 r = bind('91001', '80002', bind_type='sister', trainee_nickname='测试妹妹乙')
-check('姐姐再绑第二个妹妹 409（三胎一对一）', r.status_code == 409 and '一对一' in r.json().get('msg', ''), r.text)
-r = bind('91001', '80002', bind_type='sister', force=True)
-check('姐姐强制换绑成功', r.ok and r.json().get('rebound'), r.text)
-r = requests.get(f'{B}/api/bindings', params={'active': 1, 'bind_type': 'sister'})
-sis_items = [b for b in r.json()['items'] if str(b['trainer_uid']) == '91001']
-check('姐姐仅一条生效三胎绑定', len(sis_items) == 1 and sis_items[0]['trainee_uid'] == '80002', str(sis_items))
+check('姐姐可绑第二个妹妹（基础 2 个姐妹团名额）', r.ok and not r.json().get('rebound'), r.text)
+sis_items = [b for b in requests.get(f'{B}/api/bindings', params={'active': 1, 'bind_type': 'sister'}).json()['items'] if str(b['trainer_uid']) == '91001']
+check('姐姐有 2 条生效姐妹团绑定', len(sis_items) == 2, str(len(sis_items)))
+# 第三胎：三条件校验（测试 UID 无双周金牌记录 → 条件不满足）
+r = bind('91001', '80004', bind_type='sister', trainee_nickname='测试妹妹丁')
+check('第三胎条件未满足 409+缺失清单', r.status_code == 409 and r.json().get('third_unmet') and '三胎条件未满足' in r.json().get('msg', ''), r.text[:200])
+r = bind('91001', '80004', bind_type='sister', force=True)
+check('管理员特批第三胎成功', r.ok, r.text)
+note = db_one("SELECT note FROM bindings WHERE trainee_id=(SELECT id FROM trainees WHERE uid='80004') AND unbound_at IS NULL")
+check('特批绑定 note 记录', note and '特批' in (note[0] or ''), str(note))
+r = bind('91001', '80005', bind_type='sister', trainee_nickname='测试妹妹戊', force=True)
+check('姐妹团最多 3 个（第四胎拒绝）', r.status_code == 409 and '最多绑定 3 个' in r.json().get('msg', ''), r.text)
 r = requests.get(f'{B}/api/bindings', params={'active': 1, 'bind_type': 'trainer'})
 check('按类型过滤生效绑定', all(b['bind_type'] == 'trainer' for b in r.json()['items']), r.text)
 b1 = next(b for b in requests.get(f'{B}/api/bindings', params={'active': 1}).json()['items'] if b['trainee_uid'] == '80001')
@@ -198,7 +204,7 @@ check('绑定列表结束日期=窗口终点', b1['window_end'] == we1.strftime(
 # 妹妹甲:培训师B + 妹妹乙:姐姐（姐妹团） 并存检查
 r = requests.get(f'{B}/api/trainees', params={'kw': '80001'})
 t1 = r.json()['items'][0]
-check('甲同时显示培训师绑定', t1['trainer_uid'] == '90002' and not t1['sister_uid'], str(t1))
+check('甲同时显示培训师+姐妹团双绑定', t1['trainer_uid'] == '90002' and t1['sister_uid'] == '91001', str(t1))
 r = requests.get(f'{B}/api/trainees', params={'kw': '80002'})
 t2 = r.json()['items'][0]
 check('乙显示姐妹团姐姐', t2['sister_uid'] == '91001' and not t2['trainer_uid'], str(t2))
@@ -252,8 +258,10 @@ bound_at = db_one("SELECT bound_at FROM bindings WHERE trainee_id=? AND bind_typ
 ws, we = expected_window(bound_at)
 r = requests.get(f'{B}/api/trainees/{te_a}/rewards')
 pa = r.json()['rewards_panel']['panels']
-check('甲的奖励面板=培训师绑定', len(pa) == 1 and pa[0]['bind_type'] == 'trainer' and pa[0]['side_label'] == '培训师', str(pa))
-rw = pa[0]
+tpa = [p for p in pa if p['bind_type'] == 'trainer']
+check('甲的奖励面板含培训师绑定（双绑定下姐妹团面板并存）', len(tpa) == 1 and tpa[0]['side_label'] == '培训师'
+      and any(p['bind_type'] == 'sister' for p in pa), str([p['bind_type'] for p in pa]))
+rw = tpa[0]
 check('窗口起点=次周周一', rw['window_start'] == ws.strftime('%Y-%m-%d'), f"{rw['window_start']} != {ws.date()}")
 check('窗口终点=起点+28天', rw['window_end'] == we.strftime('%Y-%m-%d'), f"{rw['window_end']} != {we.date()}")
 if datetime.now() < ws:
@@ -261,7 +269,7 @@ if datetime.now() < ws:
           and all(x['status'] != 'pending' for x in rw['rewards']), str(rw['window_status']))
     db_exec("UPDATE bindings SET bound_at=? WHERE trainee_id=? AND bind_type='trainer' AND unbound_at IS NULL",
             ((datetime.utcnow() - timedelta(days=10)).strftime('%Y-%m-%d %H:%M:%S'), te_a))
-    rw = requests.get(f'{B}/api/trainees/{te_a}/rewards').json()['rewards_panel']['panels'][0]
+    rw = [p for p in requests.get(f'{B}/api/trainees/{te_a}/rewards').json()['rewards_panel']['panels'] if p['bind_type'] == 'trainer'][0]
 check('进窗口后 in_window', rw['window_status'] == 'in_window' and rw['days_left'] is not None, str(rw['window_status']))
 st = {x['key']: x['status'] for x in rw['rewards']}
 check('金牌+任务7次 → 只发最高档（金牌+任务档 pending，低档已达标）',
@@ -274,7 +282,7 @@ check('标记已发', r.ok, r.text)
 r = requests.post(f'{B}/api/rewards/{grant_id}/grant')
 check('重复标记 404', r.status_code == 404, f'got {r.status_code}')
 r = requests.get(f'{B}/api/trainees/{te_a}/rewards')
-st = {x['key']: x['status'] for x in r.json()['rewards_panel']['panels'][0]['rewards']}
+st = {x['key']: x['status'] for p in r.json()['rewards_panel']['panels'] if p['bind_type'] == 'trainer' for x in p['rewards']}
 check('金牌档已发放且不重生成', st.get('lv_gold') == 'granted', str(st))
 r = requests.post(f'{B}/api/rewards/{grant_id}/revoke')
 check('撤销发放', r.ok, r.text)
@@ -284,7 +292,7 @@ bid_a = db_one("SELECT id FROM bindings WHERE trainee_id=? AND bind_type='traine
 r = requests.post(f'{B}/api/rewards/grant-all', json={'binding_id': bid_a})
 check('grant-all 返回发放数量（任务档+金牌档=2）', r.ok and r.json()['granted'] == 2, r.text)
 r = requests.get(f'{B}/api/trainees/{te_a}/rewards')
-st = {x['key']: x['status'] for x in r.json()['rewards_panel']['panels'][0]['rewards']}
+st = {x['key']: x['status'] for p in r.json()['rewards_panel']['panels'] if p['bind_type'] == 'trainer' for x in p['rewards']}
 check('任务档+金牌档已发放，低档已达标', st.get('task6_bronze') == 'granted' and st.get('lv_gold') == 'granted'
       and st.get('lv_junior_silver') == 'achieved' and st.get('lv_silver') == 'achieved', str(st))
 r = requests.post(f'{B}/api/rewards/grant-all', json={'binding_id': bid_a})
@@ -366,14 +374,14 @@ check('解掉冲突后可恢复', r.ok, r.text)
 
 print('== 奖励周数（grant-week / set-remaining） ==')
 # 甲的窗口已在窗口内（前面改过 bound_at）
-w0 = next(b for b in requests.get(f'{B}/api/bindings', params={'active': 1}).json()['items'] if b['trainee_uid'] == '80001')
+w0 = next(b for b in requests.get(f'{B}/api/bindings', params={'active': 1}).json()['items'] if b['trainee_uid'] == '80001' and b['bind_type'] == 'trainer')
 r = requests.post(f'{B}/api/bindings/{w0["id"]}/set-remaining', json={'remaining': 2})
 check('set-remaining 改为 2', r.ok and r.json()['weeks_left'] == 2, r.text)
 r = requests.post(f'{B}/api/bindings/{w0["id"]}/set-remaining', json={'remaining': 9})
 check('set-remaining 超范围 400', r.status_code == 400, f'got {r.status_code}')
 r = requests.post(f'{B}/api/rewards/grant-week', json={'binding_ids': [w0['id']]})
 check('grant-week 窗口内周数-1 且标记奖励', r.ok and r.json()['bindings'] == 1, r.text)
-w1 = next(b for b in requests.get(f'{B}/api/bindings', params={'active': 1}).json()['items'] if b['trainee_uid'] == '80001')
+w1 = next(b for b in requests.get(f'{B}/api/bindings', params={'active': 1}).json()['items'] if b['trainee_uid'] == '80001' and b['bind_type'] == 'trainer')
 check('周数 2 → 1', w1['weeks_left'] == 1, str(w1['weeks_left']))
 
 print('== 奖励导出 ==')
@@ -528,7 +536,7 @@ print(f'\n结果: {passed} passed, {failed} failed')
 
 # 清理测试数据（一律按测试 UID 精确匹配，绝不用可能错位的 id）
 TEST_TRAINER_UIDS = ('90001', '90002', '90003', '90004', '90005', '90006', '90007', '91001', '91002')
-TEST_TRAINEE_UIDS = ('80001', '80002', '80003')
+TEST_TRAINEE_UIDS = ('80001', '80002', '80003', '80004', '80005')
 # 测试绑定记录直接删除（不留历史，避免污染看板统计）
 marks_tr = ','.join('?' * len(TEST_TRAINER_UIDS))
 marks_te = ','.join('?' * len(TEST_TRAINEE_UIDS))
