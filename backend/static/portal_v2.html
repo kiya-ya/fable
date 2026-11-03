@@ -70,6 +70,12 @@ body.v2-guest .v2-tip { color: rgba(255, 247, 234, .5); }
 body.v2-guest .v2-badge { color: rgba(255, 247, 234, .35); }
 body.v2-guest #v2-loading { color: rgba(255,247,234,.6); }
 body.v2-in { background: #ffffff; animation: none; }
+body.v2-in .landing-header {
+  background: rgba(255, 255, 255, .88);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  border-bottom: 1px solid rgba(122, 62, 18, .08);
+}
 body.v2-mine { padding-top: 0; }
 body.v2-mine .landing-header { display: none; }
 body.v2-in #v2-hero { display: none; }
@@ -177,6 +183,8 @@ main.v2-main { width: 100%; max-width: 680px; padding: 0 16px; }
 .pkg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
 @media (max-width: 560px) { .pkg-grid { grid-template-columns: 1fr; } }
 .pkg-card { display: flex; flex-direction: column; padding: 18px; }
+.pkg-card-sister { background: linear-gradient(170deg, #FDF0F7 0%, #fff 70%); border: 1px solid #F3C9E2; }
+.pkg-card-trainer { background: linear-gradient(170deg, #F0EBFA 0%, #fff 70%); border: 1px solid #D8CCEE; }
 .pkg-head { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
 .pkg-icon {
   width: 50px; height: 50px; border-radius: 16px; flex-shrink: 0;
@@ -527,7 +535,7 @@ function renderPackages(packages) {
     const iconImg = pkg.key === 'sister'
       ? '<img src="/img/pkg-sister.jpg" alt="姐妹团课包" style="width:100%;height:100%;object-fit:cover">'
       : '<img src="/img/pkg-trainer.jpg" alt="培训师课包" style="width:100%;height:100%;object-fit:cover">';
-    return `<div class="card pkg-card ${lockedCls}">
+    return `<div class="card pkg-card ${lockedCls} ${pkg.key === 'sister' ? 'pkg-card-sister' : 'pkg-card-trainer'}">
       <div class="pkg-head">
         <div class="pkg-icon">${iconImg}</div>
         <div><b>${esc(pkg.name)}</b><p>${esc(pkg.description || '')}</p></div>
