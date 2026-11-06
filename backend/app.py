@@ -1734,6 +1734,14 @@ def _bind_core(conn, trainer_id, trainee_id, note, force, bind_type='trainer'):
         return {'ok': False, 'msg': '妹妹不存在'}, 404
 
     rebound = False
+    # 培训师绑定：名额硬限制（超额不可绑；管理端确认后可 force 特批，portal 自助绑定无 force 直接拦截）
+    if bind_type == 'trainer':
+        panel = build_slots_panel(conn, trainer_id)
+        if panel and panel['used_slots'] >= panel['total_slots'] and not force:
+            return {
+                'ok': False, 'conflict': True, 'over_slots': True,
+                'msg': f"培训师「{trainer['nickname']}」名额已满（{panel['used_slots']}/{panel['total_slots']}），不能再绑定妹妹；确认管理员特批超额绑定？",
+            }, 409
     if bind_type == 'sister':
         active = conn.execute(
             '''SELECT b.id, t.nickname FROM bindings b JOIN trainees t ON t.id=b.trainee_id

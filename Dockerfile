@@ -1,15 +1,17 @@
-FROM python:3.11-slim
+FROM docker.m.daocloud.io/library/python:3.11-slim
 
 # 中国时区（奖励窗口/每周刷新都按本地周界计算）+ opencv（ddddocr 依赖）系统库
 ENV TZ=Asia/Shanghai
-RUN apt-get update \
+# 国内镜像源加速（默认源在国内拉取极慢）
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
     && apt-get install -y --no-install-recommends tzdata libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 COPY crawler/ crawler/
 COPY backend/ backend/
