@@ -417,13 +417,18 @@ def preview_portal():
 
 
 def _portal_trainer():
+    """返回 (tr, msg)。tr 为 None 时 msg 说明原因：未登录 / 无培训师资质"""
     tid = session.get('portal_trainer_id')
     if not tid:
-        return None
+        return None, '未登录或登录已过期'
     conn = get_db()
-    tr = conn.execute("SELECT * FROM trainers WHERE id=? AND role='trainer'", (tid,)).fetchone()
+    tr = conn.execute('SELECT * FROM trainers WHERE id=?', (tid,)).fetchone()
     conn.close()
-    return tr
+    if not tr:
+        return None, '账号不存在'
+    if tr['role'] != 'trainer':
+        return None, '当前账号暂无培训师资质，请完成资质审核或联系管理员开通'
+    return tr, None
 
 
 def _portal_user():
@@ -498,9 +503,9 @@ def portal_me():
 @app.post('/api/portal/bind')
 def portal_bind():
     """用户自助绑定：培训师 UID 固定为登录者，只需输入妹妹 UID"""
-    tr = _portal_trainer()
+    tr, _msg = _portal_trainer()
     if not tr:
-        return err('未登录', 401)
+        return err(_msg, 401)
     data = request.get_json(force=True)
     trainee_uid = str(data.get('trainee_uid', '')).strip()
     note = str(data.get('note', '') or '').strip()
@@ -558,9 +563,9 @@ def serialized_query(fn):
 @app.post('/api/portal/refresh')
 def portal_refresh():
     """用户端刷新自己学员的数据"""
-    tr = _portal_trainer()
+    tr, _msg = _portal_trainer()
     if not tr:
-        return err('未登录', 401)
+        return err(_msg, 401)
     return refresh_trainees(tr['id'])
 
 
@@ -568,9 +573,9 @@ def portal_refresh():
 @serialized_query
 def portal_trainee_data():
     """查看自己某个妹妹的本周/上周数据（等级/流水/任务/排档）"""
-    tr = _portal_trainer()
+    tr, _msg = _portal_trainer()
     if not tr:
-        return err('未登录', 401)
+        return err(_msg, 401)
     uid = request.args.get('uid', '').strip()
     if not uid:
         return err('uid 不能为空')
@@ -599,9 +604,9 @@ def portal_trainee_data():
 @app.post('/api/portal/unbind')
 def portal_unbind():
     """用户自行解散自己的绑定（名额贡献随绑定结束自动减除）"""
-    tr = _portal_trainer()
+    tr, _msg = _portal_trainer()
     if not tr:
-        return err('未登录', 401)
+        return err(_msg, 401)
     data = request.get_json(force=True)
     bid = data.get('binding_id')
     conn = get_db()
@@ -623,9 +628,9 @@ def portal_unbind():
 @app.get('/api/portal/granted-rewards')
 def portal_granted_rewards():
     """用户端「已发放奖励」：当前培训师所有已发放记录（按发放时间倒序）"""
-    tr = _portal_trainer()
+    tr, _msg = _portal_trainer()
     if not tr:
-        return err('未登录', 401)
+        return err(_msg, 401)
     conn = get_db()
     rows = conn.execute(
         '''SELECT g.reward_label, g.amount, g.granted_at,
