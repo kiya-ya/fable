@@ -10,6 +10,9 @@
 <style>
   body { background: #f6f6f6 !important; animation: none !important; }
   main { max-width: none; }
+  /* 课程考试页签：抵消 main 的边距，iframe 直角铺满到页头下沿 */
+  #tab-courses { margin: -20px -24px 0; }
+  #luna-admin-frame { width: 100%; border: none; display: block; min-height: calc(100vh - 56px); background: #f7f3fc; }
 </style>
 </head>
 <body>
@@ -210,8 +213,7 @@
 
   <!-- 课程考试（嵌入 LUNA 考试系统管理端，经 /admin-bridge 带 key 进入） -->
   <section id="tab-courses" class="panel">
-    <iframe id="luna-admin-frame" title="课程考试管理"
-      style="width:100%;border:none;border-radius:16px;min-height:calc(100vh - 180px);background:#f7f3fc"></iframe>
+    <iframe id="luna-admin-frame" title="课程考试管理"></iframe>
   </section>
 
   <!-- 资质审核 -->
