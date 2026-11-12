@@ -64,6 +64,8 @@ $$('#tabs .tab').forEach((btn) => {
     $$('#tabs .tab').forEach((b) => b.classList.toggle('active', b === btn));
     $$('.panel').forEach((p) => p.classList.remove('active'));
     $(`#tab-${btn.dataset.tab}`).classList.add('active');
+    // 课程考试页签铺满页面，隐藏页脚
+    document.querySelector('.app-footer').classList.toggle('hidden', btn.dataset.tab === 'courses');
     if (btn.dataset.tab === 'bindings') loadBindingsTab();
     if (btn.dataset.tab === 'dashboard') loadDashboard();
     if (btn.dataset.tab === 'quals') loadQuals();
