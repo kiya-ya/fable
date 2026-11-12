@@ -67,6 +67,10 @@ $$('#tabs .tab').forEach((btn) => {
     if (btn.dataset.tab === 'bindings') loadBindingsTab();
     if (btn.dataset.tab === 'dashboard') loadDashboard();
     if (btn.dataset.tab === 'quals') loadQuals();
+    if (btn.dataset.tab === 'courses') {
+      const frame = $('#luna-admin-frame');
+      if (frame && !frame.src) frame.src = '/admin-bridge';
+    }
   });
 });
 

@@ -20,6 +20,7 @@
     <button class="tab" data-tab="uidquery">结果统计</button>
     <button class="tab" data-tab="quals">资质审核</button>
     <button class="tab" data-tab="dashboard">数据看板</button>
+    <button class="tab" data-tab="courses">课程考试</button>
   </nav>
 </header>
 
@@ -205,6 +206,12 @@
         </div>
       </div>
     </div>
+  </section>
+
+  <!-- 课程考试（嵌入 LUNA 考试系统管理端，经 /admin-bridge 带 key 进入） -->
+  <section id="tab-courses" class="panel">
+    <iframe id="luna-admin-frame" title="课程考试管理"
+      style="width:100%;border:none;border-radius:16px;min-height:calc(100vh - 180px);background:#f7f3fc"></iframe>
   </section>
 
   <!-- 资质审核 -->

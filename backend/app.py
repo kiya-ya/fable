@@ -54,6 +54,16 @@ def _load_admin_config():
 
 
 ADMIN_USER, ADMIN_PASSWORD = _load_admin_config()
+
+
+def _load_luna_admin_key():
+    """LUNA 考试系统管理端共享 key，从 data/admin_config.json 的 luna_admin_key 读取"""
+    path = os.path.join(PROJECT_ROOT, 'data', 'admin_config.json')
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f).get('luna_admin_key', '')
+    except Exception:
+        return ''
 PORTAL_CODE_TTL = 300  # 用户端验证码有效期（秒）
 
 PUBLIC_PATHS = {'/login', '/portal', '/portal-v2', '/api/login', '/api/portal/login', '/api/portal/captcha',
@@ -300,6 +310,21 @@ def portal_page():
 def portal_v2_page():
     """新版用户端（灰度测试路径）：统一账号登录，绑定入口按资质解锁"""
     return app.send_static_file('portal_v2.html')
+
+
+@app.get('/admin-bridge')
+def admin_bridge():
+    """管理端统一入口：中转跳转到 LUNA 管理页（携带共享 key 种植管理 Cookie）。
+    本路径不在 PUBLIC_PATHS 中，未登录管理员会被 before_request 拦到登录页。
+    跳转目标沿用管理员当前访问的主机名（localhost/IP），保证与 iframe 同源站点，
+    SameSite=Lax 的管理 Cookie 才能正常发送。"""
+    key = _load_luna_admin_key()
+    if not key:
+        return err('未配置 luna_admin_key，请联系管理员', 500)
+    host = request.host.split(':')[0]
+    if host in ('localhost', '127.0.0.1') or host.replace('.', '').isdigit():
+        return redirect(f'http://{host}:5001/admin?key={key}')
+    return redirect(f"{_client_config()['exam_url']}/admin?key={key}")
 
 
 def _new_portal_code():
