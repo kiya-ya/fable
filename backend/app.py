@@ -907,6 +907,21 @@ def live_sister_conflict(conn, trainee_uid, trainer_uid):
     return check_sister_conflict(conn, trainee_uid, trainer_uid)
 
 
+def _is_elite_captain(uid):
+    """查询该 UID 是否精英队长（查询失败按非精英处理，不拦截，由其他规则兜底）"""
+    try:
+        r = UIDCrawler().query(uid, 'game')
+    except CookieExpiredError:
+        try:
+            _heal_uid_cookie()
+            r = UIDCrawler().query(uid, 'game')
+        except Exception:
+            return False
+    except Exception:
+        return False
+    return (r.get('is_elite') or '').strip() == '是'
+
+
 def _protection_gate(uid):
     """培训师绑定门槛：妹妹须在保护期内（UID 查询的保护期结束时间 >= 今天）。
     返回 (allowed, msg, warn)。查不到数据或查询失败一律拒绝（保护期无法确认）"""
@@ -922,6 +937,8 @@ def _protection_gate(uid):
         return False, f'保护期查询异常（请稍后重试）: {e}', False
     if not r.get('found'):
         return False, '未查到该 UID 的数据，保护期无法确认，不能绑定', False
+    if (r.get('is_elite') or '').strip() == '是':
+        return False, '该 UID 是精英队长，不能绑定为妹妹', False
     raw = (r.get('protection_end') or '').strip()
     m = re.search(r'(\d{4})-(\d{1,2})-(\d{1,2})', raw)
     if not m:
@@ -1882,6 +1899,9 @@ def create_binding_by_uid():
         if not allowed:
             return jsonify({'ok': False, 'msg': gate_msg, 'gate': True}), 422
     else:
+        # 精英队长不能绑定为妹妹（姐妹团三胎同样适用）
+        if _is_elite_captain(trainee_uid):
+            return jsonify({'ok': False, 'msg': '该 UID 是精英队长，不能绑定为妹妹', 'gate': True}), 422
         gate_msg, gate_warn = None, False
 
     conn = get_db()
@@ -2539,6 +2559,7 @@ def uid_lookup():
         'hall_name': r.get('schedule_hall', '') or r.get('auth_hall', ''),
         'week_level': r.get('week_level', ''),
         'protection_end': (r.get('protection_end') or '').strip(),
+        'is_elite': (r.get('is_elite') or '').strip(),
     }})
 
 

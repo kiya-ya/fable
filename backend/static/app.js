@@ -412,9 +412,11 @@ async function lookupBindSide(kind) {
     // 查本地是否已建档（培训师侧 role=all 覆盖姐姐记录）
     const list = await api(`/api/${kind}s?kw=${encodeURIComponent(uid)}${kind === 'trainer' ? '&role=all' : ''}`);
     const existing = list.items.find((x) => x.uid === uid);
-    bindState[kind] = { uid, nickname: r.info.nickname, hall: r.info.hall_name, protection_end: r.info.protection_end || '', existing: !!existing };
+    bindState[kind] = { uid, nickname: r.info.nickname, hall: r.info.hall_name, protection_end: r.info.protection_end || '', is_elite: r.info.is_elite || '', existing: !!existing };
     let protTag = '';
-    if (kind === 'trainee') {
+    if (kind === 'trainee' && r.info.is_elite === '是') {
+      protTag = ' ｜ <span class="tag over">精英队长·不可绑定</span>';
+    } else if (kind === 'trainee') {
       const pe = (r.info.protection_end || '').trim();
       if (pe) {
         const m = pe.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
@@ -453,6 +455,8 @@ $('#bind-trainee-uid').addEventListener('keydown', (e) => { if (e.key === 'Enter
 $('#bind-submit').addEventListener('click', async () => {
   if (!bindState.trainer) return toast(`请先查询${bindType === 'sister' ? '姐姐' : '培训师'} UID`, true);
   if (!bindState.trainee) return toast('请先查询妹妹 UID', true);
+  // 精英队长不能绑定为妹妹（服务端仍会再校验一次）
+  if (bindState.trainee.is_elite === '是') return toast('该 UID 是精英队长，不能绑定为妹妹', true);
   // 培训师绑定：客户端先拦不在保护期的（服务端仍会再校验一次）
   if (bindType === 'trainer') {
     const pe = (bindState.trainee.protection_end || '').trim();
