@@ -2169,6 +2169,7 @@ def dashboard_summary():
             'week_start': f'{w:%m-%d}',
             'label': f'{w:%m-%d}~{w + timedelta(days=6):%m-%d}',
             'cohort': total_w,
+            'retained': rw, 'dissolved': dw,
             'rate': round(rw / total_w * 100, 1) if total_w else None,
         })
 

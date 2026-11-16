@@ -1190,7 +1190,7 @@ function renderRetentionLine(series) {
   const y = (v) => padT + (H - padB - padT) * (1 - v / 100);
   const pts = data.map((w, i) => `${(padL + i * stepX).toFixed(1)},${y(w.rate).toFixed(1)}`).join(' ');
   const dots = data.map((w, i) =>
-    `<circle cx="${padL + i * stepX}" cy="${y(w.rate)}" r="4" fill="#8E6BC8"><title>${w.label} · 留存率 ${w.rate}%（样本 ${w.cohort}）</title></circle>`).join('');
+    `<circle cx="${padL + i * stepX}" cy="${y(w.rate)}" r="4" fill="#8E6BC8" stroke="transparent" stroke-width="12"><title>${w.label} · 留存率 ${w.rate}%（样本 ${w.cohort}）</title></circle>`).join('');
   const labels = data.map((w, i) =>
     `<text x="${padL + i * stepX}" y="${H - 8}" font-size="10" fill="#9ca3af" text-anchor="middle">${w.week_start}</text>`).join('');
   const gridlines = [0, 25, 50, 75, 100].map((v) => {
@@ -1203,6 +1203,26 @@ function renderRetentionLine(series) {
     <polyline points="${pts}" fill="none" stroke="#8E6BC8" stroke-width="2.5"/>
     ${dots}${labels}
   </svg>`;
+
+  // 悬浮数据卡：周 / 留存率 / 样本 / 留存 / 解散
+  el.style.position = 'relative';
+  const tip = document.createElement('div');
+  tip.className = 'chart-tip hidden';
+  el.appendChild(tip);
+  const rectW = 640, rectH = 240;
+  el.querySelectorAll('circle').forEach((c, i) => {
+    const w = data[i];
+    c.style.cursor = 'pointer';
+    c.addEventListener('mouseenter', () => {
+      tip.innerHTML = `<b>${w.label}</b><br>留存率 <b>${w.rate}%</b><br>样本 ${w.cohort} 条：留存 ${w.retained} / 解散 ${w.dissolved}`;
+      const scaleX = el.clientWidth / rectW;
+      const scaleY = el.clientHeight / rectH;
+      tip.style.left = (parseFloat(c.getAttribute('cx')) * scaleX) + 'px';
+      tip.style.top = (parseFloat(c.getAttribute('cy')) * scaleY - 8) + 'px';
+      tip.classList.remove('hidden');
+    });
+    c.addEventListener('mouseleave', () => tip.classList.add('hidden'));
+  });
 }
 
 function renderLineChart(weekly) {
