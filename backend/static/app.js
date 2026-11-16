@@ -1128,6 +1128,7 @@ async function loadDashboard() {
     renderLineChart(d.weekly);
     renderPieChart(d.dissolve_reasons);
     renderPieChart(d.dissolve_reasons_week, '#dash-pie-week', '#dash-pie-week-legend');
+    renderDissolved(d);
   } catch (e) {
     toast(e.message, true);
   }
@@ -1151,6 +1152,29 @@ function renderDashCards(d) {
       <div class="dash-card-label">${esc(c.label)}</div>
       <div class="dash-card-value" style="color:${c.color}">${esc(c.value)}</div>
     </div>`).join('');
+}
+
+function renderDissolved(d) {
+  const el = $('#dash-dissolved');
+  const r4 = d.retention_4w;
+  if (!r4.cohort || !r4.dissolved) {
+    el.innerHTML = '<span class="muted">暂无 4 周解散样本</span>';
+    return;
+  }
+  const dr = r4.dissolved_retention;
+  el.innerHTML = `
+    <div style="margin-bottom:12px">
+      <div style="font-size:12px;margin-bottom:6px;color:#7a3e12;font-weight:700">解散后是否留存（${r4.dissolved} 条）</div>
+      <div style="display:flex;gap:16px">
+        <span>解散但留存 <b style="color:#10b981">${dr.retained} 人（${dr.rate}%）</b></span>
+        <span>解散未留存 <b style="color:#ef4444">${dr.left} 人（${(100 - dr.rate).toFixed(1)}%）</b></span>
+      </div>
+    </div>
+    <div style="font-size:12px;margin-bottom:4px;color:#7a3e12;font-weight:700">按解散原因</div>
+    ${r4.dissolved_reasons.map((r) => `
+      <div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px dashed rgba(122,62,18,.1)">
+        <span>${esc(r.reason)}</span><b style="color:#5b2a06">${r.count} 条</b>
+      </div>`).join('') || '<span class="muted">暂无</span>'}`;
 }
 
 function renderLineChart(weekly) {

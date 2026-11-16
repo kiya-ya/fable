@@ -2077,7 +2077,8 @@ def _week_monday(d):
 def dashboard_summary():
     conn = get_db()
     bindings = conn.execute(
-        'SELECT bind_type, bound_at, unbound_at, note FROM bindings').fetchall()
+        '''SELECT b.bind_type, b.bound_at, b.unbound_at, b.note, t.uid AS trainee_uid
+           FROM bindings b JOIN trainees t ON t.id=b.trainee_id''').fetchall()
     conn.close()
 
     # 周选择：week=YYYY-MM-DD（该周任意一天），默认本周
@@ -2096,6 +2097,8 @@ def dashboard_summary():
     reasons_week = {}
     sel_bound = sel_unbound = 0
     cohort_retained = cohort_dissolved = 0
+    dissolved_reasons = {}
+    dissolved_uids = set()
     cutoff = today - timedelta(days=28)
     for b in bindings:
         bd = _local_date(b['bound_at'])
@@ -2122,6 +2125,7 @@ def dashboard_summary():
                 cohort_retained += 1
             else:
                 cohort_dissolved += 1
+                dissolved_uids.add(b['trainee_uid'])
         if ud is None:
             continue
         # 解散原因归类（从备注解析）
@@ -2137,6 +2141,9 @@ def dashboard_summary():
         else:
             reason = '手动解绑'
         reasons[reason] = reasons.get(reason, 0) + 1
+        # 4 周解散样本（仅培训师）单独按原因归类
+        if b['bind_type'] == 'trainer' and bd <= cutoff and (ud - bd).days < 28:
+            dissolved_reasons[reason] = dissolved_reasons.get(reason, 0) + 1
         if uw == this_monday:
             reasons_week[reason] = reasons_week.get(reason, 0) + 1
 
@@ -2155,6 +2162,9 @@ def dashboard_summary():
              (SELECT trainee_uid, MAX(last_queried_at) FROM trainee_level_monthly GROUP BY trainee_uid)''').fetchall()
     retained_uids = {r['trainee_uid'] for r in latest if r['last_retained']}
     unbound_retained = len(unbound_uids & retained_uids)
+    # 4 周解散样本的「解散但留存 / 解散未留存」拆解
+    dissolved_retained = len(dissolved_uids & retained_uids)
+    dissolved_left = len(dissolved_uids) - dissolved_retained
     conn.close()
 
     cohort = cohort_retained + cohort_dissolved
@@ -2181,6 +2191,12 @@ def dashboard_summary():
         'retention_4w': {
             'cohort': cohort, 'retained': cohort_retained, 'dissolved': cohort_dissolved,
             'retention_rate': retention_rate, 'dissolution_rate': dissolution_rate,
+            'dissolved_reasons': [{'reason': k, 'count': v} for k, v in
+                                  sorted(dissolved_reasons.items(), key=lambda x: -x[1])],
+            'dissolved_retention': {
+                'retained': dissolved_retained, 'left': dissolved_left,
+                'rate': round(dissolved_retained / len(dissolved_uids) * 100, 1) if dissolved_uids else 0.0,
+            },
         },
         'unbound_retention': {
             'total': len(unbound_uids), 'retained': unbound_retained,
