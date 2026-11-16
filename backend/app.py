@@ -2116,8 +2116,8 @@ def dashboard_summary():
                 weekly[uw]['unbound'] += 1
             if uw == this_monday:
                 sel_unbound += 1
-        # 4 周留存/解散：成团满 28 天的绑定，仍在档或满 28 天才解散 = 留存
-        if bd <= cutoff:
+        # 4 周留存/解散：成团满 28 天的培训师绑定，仍在档或满 28 天才解散 = 留存（剔除姐妹团）
+        if b['bind_type'] == 'trainer' and bd <= cutoff:
             if ud is None or (ud - bd).days >= 28:
                 cohort_retained += 1
             else:

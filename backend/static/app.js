@@ -1143,8 +1143,8 @@ function renderDashCards(d) {
     { label: '当前生效绑定（培训师/姐妹团）', value: `${d.active.total}（${d.active.trainer}/${d.active.sister}）`, color: '#10b981' },
     { label: '奖励待发放 / 已发放（档）', value: `${d.rewards.pending} / ${d.rewards.granted}`, color: '#f59e0b' },
     { label: `解绑后仍在平台（共解绑 ${d.unbound_retention.total} 人）`, value: `${d.unbound_retention.retained} 人 · ${d.unbound_retention.rate}%`, color: '#8E6BC8' },
-    { label: `4周留存率（样本 ${r4.cohort}）`, value: `${r4.retention_rate}%`, color: '#10b981' },
-    { label: '4周解散率', value: `${r4.dissolution_rate}%`, color: '#ef4444' },
+    { label: `4周留存率·仅培训师（样本 ${r4.cohort}）`, value: `${r4.retention_rate}%`, color: '#10b981' },
+    { label: '4周解散率·仅培训师', value: `${r4.dissolution_rate}%`, color: '#ef4444' },
   ];
   $('#dash-cards').innerHTML = cards.map((c) => `
     <div class="dash-card" style="border-top-color:${c.color}">
