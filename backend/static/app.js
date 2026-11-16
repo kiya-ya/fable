@@ -1236,7 +1236,7 @@ function renderLineChart(weekly) {
   const series = (key) => data.map((w, i) =>
     `${(padL + i * stepX).toFixed(1)},${y(w[key]).toFixed(1)}`).join(' ');
   const dots = (key, color) => data.map((w, i) =>
-    `<circle cx="${padL + i * stepX}" cy="${y(w[key])}" r="3.5" fill="${color}"><title>${w.label} ${w[key]}</title></circle>`).join('');
+    `<circle cx="${padL + i * stepX}" cy="${y(w[key])}" r="3.5" fill="${color}" stroke="transparent" stroke-width="12"><title>${w.label} ${w[key]}</title></circle>`).join('');
   const xlabels = data.map((w, i) =>
     `<text x="${padL + i * stepX}" y="${H - 8}" font-size="10" fill="#9ca3af" text-anchor="middle">${w.week_start}</text>`).join('');
   const gridlines = [0, 0.5, 1].map((f) => {
@@ -1252,6 +1252,24 @@ function renderLineChart(weekly) {
     ${dots('bound', '#3b82f6')}${dots('unbound', '#ef4444')}
     ${xlabels}
   </svg>`;
+
+  // 悬浮数据卡：周 / 新绑定 / 解散（circle 顺序：先全部 bound 点，再全部 unbound 点）
+  const box = $('#dash-line');
+  box.style.position = 'relative';
+  const tip = document.createElement('div');
+  tip.className = 'chart-tip hidden';
+  box.appendChild(tip);
+  box.querySelectorAll('circle').forEach((c, i) => {
+    const w = data[i % data.length];
+    c.style.cursor = 'pointer';
+    c.addEventListener('mouseenter', () => {
+      tip.innerHTML = `<b>${w.label}</b><br>新绑定 <b>${w.bound}</b> 条 ｜ 解散 <b>${w.unbound}</b> 条`;
+      tip.style.left = (parseFloat(c.getAttribute('cx')) * (box.clientWidth / 640)) + 'px';
+      tip.style.top = (parseFloat(c.getAttribute('cy')) * (box.clientHeight / 240) - 8) + 'px';
+      tip.classList.remove('hidden');
+    });
+    c.addEventListener('mouseleave', () => tip.classList.add('hidden'));
+  });
 }
 
 function renderPieChart(reasons, pieSel = '#dash-pie', legendSel = '#dash-pie-legend') {
