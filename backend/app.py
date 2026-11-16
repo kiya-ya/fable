@@ -2147,6 +2147,31 @@ def dashboard_summary():
         if uw == this_monday:
             reasons_week[reason] = reasons_week.get(reason, 0) + 1
 
+    # 逐周 4 周留存率（仅培训师）：以该周周日为观察日，样本=观察日往前28天前已绑定的记录
+    retention_weekly = []
+    for w in weeks:
+        ref = w + timedelta(days=6)
+        cutoff_w = ref - timedelta(days=28)
+        rw = dw = 0
+        for b in bindings:
+            if b['bind_type'] != 'trainer':
+                continue
+            bd = _local_date(b['bound_at'])
+            if bd > cutoff_w:
+                continue
+            ud = _local_date(b['unbound_at']) if b['unbound_at'] else None
+            if ud is None or (ud - bd).days >= 28:
+                rw += 1
+            else:
+                dw += 1
+        total_w = rw + dw
+        retention_weekly.append({
+            'week_start': f'{w:%m-%d}',
+            'label': f'{w:%m-%d}~{w + timedelta(days=6):%m-%d}',
+            'cohort': total_w,
+            'rate': round(rw / total_w * 100, 1) if total_w else None,
+        })
+
     conn = get_db()
     pending_rewards = conn.execute(
         "SELECT COUNT(*) FROM reward_grants WHERE status='pending'").fetchone()[0]
@@ -2203,6 +2228,7 @@ def dashboard_summary():
             'rate': round(unbound_retained / len(unbound_uids) * 100, 1) if unbound_uids else 0.0,
         },
         'rewards': {'pending': pending_rewards, 'granted': granted_rewards},
+        'retention_4w_weekly': retention_weekly,
     })
 
 

@@ -1129,6 +1129,7 @@ async function loadDashboard() {
     renderPieChart(d.dissolve_reasons);
     renderPieChart(d.dissolve_reasons_week, '#dash-pie-week', '#dash-pie-week-legend');
     renderDissolved(d);
+    renderRetentionLine(d.retention_4w_weekly);
   } catch (e) {
     toast(e.message, true);
   }
@@ -1175,6 +1176,33 @@ function renderDissolved(d) {
       <div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px dashed rgba(122,62,18,.1)">
         <span>${esc(r.reason)}</span><b style="color:#5b2a06">${r.count} 条</b>
       </div>`).join('') || '<span class="muted">暂无</span>'}`;
+}
+
+function renderRetentionLine(series) {
+  const el = $('#dash-retention-line');
+  const data = (series || []).filter((w) => w.rate !== null);
+  if (!data.length) {
+    el.innerHTML = '<div class="empty">暂无足够样本（绑定满 4 周后才有数据）</div>';
+    return;
+  }
+  const W = 640, H = 240, padL = 40, padB = 28, padT = 14, padR = 10;
+  const stepX = data.length > 1 ? (W - padL - padR) / (data.length - 1) : 0;
+  const y = (v) => padT + (H - padB - padT) * (1 - v / 100);
+  const pts = data.map((w, i) => `${(padL + i * stepX).toFixed(1)},${y(w.rate).toFixed(1)}`).join(' ');
+  const dots = data.map((w, i) =>
+    `<circle cx="${padL + i * stepX}" cy="${y(w.rate)}" r="4" fill="#8E6BC8"><title>${w.label} · 留存率 ${w.rate}%（样本 ${w.cohort}）</title></circle>`).join('');
+  const labels = data.map((w, i) =>
+    `<text x="${padL + i * stepX}" y="${H - 8}" font-size="10" fill="#9ca3af" text-anchor="middle">${w.week_start}</text>`).join('');
+  const gridlines = [0, 25, 50, 75, 100].map((v) => {
+    const gy = y(v);
+    return `<line x1="${padL}" y1="${gy}" x2="${W - padR}" y2="${gy}" stroke="#e5e7eb" stroke-dasharray="3"/>
+            <text x="${padL - 6}" y="${gy + 3}" font-size="10" fill="#9ca3af" text-anchor="end">${v}%</text>`;
+  }).join('');
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%">
+    ${gridlines}
+    <polyline points="${pts}" fill="none" stroke="#8E6BC8" stroke-width="2.5"/>
+    ${dots}${labels}
+  </svg>`;
 }
 
 function renderLineChart(weekly) {
