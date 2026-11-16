@@ -2147,10 +2147,10 @@ def dashboard_summary():
         if uw == this_monday:
             reasons_week[reason] = reasons_week.get(reason, 0) + 1
 
-    # 逐周 4 周留存率（仅培训师）：以该周周日为观察日，样本=观察日往前28天前已绑定的记录
+    # 逐周 4 周留存率（仅培训师）：历史周以该周周日为观察日，当前周以今天为观察日（与卡片口径一致）
     retention_weekly = []
     for w in weeks:
-        ref = w + timedelta(days=6)
+        ref = min(w + timedelta(days=6), today)
         cutoff_w = ref - timedelta(days=28)
         rw = dw = 0
         for b in bindings:
