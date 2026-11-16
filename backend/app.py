@@ -986,6 +986,17 @@ def record_trainee_query(conn, uid, data, last_week_data=None, side=False):
     prot = (data.get('protection_end') or '').strip()
     if prot and prot != '-':
         conn.execute('UPDATE trainees SET protection_end=? WHERE uid=?', (prot, uid))
+    # 昵称/大厅同步到档案（有值才覆盖；side=True 时同步到 trainers 表）
+    nick = (data.get('nickname') or '').strip()
+    hall = (data.get('schedule_hall') or data.get('auth_hall') or '').strip()
+    if hall == '-':
+        hall = ''
+    if nick or hall:
+        table = 'trainers' if side else 'trainees'
+        conn.execute(
+            f"""UPDATE {table} SET nickname=COALESCE(NULLIF(?, ''), nickname),
+               hall_name=COALESCE(NULLIF(?, ''), hall_name), updated_at=CURRENT_TIMESTAMP WHERE uid=?""",
+            (nick, hall, uid))
     conn.commit()
     return retained, prev
 
@@ -2559,64 +2570,69 @@ def refresh_all_bound_trainees():
            WHERE b.unbound_at IS NULL ORDER BY tr.uid''').fetchall()
     conn.close()
 
-    crawler = UIDCrawler()
-    healed = False
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading
 
-    def _query_with_heal(uid):
-        nonlocal crawler, healed
-        try:
-            return crawler.query(uid, 'game'), None
-        except CookieExpiredError:
-            if healed:
-                return None, 'Cookie 再次过期，中止'
-            healed = True
-            try:
-                _heal_uid_cookie()
-                crawler = UIDCrawler()
-                return crawler.query(uid, 'game'), None
-            except Exception as e:
-                return None, f'自动重登失败: {e}'
-        except Exception as e:
-            return None, str(e)
-
-    queried, errors = [], []
+    heal_lock = threading.Lock()
+    healed = [False]
     last_start, last_end = _last_week_range()
 
-    # 先刷侧方（留存判定供奖励拦截用）
-    for i, s in enumerate(sides):
-        if i:
-            time.sleep(0.6)
-        r, errmsg = _query_with_heal(s['uid'])
-        if r is None:
-            errors.append({'uid': s['uid'], 'nickname': s['nickname'], 'msg': errmsg})
-            if '中止' in errmsg or '重登失败' in errmsg:
-                return queried, errors
-            continue
-        conn = get_db()
-        record_trainee_query(conn, s['uid'], r, side=True)   # 侧方留存判定（只标记，不自动解散）
-        conn.close()
-
-    for i, b in enumerate(rows):
-        if i or sides:
-            time.sleep(0.6)  # server1 会话 TTL 短，控制频率
-        r, errmsg = _query_with_heal(b['uid'])
-        if r is None:
-            errors.append({'uid': b['uid'], 'nickname': b['nickname'], 'msg': errmsg})
-            if '中止' in errmsg or '重登失败' in errmsg:
-                break
-            continue
+    def _query(uid, need_last=False):
+        """每线程独立爬虫会话；Cookie 过期时加锁重登一次后重试。返回 (r, r_last, errmsg)"""
+        crawler = UIDCrawler()
         try:
-            r_last = crawler.query(b['uid'], 'game', last_start, last_end)
-        except Exception:
-            r_last = None
-        conn = get_db()
-        retained, prev = record_trainee_query(conn, b['uid'], r, r_last)
-        if r.get('found'):
-            sync_pending_rewards(conn, b['trainee_id'])
-            queried.append({'uid': b['uid'], 'nickname': b['nickname'], 'week_level': r.get('week_level', '')})
-        else:
-            errors.append({'uid': b['uid'], 'nickname': b['nickname'], 'msg': r.get('msg', '未查到数据')})
-        conn.close()
+            r = crawler.query(uid, 'game')
+        except CookieExpiredError:
+            try:
+                with heal_lock:
+                    if not healed[0]:
+                        _heal_uid_cookie()
+                        healed[0] = True
+                crawler = UIDCrawler()
+                r = crawler.query(uid, 'game')
+            except Exception as e:
+                return None, None, str(e)
+        except Exception as e:
+            return None, None, str(e)
+        r_last = None
+        if need_last:
+            try:
+                r_last = crawler.query(uid, 'game', last_start, last_end)
+            except Exception:
+                pass
+        return r, r_last, None
+
+    queried, errors = [], []
+
+    # 先刷侧方（留存判定供奖励拦截用），4 路并发；DB 写操作全部在主线程串行
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = {pool.submit(_query, s['uid']): s for s in sides}
+        for fut in as_completed(futures):
+            s = futures[fut]
+            r, _, errmsg = fut.result()
+            if r is None:
+                errors.append({'uid': s['uid'], 'nickname': s['nickname'], 'msg': errmsg})
+                continue
+            conn = get_db()
+            record_trainee_query(conn, s['uid'], r, side=True)   # 侧方留存判定（只标记，不自动解散）
+            conn.close()
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = {pool.submit(_query, b['uid'], True): b for b in rows}
+        for fut in as_completed(futures):
+            b = futures[fut]
+            r, r_last, errmsg = fut.result()
+            if r is None:
+                errors.append({'uid': b['uid'], 'nickname': b['nickname'], 'msg': errmsg})
+                continue
+            conn = get_db()
+            retained, prev = record_trainee_query(conn, b['uid'], r, r_last)
+            if r.get('found'):
+                sync_pending_rewards(conn, b['trainee_id'])
+                queried.append({'uid': b['uid'], 'nickname': b['nickname'], 'week_level': r.get('week_level', '')})
+            else:
+                errors.append({'uid': b['uid'], 'nickname': b['nickname'], 'msg': r.get('msg', '未查到数据')})
+            conn.close()
     return queried, errors
 
 
