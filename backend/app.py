@@ -2145,6 +2145,16 @@ def dashboard_summary():
         "SELECT COUNT(*) FROM reward_grants WHERE status='pending'").fetchone()[0]
     granted_rewards = conn.execute(
         "SELECT COUNT(*) FROM reward_grants WHERE status='granted'").fetchone()[0]
+    # 解绑后仍留在平台的妹妹：全部已解绑 UID ∩ 最近一次查询判定留存
+    unbound_uids = {r[0] for r in conn.execute(
+        '''SELECT DISTINCT t.uid FROM bindings b JOIN trainees t ON t.id=b.trainee_id
+           WHERE b.unbound_at IS NOT NULL''').fetchall()}
+    latest = conn.execute(
+        '''SELECT trainee_uid, last_retained FROM trainee_level_monthly
+           WHERE (trainee_uid, last_queried_at) IN
+             (SELECT trainee_uid, MAX(last_queried_at) FROM trainee_level_monthly GROUP BY trainee_uid)''').fetchall()
+    retained_uids = {r['trainee_uid'] for r in latest if r['last_retained']}
+    unbound_retained = len(unbound_uids & retained_uids)
     conn.close()
 
     cohort = cohort_retained + cohort_dissolved
@@ -2171,6 +2181,10 @@ def dashboard_summary():
         'retention_4w': {
             'cohort': cohort, 'retained': cohort_retained, 'dissolved': cohort_dissolved,
             'retention_rate': retention_rate, 'dissolution_rate': dissolution_rate,
+        },
+        'unbound_retention': {
+            'total': len(unbound_uids), 'retained': unbound_retained,
+            'rate': round(unbound_retained / len(unbound_uids) * 100, 1) if unbound_uids else 0.0,
         },
         'rewards': {'pending': pending_rewards, 'granted': granted_rewards},
     })
