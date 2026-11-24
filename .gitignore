@@ -2,6 +2,8 @@
 data/login_credentials.json
 data/cookie.json
 data/cookie_bigdata.json
+data/qualification_cookies.json
+data/qualification_browser_state.json
 data/keepalive_status.json
 data/weekly_refresh_status.json
 data/flask_secret.txt

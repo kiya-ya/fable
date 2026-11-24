@@ -140,6 +140,81 @@ async function qualReject(id) {
   }
 }
 
+let qualLookupData = null;
+
+function qualLocalText(local) {
+  if (!local) return '未建档（首次登录将按当前身份进入）';
+  const labels = [];
+  if (local.sister_qualified || local.role === 'sister') labels.push('姐妹团');
+  if (local.trainer_qualified || local.role === 'trainer') labels.push('培训师');
+  return labels.length ? `已开通：${labels.join('、')}` : `当前身份：${ROLE_LABEL[local.role] || local.role || '新人'}`;
+}
+
+function qualPlatformText(item) {
+  if (!item) return '未查询';
+  const status = item.status || (item.approved ? '审核通过' : '未通过');
+  return item.approved ? `${status}${item.passed_at ? ' · ' + item.passed_at : ''}` : status;
+}
+
+async function lookupQualificationUid() {
+  const uid = $('#qual-lookup-uid').value.trim();
+  if (!uid) return toast('请输入 UID', true);
+  const btn = $('#qual-lookup-btn');
+  btn.disabled = true;
+  $('#qual-lookup-result').classList.remove('hidden');
+  $('#qual-user-summary').textContent = '正在查询 UID 和平台资质…';
+  $('#qual-platform-summary').textContent = '';
+  try {
+    const r = await api('/api/admin/qualifications/lookup?uid=' + encodeURIComponent(uid));
+    qualLookupData = r;
+    const info = r.info || {};
+    const platform = r.platform || {};
+    $('#qual-user-summary').innerHTML = `
+      <div><b>UID ${esc(r.uid)}${info.nickname ? ' · ' + esc(info.nickname) : ''}</b></div>
+      <div class="muted">${esc(info.hall_name || '未查询到大厅')}　｜　${esc(qualLocalText(r.local))}</div>
+      <div style="margin-top:8px">点点姐妹团：<b>${esc(qualPlatformText(platform.sister))}</b>　｜　培训师：<b>${esc(qualPlatformText(platform.trainer))}</b></div>`;
+    const notices = [r.uid_error, r.platform_error].filter(Boolean);
+    $('#qual-platform-summary').textContent = notices.length
+      ? `${notices.join('；')}。可人工核对后继续开通。`
+      : '已读取平台资质，仅显示点点姐妹团和培训师。';
+    $('#qual-grant-sister').checked = Boolean(platform.sister?.approved || r.local?.sister_qualified || r.local?.role === 'sister');
+    $('#qual-grant-trainer').checked = Boolean(platform.trainer?.approved || r.local?.trainer_qualified || r.local?.role === 'trainer');
+  } catch (e) {
+    qualLookupData = null;
+    $('#qual-user-summary').textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+$('#qual-lookup-btn').addEventListener('click', lookupQualificationUid);
+$('#qual-lookup-uid').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') lookupQualificationUid();
+});
+$('#qual-grant-submit').addEventListener('click', async () => {
+  if (!qualLookupData) return toast('请先查询 UID', true);
+  const sister = $('#qual-grant-sister').checked;
+  const trainer = $('#qual-grant-trainer').checked;
+  if (!sister && !trainer) return toast('请至少选择一项资质', true);
+  const btn = $('#qual-grant-submit');
+  btn.disabled = true;
+  try {
+    const info = qualLookupData.info || {};
+    const r = await api('/api/admin/qualifications/manual', {
+      method: 'POST',
+      body: { uid: qualLookupData.uid, nickname: info.nickname || '', hall_name: info.hall_name || '', sister, trainer },
+    });
+    qualLookupData.local = r;
+    $('#qual-user-summary').innerHTML += '<div class="tag active" style="margin-top:8px">已保存，本次开通为累加操作，不会移除另一项资质。</div>';
+    toast('资质已开通');
+    loadQuals();
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 $('#quals-refresh').addEventListener('click', loadQuals);
 
 // ────────────── UID 速查 ──────────────
@@ -520,6 +595,7 @@ let bindingsKw = '';
 
 async function loadBindings(page) {
   if (page) bindingsPage = page;
+  $('#bindings-export').style.display = bindingsView === 'ops' ? 'none' : '';
   if (bindingsView === 'ops') {
     const data = await api('/api/operations?limit=50');
     $('#bindings-table thead').innerHTML = '<tr><th>时间</th><th>操作者</th><th>动作</th><th>类型</th><th>培训师/姐姐UID</th><th>妹妹UID</th><th>备注</th></tr>';
@@ -1058,6 +1134,56 @@ $('#import-submit').addEventListener('click', async () => {
   }
 });
 
+// ────────────── 档案与绑定列表导出 ──────────────
+async function exportListXlsx(kind, btn) {
+  const params = new URLSearchParams();
+  if (kind === 'trainers') {
+    const kw = $('#trainer-kw').value.trim();
+    if (kw) params.set('kw', kw);
+  } else if (kind === 'trainees') {
+    const kw = $('#trainee-kw').value.trim();
+    const status = $('#trainee-status-filter').value;
+    if (kw) params.set('kw', kw);
+    if (status) params.set('status', status);
+  } else {
+    params.set('active', bindingsActiveView ? '1' : '0');
+    if (bindingsTypeFilter) params.set('bind_type', bindingsTypeFilter);
+    if (bindingsKw) params.set('kw', bindingsKw);
+  }
+  btn.disabled = true;
+  const oldText = btn.textContent;
+  btn.textContent = '生成中…';
+  try {
+    const resp = await fetch(`/api/export/${kind}?${params}`);
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      throw new Error(data.msg || `导出失败 (${resp.status})`);
+    }
+    const blob = await resp.blob();
+    const cd = resp.headers.get('Content-Disposition') || '';
+    const m = cd.match(/filename\*=UTF-8''([^;]+)/);
+    const fallback = { trainers: '培训师档案.xlsx', trainees: '妹妹档案.xlsx', bindings: '绑定列表.xlsx' }[kind];
+    const filename = m ? decodeURIComponent(m[1]) : fallback;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+    toast('导出成功');
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = oldText;
+  }
+}
+
+$('#trainer-export').addEventListener('click', (e) => exportListXlsx('trainers', e.currentTarget));
+$('#trainee-export').addEventListener('click', (e) => exportListXlsx('trainees', e.currentTarget));
+$('#bindings-export').addEventListener('click', (e) => exportListXlsx('bindings', e.currentTarget));
+
 // ────────────── 周奖励导出 ──────────────
 $('#exp-date').value = new Date().toLocaleDateString('sv-SE');  // 本地 YYYY-MM-DD
 
@@ -1130,6 +1256,8 @@ async function loadDashboard() {
     renderPieChart(d.dissolve_reasons_week, '#dash-pie-week', '#dash-pie-week-legend');
     renderDissolved(d);
     renderRetentionLine(d.retention_4w_weekly);
+    const pg = d.post_graduation || {};
+    $('#dash-grad-data-note').textContent = `当前完成完整带教窗口 ${pg.total || 0} 人；已有周追踪数据 ${pg.tracked_total || 0} 人；最近培训师毕业周数据：${pg.latest_week || '暂无'}。毕业后第1周从毕业当天所在自然周开始计算，包含本周进行中的数据；有排档天数即计留存，未同步记录不进入分母。每周一同步本周和上周，历史周可按需回填。`;
   } catch (e) {
     toast(e.message, true);
   }
@@ -1137,8 +1265,20 @@ async function loadDashboard() {
 
 $('#dash-week').addEventListener('change', loadDashboard);
 
+function graduateMetric(metric) {
+  if (!metric) return { value: '—', sample: '暂无样本' };
+  const value = metric.rate !== null
+    ? `${metric.rate}%`
+    : metric.cohort > 0 ? '待同步' : '待形成样本';
+  return { value, sample: `已同步 ${metric.tracked}/${metric.cohort}` };
+}
+
 function renderDashCards(d) {
   const r4 = d.retention_4w;
+  const pg = d.post_graduation || {};
+  const gw1 = graduateMetric(pg.week1);
+  const gw4 = graduateMetric(pg.week4);
+  const gp1 = graduateMetric(pg.production_week1);
   const cards = [
     { label: `选中周新绑定（${d.this_week.label}）`, value: d.this_week.bound, color: '#3b82f6' },
     { label: '选中周解散', value: d.this_week.unbound, color: '#ef4444' },
@@ -1147,6 +1287,10 @@ function renderDashCards(d) {
     { label: `解绑后仍在平台（共解绑 ${d.unbound_retention.total} 人）`, value: `${d.unbound_retention.retained} 人 · ${d.unbound_retention.rate}%`, color: '#8E6BC8' },
     { label: `4周留存率·仅培训师（样本 ${r4.cohort}）`, value: `${r4.retention_rate}%`, color: '#10b981' },
     { label: '4周解散率·仅培训师', value: `${r4.dissolution_rate}%`, color: '#ef4444' },
+    { label: '完成4周带教（首次毕业）', value: `${pg.total || 0} 人`, color: '#3b82f6' },
+    { label: `毕业后第1周留存率（${gw1.sample}）`, value: gw1.value, color: '#10b981' },
+    { label: `毕业后第4周留存率（${gw4.sample}）`, value: gw4.value, color: '#8E6BC8' },
+    { label: `毕业后第1周产出达标率（${gp1.sample}，≥1344元）`, value: gp1.value, color: '#f59e0b' },
   ];
   $('#dash-cards').innerHTML = cards.map((c) => `
     <div class="dash-card" style="border-top-color:${c.color}">

@@ -88,6 +88,7 @@ for uid in ('80001', '80002', '80003'):
             requests.delete(f"{B}/api/trainees/{t['id']}")
     db_exec('DELETE FROM trainee_level_monthly WHERE trainee_uid=?', (uid,))
     db_exec('DELETE FROM reward_grants WHERE trainee_uid=?', (uid,))
+    db_exec('DELETE FROM member_weekly WHERE uid=?', (uid,))
 
 
 print('== 培训师 CRUD ==')
@@ -384,6 +385,33 @@ check('grant-week 窗口内周数-1 且标记奖励', r.ok and r.json()['binding
 w1 = next(b for b in requests.get(f'{B}/api/bindings', params={'active': 1}).json()['items'] if b['trainee_uid'] == '80001' and b['bind_type'] == 'trainer')
 check('周数 2 → 1', w1['weeks_left'] == 1, str(w1['weeks_left']))
 
+print('== 档案与绑定列表导出 ==')
+from openpyxl import load_workbook
+import io
+
+r = anon.get(f'{B}/api/export/trainers')
+check('档案导出未登录拦截 401', r.status_code == 401, f'got {r.status_code}')
+r = requests.get(f'{B}/api/export/trainers', params={'kw': '90001'})
+check('培训师档案导出为有效 xlsx', r.ok and r.content[:2] == b'PK', f'got {r.status_code}')
+wb = load_workbook(io.BytesIO(r.content))
+check('培训师档案表头与筛选', [c.value for c in wb.active[1]] == ['UID', '昵称', '大厅', '状态', '已用名额', '总名额', '备注']
+      and wb.active.max_row == 2 and wb.active['A2'].value == '90001', str(wb.active.max_row))
+check('培训师 UID 使用文本格式', wb.active['A2'].number_format == '@', wb.active['A2'].number_format)
+
+r = requests.get(f'{B}/api/export/trainees', params={'kw': '80001', 'status': 'active'})
+check('妹妹档案导出为有效 xlsx', r.ok and r.content[:2] == b'PK', f'got {r.status_code}')
+wb = load_workbook(io.BytesIO(r.content))
+check('妹妹档案表头与筛选', wb.active['F1'].value == '培训师UID' and wb.active['H1'].value == '姐妹团姐姐UID'
+      and wb.active.max_row == 2 and wb.active['A2'].value == '80001', str(wb.active.max_row))
+
+r = requests.get(f'{B}/api/export/bindings', params={'active': 1, 'bind_type': 'trainer', 'kw': '80001'})
+check('绑定列表导出为有效 xlsx', r.ok and r.content[:2] == b'PK', f'got {r.status_code}')
+wb = load_workbook(io.BytesIO(r.content))
+check('绑定列表表头与筛选', wb.active['C1'].value == '培训师/姐姐UID' and wb.active['N1'].value == '剩余奖励周数'
+      and wb.active.max_row == 2 and wb.active['E2'].value == '80001', str(wb.active.max_row))
+r = requests.get(f'{B}/api/export/bindings', params={'bind_type': 'bad'})
+check('绑定导出非法类型 400', r.status_code == 400, f'got {r.status_code}')
+
 print('== 奖励导出 ==')
 # 先解绑测试绑定（只动本测试创建的数据！）：导出测试不打网络
 db_exec(f"UPDATE bindings SET unbound_at=CURRENT_TIMESTAMP WHERE unbound_at IS NULL AND trainee_id IN ({te_a},{te_b},{te_c})")
@@ -467,8 +495,14 @@ r = requests.get(f'{B}/api/portal/me')
 check('新人 portal/me 返回 role=new 且无名额面板', r.ok and r.json().get('role') == 'new' and r.json().get('slots') is None, r.text)
 r = requests.post(f'{B}/api/portal/bind', json={'trainee_uid': '90001'})
 check('新人无权绑定（401）', r.status_code == 401, f'got {r.status_code}')
+r = requests.post(f'{B}/api/admin/qualifications/manual', json={'uid': '80001', 'nickname': '测试新人80001', 'sister': True, 'trainer': False})
+check('手动开通姐妹团资质', r.ok and r.json()['role'] == 'sister' and r.json()['sister_qualified'] == 1, r.text)
+r = requests.post(f'{B}/api/admin/qualifications/manual', json={'uid': '80001', 'nickname': '测试新人80001', 'sister': False, 'trainer': True})
+check('叠加培训师资质并保留姐妹团', r.ok and r.json()['role'] == 'trainer' and r.json()['sister_qualified'] == 1 and r.json()['trainer_qualified'] == 1, r.text)
+r = requests.post(f'{B}/api/admin/qualifications/manual', json={'uid': '80001', 'nickname': '测试新人80001', 'sister': True, 'trainer': False})
+check('重复开通单项不移除另一项资质', r.ok and r.json()['sister_qualified'] == 1 and r.json()['trainer_qualified'] == 1, r.text)
 r = requests.post(f'{B}/api/portal/logout')
-db_exec("DELETE FROM trainers WHERE uid='80001' AND role='new'")
+db_exec("DELETE FROM trainers WHERE uid='80001'")
 cap = requests.get(f'{B}/api/portal/captcha').json()['code']
 r = requests.post(f'{B}/api/portal/login', json={'uid': '90001', 'code': 'xxxxx', 'password': 'test456'})
 check('验证码环节已取消（任意验证码不拦截）', r.ok, r.text)
@@ -521,6 +555,42 @@ check('看板结构', r.ok and len(d['weekly']) == 8 and 'dissolve_reasons' in d
 check('近8周绑定数>=1（本周有测试绑定）', sum(w['bound'] for w in d['weekly']) >= 1, str(d['weekly']))
 check('解散原因归类包含手动解绑或系统判定', all('reason' in x and x['count'] > 0 for x in d['dissolve_reasons']), str(d['dissolve_reasons']))
 check('4周留存字段', set(('cohort', 'retained', 'dissolved', 'retention_rate', 'dissolution_rate')) <= set(d['retention_4w'].keys()), str(d['retention_4w']))
+# 构造一个已毕业的培训师妹妹：第 1 周有排档且产出达标，第 4 周故意留作待同步
+old_bound = (datetime.utcnow() - timedelta(days=60)).strftime('%Y-%m-%d %H:%M:%S')
+db_exec("UPDATE bindings SET bound_at=? WHERE trainee_id=? AND bind_type='trainer' AND unbound_at IS NULL", (old_bound, te_a))
+_, graduate_at = expected_window(old_bound)
+grad_day = graduate_at.date()
+db_exec('''INSERT OR REPLACE INTO member_weekly
+           (uid, week_start, week_end, nickname, revenue, schedule_days, week_level, queried_at)
+           VALUES ('80001', ?, ?, '测试妹妹甲', 1500, 2, '金牌', ?)''',
+        (grad_day.strftime('%Y-%m-%d'), (grad_day + timedelta(days=6)).strftime('%Y-%m-%d'), NOW_S))
+r = requests.get(f'{B}/api/dashboard/summary')
+pg = r.json()['post_graduation']
+check('毕业后指标包含首次毕业人数与周数据覆盖', pg['total'] >= 1 and pg['tracked_total'] >= 1, str(pg))
+check('毕业第1周排档>0 计留存且流水≥1344 计达标',
+      pg['week1']['retained'] >= 1 and pg['production_week1']['achieved'] >= 1, str(pg))
+check('未同步的毕业第4周不计入分母', pg['week4']['rate'] is None and pg['week4']['missing'] >= 1, str(pg['week4']))
+# 本周一刚毕业的妹妹已进入毕业后第1周，不能等到下周才形成样本
+current_grad_day = (datetime.now() + timedelta(hours=8)).date()
+current_grad_day -= timedelta(days=current_grad_day.weekday())
+current_window_start = current_grad_day - timedelta(weeks=4)
+current_bound_local = datetime.combine(current_window_start - timedelta(days=1), datetime.min.time()).replace(hour=12)
+current_bound = (current_bound_local - timedelta(hours=8)).strftime('%Y-%m-%d %H:%M:%S')
+r = requests.post(f'{B}/api/trainees', json={'uid': '80006', 'nickname': '测试本周毕业'})
+assert r.ok, f'新增本周毕业测试妹妹失败: {r.text}'
+te_current = r.json()['id']
+db_exec("INSERT INTO bindings (trainer_id, trainee_id, bind_type, bound_at, note) VALUES (?, ?, 'trainer', ?, '本周毕业回归测试')",
+        (tr_a, te_current, current_bound))
+db_exec('''INSERT OR REPLACE INTO member_weekly
+           (uid, week_start, week_end, nickname, revenue, schedule_days, week_level, queried_at)
+           VALUES ('80006', ?, ?, '测试本周毕业', 1500, 2, '金牌', ?)''',
+        (current_grad_day.strftime('%Y-%m-%d'), (current_grad_day + timedelta(days=6)).strftime('%Y-%m-%d'), NOW_S))
+r = requests.get(f'{B}/api/dashboard/summary')
+pg_current = r.json()['post_graduation']
+check('本周毕业即进入第1周样本且使用本周已同步数据',
+      pg_current['week1']['cohort'] >= pg['week1']['cohort'] + 1
+      and pg_current['week1']['tracked'] >= pg['week1']['tracked'] + 1,
+      str({'before': pg['week1'], 'current': pg_current['week1']}))
 r = requests.get(f'{B}/api/dashboard/summary', params={'week': '2026-09-01'})
 check('看板支持选周', r.ok and r.json()['this_week']['label'] == '08-31 ~ 09-06', r.json()['this_week'])
 r = requests.get(f'{B}/api/bindings', params={'active': 0, 'kw': '测试妹妹甲'})
@@ -536,7 +606,7 @@ print(f'\n结果: {passed} passed, {failed} failed')
 
 # 清理测试数据（一律按测试 UID 精确匹配，绝不用可能错位的 id）
 TEST_TRAINER_UIDS = ('90001', '90002', '90003', '90004', '90005', '90006', '90007', '91001', '91002')
-TEST_TRAINEE_UIDS = ('80001', '80002', '80003', '80004', '80005')
+TEST_TRAINEE_UIDS = ('80001', '80002', '80003', '80004', '80005', '80006')
 # 测试绑定记录直接删除（不留历史，避免污染看板统计）
 marks_tr = ','.join('?' * len(TEST_TRAINER_UIDS))
 marks_te = ','.join('?' * len(TEST_TRAINEE_UIDS))
@@ -553,5 +623,6 @@ for uid in TEST_TRAINEE_UIDS:
         if t['uid'] == uid:
             requests.delete(f"{B}/api/trainees/{t['id']}")
     db_exec('DELETE FROM trainee_level_monthly WHERE trainee_uid=?', (uid,))
+    db_exec('DELETE FROM member_weekly WHERE uid=?', (uid,))
 print('测试数据已清理')
 sys.exit(1 if failed else 0)

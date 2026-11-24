@@ -92,6 +92,7 @@
         <h2>绑定列表</h2>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <input id="bindings-kw" type="text" placeholder="搜索昵称 / UID" style="width:160px">
+          <button id="bindings-export" class="btn">导出 XLSX</button>
           <button id="bindings-refresh" class="btn">刷新全部数据</button>
           <div class="seg" id="bindings-type-seg">
             <button class="seg-btn active" data-filter="">全部类型</button>
@@ -229,6 +230,18 @@
         <div id="dash-dissolved" class="muted" style="font-size:13px">加载中…</div>
       </div>
     </div>
+    <details class="card data-notes">
+      <summary>数据口径与来源说明</summary>
+      <div class="data-notes-body">
+        <p><b>时间口径</b>：绑定和解绑时间统一按北京时间（UTC+8）归入自然周，每周一至周日。顶部“统计周”只影响选中周绑定/解散和选中周原因分布；4 周留存与毕业后指标为累计口径。</p>
+        <p><b>4 周留存/解散</b>：仅统计培训师绑定满 28 天的记录；仍生效或满 28 天后才解散计为留存，提前解散计为解散。它衡量带教关系，不代表毕业后仍在平台。</p>
+        <p><b>毕业</b>：完成从绑定次周周一开始的完整 4 周带教窗口，窗口结束日为毕业日；提前解散不算毕业，同一 UID 只取首次毕业。</p>
+        <p><b>毕业后留存</b>：毕业后第 1/4 个自然周排档天数大于 0。只统计对应自然周已经结束且已有周数据的妹妹；未同步数据记为“待同步”，不计入留存或流失。</p>
+        <p><b>产出达标</b>：毕业后第 1 自然周礼物流水 ≥ 1344 元。留存和产出分别计算，避免只用流水掩盖未留存。</p>
+        <p><b>数据来源</b>：绑定关系来自本地 bindings；带教留存来自绑定起止时间；毕业后周数据来自 UID 查询系统的 member_weekly 周追踪。档案里的“活跃/退出”不参与这些比率。</p>
+        <p id="dash-grad-data-note" class="muted"></p>
+      </div>
+    </details>
   </section>
 
   <!-- 课程考试（嵌入 LUNA 考试系统管理端，经 /admin-bridge 带 key 进入） -->
@@ -238,6 +251,25 @@
 
   <!-- 资质审核 -->
   <section id="tab-quals" class="panel">
+    <div class="card">
+      <div class="card-head">
+        <h2>UID 资质核验与手动开通</h2>
+        <button id="qual-lookup-btn" class="btn primary">查询 UID</button>
+      </div>
+      <div class="toolbar">
+        <input id="qual-lookup-uid" type="text" inputmode="numeric" placeholder="输入 UID，自动回填昵称、大厅和平台资质">
+      </div>
+      <div id="qual-lookup-result" class="hidden" style="margin-top:14px">
+        <div id="qual-user-summary"></div>
+        <div id="qual-platform-summary" class="muted" style="margin:10px 0"></div>
+        <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">
+          <label><input id="qual-grant-sister" type="checkbox"> 开通姐妹团资质</label>
+          <label><input id="qual-grant-trainer" type="checkbox"> 开通培训师资质</label>
+          <button id="qual-grant-submit" class="btn small primary">确认开通</button>
+        </div>
+        <div class="muted" style="margin-top:8px">平台状态仅用于辅助核对，最终由管理员确认。手动开通不会生成考试申请记录。</div>
+      </div>
+    </div>
     <div class="card">
       <div class="card-head">
         <h2>资质审核（考试系统申请）</h2>
@@ -269,6 +301,7 @@
       <input id="trainer-kw" type="text" placeholder="搜索 UID / 昵称">
       <button id="trainer-bulk" class="btn">批量导入</button>
       <button id="trainer-refresh-all" class="btn">批量补全信息</button>
+      <button id="trainer-export" class="btn">导出 XLSX</button>
       <button id="trainer-add" class="btn primary">新增培训师</button>
     </div>
     <table id="trainers-table">
@@ -296,6 +329,7 @@
         <option value="inactive">退出</option>
       </select>
       <button id="trainee-import" class="btn">从历史数据导入</button>
+      <button id="trainee-export" class="btn">导出 XLSX</button>
       <button id="trainee-add" class="btn primary">新增妹妹</button>
     </div>
     <table id="trainees-table">

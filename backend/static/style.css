@@ -154,6 +154,11 @@ input:focus, select:focus { border-color: var(--brand-gold); box-shadow: 0 0 0 3
 .dash-pie-wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
 .pie-legend-item { font-size: 13px; color: #4b5563; padding: 3px 0; }
 .pie-title { font-size: 13px; color: #6b7280; margin-bottom: 8px; }
+.data-notes { margin-top: 16px; }
+.data-notes summary { cursor: pointer; font-weight: 700; color: #5b2a06; }
+.data-notes-body { padding-top: 14px; font-size: 13px; line-height: 1.8; color: #4b5563; }
+.data-notes-body p { margin: 0 0 10px; }
+.data-notes-body p:last-child { margin-bottom: 0; }
 @media (max-width: 768px) {
   .dash-grid { grid-template-columns: 1fr; }
 }

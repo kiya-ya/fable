@@ -6,10 +6,11 @@
 排档（不成团）完全不可见 → 毕业留存失真。本模块按人追踪毕业生毕业后的真实产出。
 产出线：毕业后按老人要求 ≥1344/周（新人阶梯 336/672/1008/1344 的第四档）。
 
-追踪范围：近 12 周内毕业的妹妹（更早的毕业生对运营意义已不大，且省查询量）。
+追踪范围：近 12 周内的姐妹团毕业生，以及完成完整 4 周带教窗口的培训师妹妹。
+培训师提前解散不算毕业；同一 UID 取首次毕业，避免换绑后重复进入样本。
 
 用法:
-  python crawler/member_weekly_sync.py              # 同步本周
+  python crawler/member_weekly_sync.py              # 同步本周和上周
   python crawler/member_weekly_sync.py --weeks 4    # 回填最近 4 周
 """
 import sys
@@ -53,20 +54,59 @@ def get_week_range(offset: int = 0):
     return monday.strftime('%Y-%m-%d'), sunday.strftime('%Y-%m-%d')
 
 
+def trainer_graduation_date(bound_at):
+    """培训师带教毕业日：绑定次周周一起的 4 周窗口结束日（周一）。"""
+    local = datetime.strptime(bound_at, '%Y-%m-%d %H:%M:%S') + timedelta(hours=8)
+    days_to_monday = (7 - local.weekday()) % 7 or 7
+    window_start = (local + timedelta(days=days_to_monday)).date()
+    return window_start + timedelta(weeks=4)
+
+
+def get_trainer_graduates(conn, since=None):
+    """完成完整带教窗口的培训师妹妹；提前解散不算毕业，同一 UID 取首次毕业。"""
+    today = datetime.now().date()
+    rows = conn.execute('''
+        SELECT t.uid, t.nickname, b.bound_at, b.unbound_at
+        FROM bindings b JOIN trainees t ON t.id=b.trainee_id
+        WHERE b.bind_type='trainer' ORDER BY b.bound_at
+    ''').fetchall()
+    graduates = {}
+    for row in rows:
+        grad_date = trainer_graduation_date(row['bound_at'])
+        if grad_date > today or (since and grad_date < since):
+            continue
+        if row['unbound_at']:
+            unbound_date = (datetime.strptime(row['unbound_at'], '%Y-%m-%d %H:%M:%S') + timedelta(hours=8)).date()
+            if unbound_date < grad_date:
+                continue
+        if row['uid'] not in graduates or grad_date < graduates[row['uid']]['grad_date']:
+            graduates[row['uid']] = {
+                'uid': row['uid'], 'nickname': row['nickname'], 'grad_date': grad_date,
+            }
+    return sorted(graduates.values(), key=lambda g: g['grad_date'], reverse=True)
+
+
 def get_tracked_uids(conn):
-    """近 12 周内毕业的妹妹（uid, 昵称, 毕业日期）"""
-    since = (datetime.now() - timedelta(weeks=TRACK_WEEKS)).strftime('%Y-%m-%d')
-    return conn.execute("""
+    """近 12 周内的姐妹团毕业生 + 完成 4 周带教的培训师妹妹。"""
+    since_date = (datetime.now() - timedelta(weeks=TRACK_WEEKS)).date()
+    sister_rows = conn.execute("""
         SELECT CAST(sister_uid2 AS TEXT) AS uid, MAX(sister_nickname2) AS nickname,
                MAX(dissolve_date) AS grad_date
         FROM team_detail
         WHERE dissolve_reason = '毕业' AND dissolve_date >= ?
           AND sister_uid2 IS NOT NULL AND sister_uid2 != ''
         GROUP BY uid ORDER BY grad_date DESC
-    """, (since,)).fetchall()
+    """, (since_date.strftime('%Y-%m-%d'),)).fetchall()
+    graduates = {}
+    for row in sister_rows:
+        graduates[row['uid']] = {'uid': row['uid'], 'nickname': row['nickname'], 'grad_date': row['grad_date']}
+    for row in get_trainer_graduates(conn, since=since_date):
+        if row['uid'] not in graduates or str(row['grad_date']) < str(graduates[row['uid']]['grad_date']):
+            graduates[row['uid']] = row
+    return sorted(graduates.values(), key=lambda g: str(g['grad_date']), reverse=True)
 
 
-def sync(weeks: int = 1, delay: float = 0.6, max_heals: int = 50):
+def sync(weeks: int = 2, delay: float = 0.6, max_heals: int = 50):
     conn = get_db()
     ensure_table(conn)
     grads = get_tracked_uids(conn)
@@ -124,6 +164,6 @@ def sync(weeks: int = 1, delay: float = 0.6, max_heals: int = 50):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='毕业妹妹个人周流水追踪')
-    parser.add_argument('--weeks', type=int, default=1, help='回填最近 N 周（默认 1）')
+    parser.add_argument('--weeks', type=int, default=2, help='同步最近 N 周（默认 2，含本周与上周）')
     args = parser.parse_args()
     sync(weeks=args.weeks)

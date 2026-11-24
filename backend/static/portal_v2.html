@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>点点开黑 · 统一入口（v2 测试）</title>
+<title>点点开黑 · 学习与成长</title>
 <link rel="icon" href="/logo.jpg" type="image/jpeg">
 <link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="/brand.css">
@@ -278,6 +278,7 @@ main.v2-main { width: 100%; max-width: 680px; padding: 0 16px; }
 .guide-body { flex: 1; }
 .guide-body b { font-size: 14px; color: var(--brown-900, #5b2a06); }
 .guide-body p { font-size: 12px; color: rgba(91,42,6,.6); margin-top: 3px; line-height: 1.6; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
 
 /* 底部导航栏（登录后显示） */
 body.v2-in { padding-bottom: 74px; }
@@ -317,6 +318,106 @@ body.v2-guest #bottom-nav { display: none; }
 .st-rejected { color: #dc2626; }
 .btn.logout-red { background: #dc2626; border-color: transparent; color: #fff; font-weight: 600; }
 .btn.logout-red:hover:not(:disabled) { background: #b91c1c; }
+
+/* 我的：新人成长月刊的个人档案页 */
+body.v2-mine { background: #F4F5F1; color: #211F25; }
+.mine-mag-hero { margin: 14px 0 0; padding: 24px 18px 22px; position: relative; border: 2px solid #211F25; background: #D9CDEF; }
+.mine-hero-heading { margin-bottom: 20px; padding: 0 104px 17px 0; border-bottom: 1px solid rgba(33,31,37,.25); }
+.mine-hero-heading p { margin: 0 0 7px; color: #4B4653; font-size: 11px; font-weight: 800; }
+.mine-hero-heading h1 { margin: 0; color: #211F25; font-family: 'Songti SC', 'SimSun', serif; font-size: 31px; line-height: 1.25; letter-spacing: -.04em; }
+.mine-profile { display: flex; align-items: center; gap: 12px; }
+.mine-mag-hero img { border: 2px solid #211F25 !important; border-radius: 50% !important; box-shadow: none !important; }
+#v2-mine-name { color: #211F25 !important; font-family: 'Songti SC', 'SimSun', serif; font-size: 25px !important; text-shadow: none !important; }
+#v2-mine-uid { color: #4B4653 !important; font-variant-numeric: tabular-nums; }
+.mine-mag-hero .icon-btn { border: 1px solid #211F25; border-radius: 0; background: transparent; color: #211F25; }
+.mine-mag-hero .icon-btn:hover { background: rgba(255,255,255,.45); }
+body.v2-mine .card { margin: 0; padding: 23px 2px 26px; border: 0; border-top: 3px solid #211F25; border-radius: 0; background: transparent; box-shadow: none; color: #211F25; }
+body.v2-mine .mine-mag-first { margin-top: 26px; }
+body.v2-mine .card h2 { margin-bottom: 16px; color: #211F25; font-family: 'Songti SC', 'SimSun', serif; font-size: 27px; }
+body.v2-mine .card h2::before { display: none; }
+body.v2-mine .v2-result-row { margin-bottom: 0; padding: 13px 2px; border: 0; border-bottom: 1px solid #CFCDD2; border-radius: 0; background: transparent; }
+body.v2-mine .v2-result-row:hover { background: #F4F5F1; }
+body.v2-mine .apply-row { border-top-color: #CFCDD2; border-top-style: solid; }
+body.v2-mine .btn { border-radius: 0; }
+body.v2-mine .btn.primary { border: 2px solid #211F25; background: #211F25; color: #fff; box-shadow: none; }
+body.v2-mine #bottom-nav { border-top: 2px solid #211F25; background: #F4F5F1; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+body.v2-mine .bnav-item { border-radius: 0; color: #66616C; }
+body.v2-mine .bnav-item.active { background: transparent; color: #6D50AF; }
+body.v2-mine .v2-footer .footer-text { color: #5F5A64 !important; }
+body.v2-mine .v2-badge,
+body.v2-mine .muted,
+body.v2-mine #v2-results .v2-result-row div > div,
+body.v2-mine #v2-results > div:last-child { color: #5F5A64 !important; }
+body.v2-mine .v2-result-row > span[style*="color:#dc2626"] { color: #8A365D !important; }
+body.v2-mine .v2-result-row > span[style*="color:#16a34a"] { color: #1F643F !important; }
+.apply-steps { display: flex; align-items: center; margin-top: 8px; }
+.apply-step { display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0; }
+.apply-step-dot { display: flex; align-items: center; justify-content: center; width: 25px; height: 25px; border-radius: 50%; background: #E6E3E8; color: #5F5A64; font-size: 11px; font-weight: 800; }
+.apply-step-label { color: #5F5A64; font-size: 11px; font-weight: 700; }
+.apply-step-dot.done { background: #247B50; color: #fff; }
+.apply-step-dot.active { background: #6D50AF; color: #fff; }
+.apply-step-label.done { color: #247B50; }
+.apply-step-label.active { color: #5C3E96; }
+.apply-step-line { flex: 1; height: 2px; margin: 0 4px; background: #DDD9E1; }
+.apply-step-line.done { background: #72A88D; }
+body.v2-mine #v2-apply-list div[style*="color:#8E6BC8"] { color: #5C3E96 !important; }
+
+/* 用户端首页：新人成长月刊（不影响登录页与我的页） */
+body.v2-in:not(.v2-mine) { background: #F4F5F1; color: #211F25; }
+body.v2-in:not(.v2-mine) .landing-header { border-bottom: 2px solid #211F25; background: #F4F5F1; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+body.v2-in:not(.v2-mine) .lh-brand { color: #211F25; font-family: 'Songti SC', 'SimSun', serif; font-size: 19px; }
+body.v2-in:not(.v2-mine) .lh-brand img { border-radius: 50%; box-shadow: none; }
+body.v2-in:not(.v2-mine) .menu-btn i { background: #211F25; }
+body.v2-in:not(.v2-mine) .home-cover { display: grid; grid-template-columns: minmax(0, 1fr) 48%; min-height: 238px; margin-bottom: 24px; border: 2px solid #211F25; background: #D9CDEF; }
+body.v2-in:not(.v2-mine) .home-cover-copy { display: flex; flex-direction: column; align-items: flex-start; padding: 22px 16px; }
+body.v2-in:not(.v2-mine) .home-issue { margin: 0 0 16px; color: #4B4653; font-size: 11px; font-weight: 800; }
+body.v2-in:not(.v2-mine) .home-cover h1 { margin: 0; color: #211F25; font-family: 'Songti SC', 'SimSun', serif; font-size: 31px; line-height: 1.3; letter-spacing: -.04em; }
+body.v2-in:not(.v2-mine) .home-user { margin: auto 0 0; padding-top: 18px; color: #4B4653; font-size: 12px; }
+body.v2-in:not(.v2-mine) #v2-open-guide { margin-top: 10px; }
+body.v2-in:not(.v2-mine) .home-banner { height: 100%; min-height: 236px; margin: 0; border: 0; border-left: 2px solid #211F25; border-radius: 0; box-shadow: none; }
+body.v2-in:not(.v2-mine) .home-banner .banner-track,
+body.v2-in:not(.v2-mine) .home-banner .banner-slide { height: 100%; }
+body.v2-in:not(.v2-mine) .home-banner .banner-text { left: 10px; bottom: 10px; padding: 5px 8px; background: #F4F5F1; color: #211F25; font-family: 'Songti SC', 'SimSun', serif; font-size: 16px; text-shadow: none; }
+body.v2-in:not(.v2-mine) .home-directory-label { margin-bottom: 6px; color: #4B4653; font-size: 11px; font-weight: 800; }
+body.v2-in:not(.v2-mine) .quick-grid { display: block; margin-bottom: 26px; border-top: 3px solid #211F25; }
+body.v2-in:not(.v2-mine) .quick-item { position: relative; display: grid; grid-template-columns: 38px 1fr 20px; grid-template-rows: auto auto; align-items: center; gap: 3px 12px; width: 100%; min-height: 76px; padding: 12px 3px; border: 0; border-bottom: 1px solid #CFCDD2; border-radius: 0; background: transparent; box-shadow: none; text-align: left; }
+body.v2-in:not(.v2-mine) .quick-item:not(.locked):hover { transform: none; background: #fff; box-shadow: none; }
+body.v2-in:not(.v2-mine) .quick-item.locked { opacity: 1; background: transparent; }
+body.v2-in:not(.v2-mine) .quick-item::after { content: '→'; grid-column: 3; grid-row: 1 / 3; color: #4B4653; font-size: 19px; }
+body.v2-in:not(.v2-mine) .quick-icon { grid-column: 1; grid-row: 1 / 3; width: 36px; height: 36px; border: 1px solid #211F25; border-radius: 50%; background: transparent !important; }
+body.v2-in:not(.v2-mine) .quick-item b { grid-column: 2; color: #211F25; font-family: 'Songti SC', 'SimSun', serif; font-size: 20px; line-height: 1.2; }
+body.v2-in:not(.v2-mine) .quick-item .qs { grid-column: 2; min-height: 0; color: #5F5A64; font-size: 11px; text-align: left; line-height: 1.5; }
+body.v2-in:not(.v2-mine) .home-section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; padding-bottom: 9px; border-bottom: 3px solid #211F25; }
+body.v2-in:not(.v2-mine) .home-section-heading h2 { margin: 0; font-family: 'Songti SC', 'SimSun', serif; font-size: 27px; }
+body.v2-in:not(.v2-mine) .home-section-heading > span { color: #5F5A64; font-size: 11px; }
+@media (max-width: 480px) {
+  body.v2-in:not(.v2-mine) .home-cover-copy { padding: 17px 12px; }
+  body.v2-in:not(.v2-mine) .home-cover h1 { font-size: 26px; }
+}
+body.v2-in:not(.v2-mine) .pkg-grid { gap: 14px; }
+body.v2-in:not(.v2-mine) .card { border: 2px solid #211F25; border-radius: 0; box-shadow: none; color: #211F25; }
+body.v2-in:not(.v2-mine) .pkg-card { padding: 18px; background: #fff; }
+body.v2-in:not(.v2-mine) .pkg-card-sister { background: #E8E1D5; }
+body.v2-in:not(.v2-mine) .pkg-card-trainer { background: #D9CDEF; }
+body.v2-in:not(.v2-mine) .pkg-icon { border-radius: 0; }
+body.v2-in:not(.v2-mine) .pkg-head b { color: #211F25; font-family: 'Songti SC', 'SimSun', serif; font-size: 21px; }
+body.v2-in:not(.v2-mine) .pkg-head p,
+body.v2-in:not(.v2-mine) .pkg-course .st.todo { color: #4B4653; }
+body.v2-in:not(.v2-mine) .pkg-progress .bar { height: 6px; border-radius: 0; background: rgba(33,31,37,.16); }
+body.v2-in:not(.v2-mine) .pkg-progress .bar i { border-radius: 0; background: #6D50AF; }
+body.v2-in:not(.v2-mine) .pkg-progress .num,
+body.v2-in:not(.v2-mine) .pkg-cat { color: #211F25; font-variant-numeric: tabular-nums; }
+body.v2-in:not(.v2-mine) .pkg-course { margin-bottom: 0; padding: 8px 0; border-bottom: 1px solid rgba(33,31,37,.18); border-radius: 0; background: transparent; color: #211F25; }
+body.v2-in:not(.v2-mine) .pkg-course.opt { background: transparent; }
+body.v2-in:not(.v2-mine) .pkg-course .st { color: #1F643F; }
+body.v2-in:not(.v2-mine) .pkg-course .st.doing { color: #4E317F; }
+body.v2-in:not(.v2-mine) .btn { border-radius: 0; }
+body.v2-in:not(.v2-mine) .btn.primary { border: 2px solid #211F25; background: #211F25; color: #fff; box-shadow: none; }
+body.v2-in:not(.v2-mine) #bottom-nav { border-top: 2px solid #211F25; background: #F4F5F1; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+body.v2-in:not(.v2-mine) .bnav-item { border-radius: 0; color: #66616C; }
+body.v2-in:not(.v2-mine) .bnav-item.active { background: transparent; color: #6D50AF; }
+body.v2-in:not(.v2-mine) .v2-badge,
+body.v2-in:not(.v2-mine) .v2-footer .footer-text { color: #5F5A64; }
 </style>
 </head>
 <body>
@@ -346,7 +447,6 @@ body.v2-guest #bottom-nav { display: none; }
 </div>
 
 <main class="v2-main">
-  <div class="v2-badge">V2 灰度测试版</div>
   <div id="v2-loading" style="text-align:center;color:rgba(91,42,6,.45);padding:48px 0;font-size:13px;letter-spacing:2px">加载中…</div>
 
   <!-- 签名区：标语 + 声波条 -->
@@ -369,24 +469,26 @@ body.v2-guest #bottom-nav { display: none; }
     <div class="v2-tip">新人？首次登录密码为 UID 后 5 位<br>登录后按指引学习考试</div>
   </div>
 
-  <!-- 主页面（首页 tab）：轮播图 + 三大模块 + 课包展示 -->
+  <!-- 主页面：月刊封面 + 纵向功能目录 + 本期课程 -->
   <div id="v2-main" class="hidden">
-    <!-- 顶部滚动图像 -->
-    <div class="home-banner" id="v2-home-banner">
-      <div class="banner-track" id="v2-banner-track">
-        <div class="banner-slide"><img src="/img/banner-learn.jpg" alt="新人培训中心"><div class="banner-text">新人培训中心</div></div>
-        <div class="banner-slide"><img src="/img/pkg-sister.jpg" alt="姐妹团"><div class="banner-text">姐妹团 · 与姐妹同行</div></div>
-        <div class="banner-slide"><img src="/img/pkg-trainer.jpg" alt="培训师"><div class="banner-text">培训师 · 带出王牌</div></div>
+    <section class="home-cover" aria-labelledby="home-cover-title">
+      <div class="home-cover-copy">
+        <p class="home-issue">新人成长月刊</p>
+        <h1 id="home-cover-title">今天，<br>先学这一课。</h1>
+        <p class="home-user"><span id="v2-welcome">欢迎你</span></p>
+        <button id="v2-open-guide" class="btn small hidden">新人指引</button>
       </div>
-      <div class="banner-dots" id="v2-banner-dots"><i class="on"></i><i></i><i></i></div>
-    </div>
+      <div class="home-banner" id="v2-home-banner">
+        <div class="banner-track" id="v2-banner-track">
+          <div class="banner-slide"><img src="/img/banner-learn.jpg" alt="新人培训中心"><div class="banner-text">新人培训中心</div></div>
+          <div class="banner-slide"><img src="/img/pkg-sister.jpg" alt="姐妹团"><div class="banner-text">姐妹团 · 与姐妹同行</div></div>
+          <div class="banner-slide"><img src="/img/pkg-trainer.jpg" alt="培训师"><div class="banner-text">培训师 · 带出王牌</div></div>
+        </div>
+        <div class="banner-dots" id="v2-banner-dots"><i class="on"></i><i></i><i></i></div>
+      </div>
+    </section>
 
-    <div class="v2-hello">
-      <span id="v2-welcome">欢迎你</span>
-      <button id="v2-open-guide" class="btn small hidden">新人指引</button>
-    </div>
-
-    <!-- 三大功能模块 -->
+    <div class="home-directory-label">学习与工作目录</div>
     <div class="quick-grid">
       <button class="quick-item" id="v2-q-learn">
         <span class="quick-icon" style="background:rgba(142,107,200,.14)">
@@ -411,17 +513,18 @@ body.v2-guest #bottom-nav { display: none; }
       </button>
     </div>
 
-    <!-- 课包详情（仅展示） -->
+    <div class="home-section-heading"><h2>本期课程</h2><span>课包与资质进度</span></div>
     <div class="pkg-grid" id="v2-pkg-grid">
       <div class="card" style="text-align:center;color:rgba(91,42,6,.4);grid-column:1/-1">课程加载中…</div>
     </div>
   </div>
 
-  <!-- 我的 tab：夜幕紫 hero + 资质进度 + 成绩（折叠） -->
+  <!-- 我的 tab：个人档案封面 + 资质章节 + 成绩目录（折叠） -->
   <div id="v2-mine" class="hidden" style="position:relative">
-    <!-- hero：夜幕紫（与首页/登录页呼应），账号操作收成右上角图标 -->
-    <div style="margin:0 -16px;border-radius:0 0 28px 28px;background:linear-gradient(160deg,#2A2140 0%,#4A3663 50%,#6B4FA0 100%);padding:26px 16px 48px;position:relative">
-      <div style="display:flex;align-items:center;gap:12px">
+    <!-- 档案封面保留账号操作，正文不再使用卡片套卡片 -->
+    <div class="mine-mag-hero">
+      <div class="mine-hero-heading"><p>个人档案</p><h1>我的成长记录</h1></div>
+      <div class="mine-profile">
         <img src="/logo.jpg" alt="头像" style="width:52px;height:52px;border-radius:16px;box-shadow:0 6px 16px rgba(20,12,40,.4);border:2px solid rgba(255,247,234,.35)">
         <div style="flex:1;min-width:0">
           <div id="v2-mine-name" style="font-weight:800;font-size:17px;color:#FFF7EA;text-shadow:0 1px 8px rgba(20,12,40,.4)"></div>
@@ -439,7 +542,7 @@ body.v2-guest #bottom-nav { display: none; }
       </div>
     </div>
 
-    <div class="card" style="margin-top:-32px;position:relative;z-index:2">
+    <div class="card mine-mag-first">
       <h2>我的资质进度</h2>
       <div id="v2-apply-list" class="muted" style="font-size:13px">加载中…</div>
     </div>
@@ -474,34 +577,51 @@ body.v2-guest #bottom-nav { display: none; }
     <div class="footer-text">点点开黑 · 享受开黑乐趣</div>
   </div>
 
-  <!-- 新人指引弹窗（首次登录强制弹出，点击关闭） -->
+  <!-- 新人指引弹窗（从首页入口手动打开） -->
   <div id="v2-guide-modal" class="modal-mask hidden">
     <div class="modal" style="max-width:440px">
       <h3>新人指引</h3>
       <div class="guide-step">
         <div class="guide-num">1</div>
         <div class="guide-body">
-          <b>课程学习</b>
-          <p>完成姐妹团必修课（视频看到 90% / 图文读够时长）</p>
+          <b>完成课程学习</b>
+          <p>先学习姐妹团必修课。图文课读够要求时长，视频课达到观看要求；后续按课包目录继续学习。</p>
         </div>
       </div>
       <div class="guide-step">
         <div class="guide-num">2</div>
         <div class="guide-body">
-          <b>参加考试</b>
-          <p>必修课全部完成后解锁，60 分及格；挂科 1 天后可重考</p>
+          <b>参加对应考试</b>
+          <p>完成课程后解锁对应考试，60 分及格；未通过时，冷却结束后可再次参加。</p>
         </div>
       </div>
       <div class="guide-step">
         <div class="guide-num">3</div>
         <div class="guide-body">
-          <b>申请资质</b>
-          <p>考试通过后在「查询」页提交申请，管理员审核通过即激活</p>
+          <b>完成平台认证并申请资质</b>
+          <p>考试通过后，在「我的」查看平台操作指引，再提交资质申请，管理员审核通过后激活对应身份。</p>
         </div>
       </div>
       <div class="modal-actions">
         <button id="v2-guide-golearn" class="btn">去学习</button>
         <button id="v2-guide-close" class="btn primary">我知道了</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 资质申请前的平台操作指引 -->
+  <div id="v2-apply-guide-modal" class="modal-mask hidden" role="dialog" aria-modal="true" aria-labelledby="v2-apply-guide-title">
+    <div class="modal" style="max-width:440px">
+      <h3 id="v2-apply-guide-title">申请前，请先完成平台认证</h3>
+      <p class="muted" style="margin:6px 0 10px">在点点开黑 APP 中按以下步骤操作，平台显示「审核中」后，再回到本系统提交资质申请。</p>
+      <div class="guide-step"><div class="guide-num">1</div><div class="guide-body"><b>打开点点开黑 APP</b></div></div>
+      <div class="guide-step"><div class="guide-num">2</div><div class="guide-body"><b>进入「我的」</b></div></div>
+      <div class="guide-step"><div class="guide-num">3</div><div class="guide-body"><b>点击「队长认证」</b></div></div>
+      <div class="guide-step"><div class="guide-num">4</div><div id="v2-apply-guide-step4" class="guide-body"><b>选择「点点姐妹团」</b></div></div>
+      <div class="guide-step"><div class="guide-num">5</div><div class="guide-body"><b>平台显示「审核中」后，回到本系统提交资质申请</b><p>本系统的申请也需要管理员审核，请不要重复提交。</p></div></div>
+      <div class="modal-actions">
+        <button id="v2-apply-guide-cancel" class="btn">取消</button>
+        <button id="v2-apply-guide-confirm" class="btn primary" disabled>10 秒后可申请</button>
       </div>
     </div>
   </div>
@@ -623,7 +743,7 @@ function renderPackages(packages) {
   }).join('');
 }
 async function loadLearnOverview() {
-  const { status, data } = await api('/api/portal/learn-overview?uid=' + encodeURIComponent(myUid));
+  const { status, data } = await api('/api/portal/learn-overview?uid=' + encodeURIComponent(myUid) + '&nickname=' + encodeURIComponent(myNickname));
   if (status === 200 && data.ok === false) return;
   const d = data.data || data;
   if (d && d.packages) {
@@ -659,7 +779,7 @@ function enterApp(me) {
     $('#v2-q-bind-icon').innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#C2440C" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>';
     item.onclick = () => { location.href = '/portal'; };
   }
-  // 新人/其他角色：进主页面（双大卡），新人强制弹指引（可关闭）
+  // 新人可从首页手动打开指引，不再登录后自动弹窗
   $('#v2-login').classList.add('hidden');
   $('#v2-loading').classList.add('hidden');
   $('#v2-main').classList.remove('hidden');
@@ -668,14 +788,13 @@ function enterApp(me) {
   $('#v2-welcome').textContent = `欢迎你，${me.nickname || myUid}`;
   if (me.role === 'new') {
     $('#v2-open-guide').classList.remove('hidden');
-    $('#v2-guide-modal').classList.remove('hidden');
   }
   if (me.is_new_user) toast('已为你自动建档，欢迎加入！');
   loadLearnOverview();
 }
 
 function v2GoPackage(key) {
-  location.href = EXAM_URL + '/learn/package/' + key + '?uid=' + encodeURIComponent(myUid);
+  location.href = EXAM_URL + '/learn/package/' + key + '?uid=' + encodeURIComponent(myUid) + '&nickname=' + encodeURIComponent(myNickname);
 }
 
 // 三横线 → 系统说明下拉
@@ -758,10 +877,10 @@ $('#v2-share-modal').addEventListener('click', (e) => {
 
 // ── 三大模块跳转 ──
 $('#v2-q-learn').addEventListener('click', () => {
-  location.href = EXAM_URL + '/learn?uid=' + encodeURIComponent(myUid);
+  location.href = EXAM_URL + '/learn?uid=' + encodeURIComponent(myUid) + '&nickname=' + encodeURIComponent(myNickname);
 });
 $('#v2-q-exam').addEventListener('click', () => {
-  location.href = EXAM_URL + '/exam-center?uid=' + encodeURIComponent(myUid);
+  location.href = EXAM_URL + '/exam-center?uid=' + encodeURIComponent(myUid) + '&nickname=' + encodeURIComponent(myNickname);
 });
 
 // ── 底部导航 ──
@@ -776,8 +895,8 @@ function switchTab(tab) {
 document.querySelectorAll('.bnav-item').forEach((btn) => {
   btn.addEventListener('click', () => {
     const tab = btn.dataset.tab;
-    if (tab === 'learn') location.href = EXAM_URL + '/learn?uid=' + encodeURIComponent(myUid);
-    else if (tab === 'exam') location.href = EXAM_URL + '/exam-center?uid=' + encodeURIComponent(myUid);
+    if (tab === 'learn') location.href = EXAM_URL + '/learn?uid=' + encodeURIComponent(myUid) + '&nickname=' + encodeURIComponent(myNickname);
+    else if (tab === 'exam') location.href = EXAM_URL + '/exam-center?uid=' + encodeURIComponent(myUid) + '&nickname=' + encodeURIComponent(myNickname);
     else switchTab(tab);
   });
 });
@@ -786,12 +905,12 @@ document.querySelectorAll('.bnav-item').forEach((btn) => {
 const APPLY_STATUS = { pending: ['审核中', 'st-pending'], approved: ['已通过（已激活）', 'st-approved'], rejected: ['已驳回', 'st-rejected'] };
 
 function stepHtml(steps) {
-  return `<div style="display:flex;align-items:center;margin-top:8px">` + steps.map((s, i) => `
-    <div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0">
-      <div style="width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;${s.done ? 'background:#16a34a;color:#fff' : s.active ? 'background:#8E6BC8;color:#fff' : 'background:rgba(122,62,18,.10);color:rgba(91,42,6,.4)'}">${s.done ? '✓' : i + 1}</div>
-      <span style="font-size:10px;font-weight:700;${s.done ? 'color:#16a34a' : s.active ? 'color:#8E6BC8' : 'color:rgba(91,42,6,.4)'}">${s.label}</span>
+  return `<div class="apply-steps">` + steps.map((s, i) => `
+    <div class="apply-step">
+      <div class="apply-step-dot ${s.done ? 'done' : s.active ? 'active' : ''}">${s.done ? '✓' : i + 1}</div>
+      <span class="apply-step-label ${s.done ? 'done' : s.active ? 'active' : ''}">${s.label}</span>
     </div>
-    ${i < steps.length - 1 ? `<div style="flex:1;height:2px;margin:0 4px;border-radius:2px;background:${s.done ? 'rgba(22,163,74,.5)' : 'rgba(122,62,18,.10)'}"></div>` : ''}`).join('') + `</div>`;
+    ${i < steps.length - 1 ? `<div class="apply-step-line ${s.done ? 'done' : ''}"></div>` : ''}`).join('') + `</div>`;
 }
 
 async function loadMine() {
@@ -802,9 +921,9 @@ async function loadMine() {
   box.innerHTML = '加载中…';
   // 并行拉取：学习概览 + 申请状态 + 成绩
   const [ov, st, rs] = await Promise.all([
-    api('/api/portal/learn-overview?uid=' + encodeURIComponent(myUid)),
-    api('/api/portal/apply-status?uid=' + encodeURIComponent(myUid)),
-    api('/api/portal/my-results?uid=' + encodeURIComponent(myUid)),
+    api('/api/portal/learn-overview?uid=' + encodeURIComponent(myUid) + '&nickname=' + encodeURIComponent(myNickname)),
+    api('/api/portal/apply-status?uid=' + encodeURIComponent(myUid) + '&nickname=' + encodeURIComponent(myNickname)),
+    api('/api/portal/my-results?uid=' + encodeURIComponent(myUid) + '&nickname=' + encodeURIComponent(myNickname)),
   ]);
   // 资质进度
   const pkgs = (ov.data && ov.data.data && ov.data.data.packages) || (ov.data && ov.data.packages) || [];
@@ -891,18 +1010,73 @@ async function v2ResultDetail(rid) {
     </div>`).join('') || '<div class="empty">暂无明细</div>';
 }
 
-async function v2Apply(key, name) {
-  if (!confirm(`确认申请「${name}」资质？管理员审核通过后即激活`)) return;
-  const { data } = await api('/api/portal/apply', {
-    method: 'POST', body: { uid: myUid, nickname: myNickname, package_key: key },
-  });
-  if (data.ok || data.success) {
-    toast('申请已提交，请等待审核');
-  } else {
-    toast(data.msg || data.error || '申请失败', true);
-  }
-  loadMine();
+let applyGuideKey = '';
+let applyGuideRemaining = 0;
+let applyGuideTimer = null;
+let applyGuideSubmitting = false;
+
+function v2Apply(key, name) {
+  if (applyGuideSubmitting) return;
+  applyGuideKey = key;
+  const isTrainer = key === 'trainer';
+  $('#v2-apply-guide-title').textContent = isTrainer ? '申请培训师资质前，请先完成平台认证' : '申请姐妹团资质前，请先完成平台认证';
+  $('#v2-apply-guide-step4').innerHTML = isTrainer ? '<b>点击「更多」，选择「培训师」</b>' : '<b>选择「点点姐妹团」</b>';
+  applyGuideRemaining = 10;
+  clearInterval(applyGuideTimer);
+  const confirmBtn = $('#v2-apply-guide-confirm');
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = '10 秒后可申请';
+  $('#v2-apply-guide-cancel').disabled = false;
+  $('#v2-apply-guide-modal').classList.remove('hidden');
+  applyGuideTimer = setInterval(() => {
+    applyGuideRemaining -= 1;
+    if (applyGuideRemaining <= 0) {
+      clearInterval(applyGuideTimer);
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = '我已阅读并申请';
+    } else {
+      confirmBtn.textContent = `${applyGuideRemaining} 秒后可申请`;
+    }
+  }, 1000);
 }
+
+function closeApplyGuide() {
+  if (applyGuideSubmitting) return;
+  clearInterval(applyGuideTimer);
+  $('#v2-apply-guide-modal').classList.add('hidden');
+}
+
+$('#v2-apply-guide-cancel').addEventListener('click', closeApplyGuide);
+$('#v2-apply-guide-confirm').addEventListener('click', async () => {
+  if (applyGuideRemaining > 0 || applyGuideSubmitting) return;
+  applyGuideSubmitting = true;
+  const confirmBtn = $('#v2-apply-guide-confirm');
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = '正在提交…';
+  $('#v2-apply-guide-cancel').disabled = true;
+  try {
+    const { data } = await api('/api/portal/apply', {
+      method: 'POST', body: { uid: myUid, nickname: myNickname, package_key: applyGuideKey },
+    });
+    if (data.ok || data.success) {
+      clearInterval(applyGuideTimer);
+      $('#v2-apply-guide-modal').classList.add('hidden');
+      toast('申请已提交，请等待审核');
+      loadMine();
+    } else {
+      toast(data.msg || data.error || '申请失败', true);
+    }
+  } catch (e) {
+    toast('网络错误，请稍后重试', true);
+  } finally {
+    applyGuideSubmitting = false;
+    $('#v2-apply-guide-cancel').disabled = false;
+    if (applyGuideRemaining <= 0) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = '我已阅读并申请';
+    }
+  }
+});
 
 // ── 我的：账号操作 ──
 $('#v2-chpwd').addEventListener('click', () => {

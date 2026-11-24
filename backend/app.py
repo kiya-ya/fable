@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, 'crawler'))
 from db import get_db  # noqa: E402
 from uid_crawler import UIDCrawler, CookieExpiredError, CAPTAIN_TYPE_LABELS  # noqa: E402
 from trainer_db import init_trainer_db  # noqa: E402
+from member_weekly_sync import get_trainer_graduates  # noqa: E402
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 
@@ -261,6 +262,81 @@ def qual_reject(qid):
         return err(f'考试系统连接失败: {e}', 502)
     log_operation('admin', None, 'qual_reject', None, str(qid), None, f'驳回资质申请：{reason}')
     return ok()
+
+
+@app.get('/api/admin/qualifications/lookup')
+def qual_lookup():
+    """UID 回填：本地身份 + UID 基本信息 + 点点开黑平台资质（平台异常不阻断手动兜底）。"""
+    uid = str(request.args.get('uid', '') or '').strip()
+    if not uid:
+        return err('UID 不能为空')
+    info = {'found': False}
+    uid_error = None
+    try:
+        result = UIDCrawler().query(uid, 'game')
+        if result.get('found'):
+            info = {'found': True, 'nickname': result.get('nickname', ''),
+                    'hall_name': result.get('schedule_hall', '') or result.get('auth_hall', '')}
+        else:
+            uid_error = result.get('msg', 'UID 查询系统未找到该用户')
+    except Exception as e:
+        uid_error = str(e)
+    platform = None
+    platform_error = None
+    try:
+        from qualification_crawler import query_qualifications
+        platform = query_qualifications(uid)
+    except Exception as e:
+        platform_error = str(e)
+    conn = get_db()
+    local = conn.execute('SELECT * FROM trainers WHERE uid=?', (uid,)).fetchone()
+    conn.close()
+    if local:
+        info['found'] = True
+        info['nickname'] = info.get('nickname') or local['nickname']
+        info['hall_name'] = info.get('hall_name') or local['hall_name']
+    if platform and not info.get('nickname') and platform.get('nickname'):
+        info['found'] = True
+        info['nickname'] = platform['nickname']
+    return ok({'uid': uid, 'info': info, 'uid_error': uid_error,
+               'local': rows_to_dicts([local])[0] if local else None,
+               'platform': platform, 'platform_error': platform_error})
+
+
+@app.post('/api/admin/qualifications/manual')
+def qual_manual_grant():
+    """兜底开通：管理员核对后，为 UID 累加姐妹团/培训师资质，不依赖考试申请记录。"""
+    data = request.get_json(force=True, silent=True) or {}
+    uid = str(data.get('uid', '') or '').strip()
+    nickname = str(data.get('nickname', '') or '').strip()
+    hall_name = str(data.get('hall_name', '') or '').strip()
+    if not uid:
+        return err('UID 不能为空')
+    if not data.get('sister') and not data.get('trainer'):
+        return err('请至少选择一项要开通的资质')
+    conn = get_db()
+    tr = conn.execute('SELECT * FROM trainers WHERE uid=?', (uid,)).fetchone()
+    sister = bool(data.get('sister')) or bool(tr and (tr['sister_qualified'] or tr['role'] == 'sister'))
+    trainer = bool(data.get('trainer')) or bool(tr and (tr['trainer_qualified'] or tr['role'] == 'trainer'))
+    role = 'trainer' if trainer else 'sister'
+    if tr:
+        conn.execute('''UPDATE trainers SET nickname=?, hall_name=?, role=?, status='active',
+                       sister_qualified=?, trainer_qualified=?, updated_at=CURRENT_TIMESTAMP WHERE id=?''',
+                     (nickname or tr['nickname'], hall_name or tr['hall_name'], role,
+                      int(sister), int(trainer), tr['id']))
+        tid = tr['id']
+    else:
+        cur = conn.execute('''INSERT INTO trainers
+                           (uid, nickname, hall_name, role, base_slots, note, sister_qualified, trainer_qualified)
+                           VALUES (?,?,?,?,2,'管理员手动开通资质',?,?)''',
+                         (uid, nickname or uid, hall_name, role, int(sister), int(trainer)))
+        tid = cur.lastrowid
+    conn.commit()
+    conn.close()
+    labels = ('姐妹团' if sister else '') + ('、培训师' if trainer else '')
+    log_operation('admin', None, 'qual_manual_grant', role, uid, None, f'手动开通资质：{labels}')
+    return ok({'id': tid, 'uid': uid, 'role': role, 'sister_qualified': int(sister),
+               'trainer_qualified': int(trainer)})
 
 
 @app.before_request
@@ -2073,6 +2149,57 @@ def _week_monday(d):
     return d - timedelta(days=d.weekday())
 
 
+def _post_graduation_metrics(conn, today):
+    """培训师毕业后自然周指标；未同步周只记缺口，不进入留存率分母。"""
+    graduates = get_trainer_graduates(conn)
+    if not graduates:
+        return {
+            'total': 0, 'tracked_total': 0, 'latest_week': None,
+            'week1': None, 'week4': None, 'production_week1': None,
+        }
+    uids = [g['uid'] for g in graduates]
+    marks = ','.join('?' * len(uids))
+    weekly_rows = conn.execute(
+        f'SELECT uid, week_start, schedule_days, revenue, queried_at FROM member_weekly WHERE uid IN ({marks})',
+        uids).fetchall()
+    weekly_map = {(r['uid'], r['week_start']): r for r in weekly_rows}
+    current_monday = _week_monday(today)
+
+    def week_stats(offset, production=False):
+        retained = achieved = 0
+        matured = []
+        for g in graduates:
+            week_start = g['grad_date'] + timedelta(weeks=offset)
+            if week_start <= current_monday:
+                matured.append((g, week_start))
+        tracked = 0
+        for g, week_start in matured:
+            row = weekly_map.get((g['uid'], week_start.strftime('%Y-%m-%d')))
+            if not row:
+                continue
+            tracked += 1
+            if (row['schedule_days'] or 0) > 0:
+                retained += 1
+            if float(row['revenue'] or 0) >= 1344:
+                achieved += 1
+        numerator = achieved if production else retained
+        return {
+            'cohort': len(matured), 'tracked': tracked, 'missing': len(matured) - tracked,
+            'retained': retained, 'left': tracked - retained, 'achieved': achieved,
+            'rate': round(numerator / tracked * 100, 1) if tracked else None,
+        }
+
+    return {
+        'total': len(graduates),
+        'tracked_total': len({r['uid'] for r in weekly_rows}),
+        'latest_week': max((r['week_start'] for r in weekly_rows), default=None),
+        'latest_queried_at': max((r['queried_at'] or '' for r in weekly_rows), default='') or None,
+        'week1': week_stats(0),
+        'week4': week_stats(3),
+        'production_week1': week_stats(0, production=True),
+    }
+
+
 @app.get('/api/dashboard/summary')
 def dashboard_summary():
     conn = get_db()
@@ -2191,6 +2318,7 @@ def dashboard_summary():
     # 4 周解散样本的「解散但留存 / 解散未留存」拆解
     dissolved_retained = len(dissolved_uids & retained_uids)
     dissolved_left = len(dissolved_uids) - dissolved_retained
+    post_graduation = _post_graduation_metrics(conn, today)
     conn.close()
 
     cohort = cohort_retained + cohort_dissolved
@@ -2230,7 +2358,185 @@ def dashboard_summary():
         },
         'rewards': {'pending': pending_rewards, 'granted': granted_rewards},
         'retention_4w_weekly': retention_weekly,
+        'post_graduation': post_graduation,
     })
+
+
+# ────────────────────────────────────────────── 档案与绑定列表导出（XLSX）
+
+def _xlsx_response(filename, sheet_name, headers, rows, widths, text_columns=()):
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = sheet_name
+    ws.append(headers)
+    for row in rows:
+        ws.append(row)
+    for cell in ws[1]:
+        cell.fill = PatternFill('solid', fgColor='27233A')
+        cell.font = Font(color='FFFFFF', bold=True)
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+    ws.row_dimensions[1].height = 24
+    ws.freeze_panes = 'A2'
+    ws.auto_filter.ref = f'A1:{get_column_letter(len(headers))}{ws.max_row}'
+    for idx, width in enumerate(widths, start=1):
+        ws.column_dimensions[get_column_letter(idx)].width = width
+    for col in text_columns:
+        for row_idx in range(2, ws.max_row + 1):
+            ws.cell(row=row_idx, column=col).number_format = '@'
+    for row in ws.iter_rows(min_row=2):
+        for cell in row:
+            cell.alignment = Alignment(vertical='center')
+    buf = BytesIO()
+    wb.save(buf)
+    wb.close()
+    buf.seek(0)
+    return send_file(buf, as_attachment=True, download_name=filename,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+def _export_stamp():
+    return datetime.now().strftime('%Y%m%d_%H%M%S')
+
+
+@app.get('/api/export/trainers')
+def export_trainers():
+    kw = request.args.get('kw', '').strip()
+    where = "WHERE role='trainer'"
+    params = []
+    if kw:
+        where += ' AND (uid LIKE ? OR nickname LIKE ?)'
+        params += [f'%{kw}%', f'%{kw}%']
+    conn = get_db()
+    rows = conn.execute(
+        f'SELECT * FROM trainers {where} ORDER BY id DESC', params).fetchall()
+    counts = dict(conn.execute(
+        "SELECT trainer_id, COUNT(*) FROM bindings WHERE unbound_at IS NULL AND bind_type='trainer' GROUP BY trainer_id"
+    ).fetchall())
+    bound_rows = conn.execute(
+        '''SELECT b.trainer_id, t.uid FROM bindings b
+           JOIN trainees t ON t.id = b.trainee_id
+           WHERE b.unbound_at IS NULL AND b.bind_type='trainer' ''').fetchall()
+    levels = get_effective_levels(conn, [r['uid'] for r in bound_rows])
+    extras = {}
+    for r in bound_rows:
+        lv = levels.get(r['uid'])
+        extras[r['trainer_id']] = extras.get(r['trainer_id'], 0) + slot_plus(lv['best_rank'] if lv else 0)
+    conn.close()
+    output = []
+    for r in rows:
+        output.append([
+            r['uid'], r['nickname'], r['hall_name'] or '',
+            '活跃' if r['status'] == 'active' else '退出',
+            counts.get(r['id'], 0), min(r['base_slots'] + extras.get(r['id'], 0), SLOT_CAP),
+            r['note'] or '',
+        ])
+    return _xlsx_response(
+        f'培训师档案_{_export_stamp()}.xlsx', '培训师档案',
+        ['UID', '昵称', '大厅', '状态', '已用名额', '总名额', '备注'],
+        output, [16, 22, 24, 10, 12, 12, 32], text_columns=(1,))
+
+
+@app.get('/api/export/trainees')
+def export_trainees():
+    kw = request.args.get('kw', '').strip()
+    status = request.args.get('status', '').strip()
+    if status and status not in TRAINEE_STATUSES:
+        return err('status 必须是 active / inactive')
+    where = 'WHERE 1=1'
+    params = []
+    if kw:
+        where += ' AND (uid LIKE ? OR nickname LIKE ?)'
+        params += [f'%{kw}%', f'%{kw}%']
+    if status:
+        where += ' AND status = ?'
+        params.append(status)
+    conn = get_db()
+    rows = conn.execute(
+        f'SELECT * FROM trainees {where} ORDER BY id DESC', params).fetchall()
+    bound_rows = conn.execute(
+        '''SELECT b.trainee_id, b.bind_type, tr.nickname AS side_nickname, tr.uid AS side_uid
+           FROM bindings b JOIN trainers tr ON tr.id = b.trainer_id
+           WHERE b.unbound_at IS NULL''').fetchall()
+    conn.close()
+    bound = {}
+    for r in bound_rows:
+        bound.setdefault(r['trainee_id'], {})[r['bind_type']] = r
+    output = []
+    for r in rows:
+        current = bound.get(r['id'], {})
+        trainer = current.get('trainer')
+        sister = current.get('sister')
+        output.append([
+            r['uid'], r['nickname'], r['hall_name'] or '',
+            '活跃' if r['status'] == 'active' else '退出',
+            trainer['side_nickname'] if trainer else '', trainer['side_uid'] if trainer else '',
+            sister['side_nickname'] if sister else '', sister['side_uid'] if sister else '',
+            r['note'] or '',
+        ])
+    return _xlsx_response(
+        f'妹妹档案_{_export_stamp()}.xlsx', '妹妹档案',
+        ['UID', '昵称', '大厅', '状态', '培训师昵称', '培训师UID', '姐妹团姐姐昵称', '姐妹团姐姐UID', '备注'],
+        output, [16, 22, 24, 10, 22, 16, 22, 16, 32], text_columns=(1, 6, 8))
+
+
+@app.get('/api/export/bindings')
+def export_bindings():
+    active = request.args.get('active', '1') != '0'
+    bind_type = request.args.get('bind_type', '').strip()
+    if bind_type and bind_type not in BIND_TYPES:
+        return err('bind_type 必须是 trainer / sister')
+    kw = request.args.get('kw', '').strip()
+    where = 'WHERE b.unbound_at IS NULL' if active else 'WHERE b.unbound_at IS NOT NULL'
+    params = []
+    if bind_type:
+        where += ' AND b.bind_type = ?'
+        params.append(bind_type)
+    if kw:
+        where += ''' AND (tr.nickname LIKE ? OR te.nickname LIKE ?
+                         OR tr.uid LIKE ? OR te.uid LIKE ?)'''
+        params += [f'%{kw}%'] * 4
+    conn = get_db()
+    rows = conn.execute(
+        f'''SELECT b.id, b.bind_type, b.bound_at, b.unbound_at, b.note, b.weeks_consumed,
+                   tr.uid AS trainer_uid, tr.nickname AS trainer_nickname,
+                   te.uid AS trainee_uid, te.nickname AS trainee_nickname, te.hall_name, te.protection_end
+            FROM bindings b
+            JOIN trainers tr ON tr.id = b.trainer_id
+            JOIN trainees te ON te.id = b.trainee_id
+            {where} ORDER BY b.id DESC''', params).fetchall()
+    retained_map = {r['trainee_uid']: r['last_retained'] for r in conn.execute(
+        'SELECT trainee_uid, last_retained FROM trainee_level_monthly WHERE month=?', (_current_month(),)).fetchall()}
+    conn.close()
+    output = []
+    window_labels = {'in_window': '进行中', 'not_started': '未开始', 'expired': '已结束'}
+    for r in rows:
+        start, end, window_status = reward_window_status(r['bound_at'])
+        if window_status == 'in_window':
+            weeks_left = max(REWARD_WINDOW_WEEKS - (r['weeks_consumed'] or 0), 0)
+        elif window_status == 'not_started':
+            weeks_left = REWARD_WINDOW_WEEKS
+        else:
+            weeks_left = 0
+        retained = retained_map.get(r['trainee_uid'])
+        output.append([
+            BIND_TYPES.get(r['bind_type'], r['bind_type']), r['trainer_nickname'], r['trainer_uid'],
+            r['trainee_nickname'], r['trainee_uid'], r['hall_name'] or '',
+            '当前生效' if active else '已解绑', r['protection_end'] or '',
+            '未查询' if retained is None else ('留存' if retained else '疑似解散'),
+            r['bound_at'], start.strftime('%Y-%m-%d'), end.strftime('%Y-%m-%d'),
+            window_labels.get(window_status, window_status), weeks_left, r['unbound_at'] or '', r['note'] or '',
+        ])
+    scope = '当前生效' if active else '历史记录'
+    return _xlsx_response(
+        f'绑定列表_{scope}_{_export_stamp()}.xlsx', scope,
+        ['类型', '培训师/姐姐昵称', '培训师/姐姐UID', '妹妹昵称', '妹妹UID', '大厅', '绑定状态',
+         '保护期结束', '留存', '绑定时间', '奖励开始日期', '结束日期', '奖励窗口状态', '剩余奖励周数', '解绑时间', '备注'],
+        output, [14, 22, 18, 22, 16, 24, 12, 16, 12, 20, 16, 16, 14, 14, 20, 32], text_columns=(3, 5))
 
 
 # ────────────────────────────────────────────── 周奖励导出（XLSX）
@@ -2730,6 +3036,9 @@ def _weekly_refresh_loop():
                 if state.get('last_week') != week_key:
                     print(f'[WeeklyRefresh] 开始本周({week_key})学员刷新…', flush=True)
                     queried, errors = refresh_all_bound_trainees()
+                    print(f'[WeeklyRefresh] 开始同步毕业妹妹本周与上周数据…', flush=True)
+                    from member_weekly_sync import sync as sync_member_weekly
+                    sync_member_weekly(weeks=2)
                     with open(WEEKLY_REFRESH_STATE, 'w', encoding='utf-8') as f:
                         json.dump({'last_week': week_key, 'ran_at': now.strftime('%Y-%m-%d %H:%M:%S'),
                                    'queried': len(queried), 'errors': len(errors)}, f, ensure_ascii=False)

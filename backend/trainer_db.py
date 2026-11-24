@@ -85,6 +85,12 @@ def _migrate(conn):
     if 'password_hash' not in cols:
         # 用户端账号密码（哈希存储，不可逆；管理员设置/重置，用户可自改）
         conn.execute('ALTER TABLE trainers ADD COLUMN password_hash TEXT')
+    if 'sister_qualified' not in cols:
+        conn.execute('ALTER TABLE trainers ADD COLUMN sister_qualified INTEGER NOT NULL DEFAULT 0')
+    if 'trainer_qualified' not in cols:
+        conn.execute('ALTER TABLE trainers ADD COLUMN trainer_qualified INTEGER NOT NULL DEFAULT 0')
+    conn.execute("UPDATE trainers SET sister_qualified=1 WHERE role='sister'")
+    conn.execute("UPDATE trainers SET trainer_qualified=1 WHERE role='trainer'")
     # 操作日志：谁（admin/portal/system）在何时对谁做了什么
     conn.execute('''CREATE TABLE IF NOT EXISTS operation_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
