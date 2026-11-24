@@ -27,6 +27,8 @@ __pycache__/
 tools/*
 !tools/backup_manager.py
 backups/
+.wheelhouse/*
+!.wheelhouse/.gitkeep
 
 # 测试与导出产物
 exp_check.xlsx
