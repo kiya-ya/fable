@@ -24,7 +24,9 @@ __pycache__/
 .venv/
 
 # 工具与运行产物
-tools/
+tools/*
+!tools/backup_manager.py
+backups/
 
 # 测试与导出产物
 exp_check.xlsx

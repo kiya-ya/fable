@@ -98,6 +98,32 @@ tools/ngrok.exe http 5000
 - `stats.db` — 主数据库（含历史快照）
 - `weekly_refresh_status.json` / `ngrok_state.json` / `ngrok_changes.log`
 
+## 备份与恢复
+
+`tools/backup_manager.py` 使用 SQLite 在线安全备份，包含两个数据库、LUNA 上传图片、自托管课件和必要配置。备份文件及恢复目录均不进入 Git。
+
+```bash
+# 必须换成独立的强密码，不要写入仓库
+export BACKUP_PASSWORD='替换为独立强密码'
+.venv/Scripts/python.exe -X utf8 tools/backup_manager.py backup
+
+# 在独立空目录验证恢复，不覆盖正式数据
+.venv/Scripts/python.exe -X utf8 tools/backup_manager.py restore backups/local/备份文件.zip.enc --dest backups/restore-check
+```
+
+恢复结果必须同时显示 `trainer/data/stats.db` 和 `luna/data.db` 的 `integrity_check=ok`。每日备份可通过 Windows 任务计划程序调用同一命令。
+
+异地上传使用 rclone，并强制要求加密：
+
+```bash
+export BACKUP_REMOTE='远程名称:trainer-backups'
+.venv/Scripts/python.exe -X utf8 tools/backup_manager.py backup
+```
+
+未配置 `BACKUP_REMOTE` 时只生成本地备份，输出 `offsite: pending`。公司云存储或 R2/B2 的凭据配置在 rclone 中，不写入项目。本地保留最近 7 份日备份、4 份周备份和 3 份月备份；远程版本清理策略另行配置。
+
+内部测试场景与通过标准见 `INTERNAL_TEST.md`。
+
 ## 版本历史
 
 - **v1.0.0** — 正式版：绑定管理、名额奖励、用户端账号体系、姐姐冲突检查、操作日志、ngrok 穿透与域名检测
