@@ -322,15 +322,22 @@ body.v2-guest #bottom-nav { display: none; }
 /* 我的：新人成长月刊的个人档案页 */
 body.v2-mine { background: #F4F5F1; color: #211F25; }
 .mine-mag-hero { margin: 0; padding: 22px 16px 18px; position: relative; background: transparent; }
-.mine-hero-heading { margin-bottom: 20px; padding: 0 104px 17px 0; border-bottom: 1px solid #CFCDD2; }
+.mine-hero-heading { margin-bottom: 20px; padding: 0 150px 17px 0; border-bottom: 1px solid #CFCDD2; }
 .mine-hero-heading p { margin: 0 0 7px; color: #4B4653; font-size: 11px; font-weight: 800; }
 .mine-hero-heading h1 { margin: 0; color: #211F25; font-family: 'Songti SC', 'SimSun', serif; font-size: 31px; line-height: 1.25; letter-spacing: -.04em; }
 .mine-profile { display: flex; align-items: center; gap: 12px; }
 .mine-mag-hero img { border: 0 !important; border-radius: 50% !important; box-shadow: 0 4px 12px rgba(33,31,37,.12) !important; }
 #v2-mine-name { color: #211F25 !important; font-family: 'Songti SC', 'SimSun', serif; font-size: 25px !important; text-shadow: none !important; }
 #v2-mine-uid { color: #4B4653 !important; font-variant-numeric: tabular-nums; }
-.mine-mag-hero .icon-btn { border: 0; border-radius: 50%; background: #fff; color: #211F25; box-shadow: 0 3px 10px rgba(33,31,37,.08); }
+.mine-mag-hero .icon-btn { width: 44px; height: 44px; position: relative; flex-shrink: 0; border: 0; border-radius: 50%; background: #fff; color: #211F25; box-shadow: 0 3px 10px rgba(33,31,37,.08); }
 .mine-mag-hero .icon-btn:hover { background: #fff; }
+#v2-chpwd { background: #EEE8FA !important; color: #6D50AF !important; }
+#v2-logout { background: #FDE8E8 !important; color: #C2415D !important; }
+#v2-mine-menu-btn { position: relative; width: 44px; height: 44px; padding: 0 !important; align-items: center; justify-content: center; border-radius: 50%; background: #211F25; color: #FFF7EA; }
+#v2-mine-menu-btn i { background: currentColor !important; }
+.mine-mag-hero [data-tooltip]::after { content: attr(data-tooltip); position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; padding: 5px 8px; border-radius: 6px; background: #211F25; color: #fff; font-size: 11px; line-height: 1.4; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s ease; }
+.mine-mag-hero [data-tooltip]:hover::after,
+.mine-mag-hero [data-tooltip]:focus-visible::after { opacity: 1; }
 body.v2-mine .card { margin: 0; padding: 23px 2px 26px; border: 0; border-top: 1px solid #CFCDD2; border-radius: 0; background: transparent; box-shadow: none; color: #211F25; }
 body.v2-mine .mine-mag-first { margin-top: 26px; }
 body.v2-mine .card h2 { margin-bottom: 16px; color: #211F25; font-family: 'Songti SC', 'SimSun', serif; font-size: 27px; }
@@ -377,7 +384,7 @@ body.v2-in:not(.v2-mine) .home-cover h1 { margin: 0; color: #211F25; font-family
 body.v2-in:not(.v2-mine) .home-cover h1 br { display: none; }
 body.v2-in:not(.v2-mine) .home-user { margin: 0; padding: 0; color: #4B4653; font-size: 12px; text-align: right; }
 body.v2-in:not(.v2-mine) #v2-open-guide { grid-column: 1 / -1; justify-self: start; margin-top: 2px; }
-body.v2-in:not(.v2-mine) .home-banner { width: 100%; height: 230px; min-height: 0; margin: 0; border: 0; border-radius: 12px; box-shadow: 0 6px 18px rgba(33,31,37,.12); }
+body.v2-in:not(.v2-mine) .home-banner { width: 100%; height: 280px; min-height: 0; margin: 0; border: 0; border-radius: 12px; box-shadow: 0 6px 18px rgba(33,31,37,.12); }
 body.v2-in:not(.v2-mine) .home-banner .banner-track,
 body.v2-in:not(.v2-mine) .home-banner .banner-slide { height: 100%; }
 body.v2-in:not(.v2-mine) .home-banner .banner-text { left: 10px; bottom: 10px; padding: 5px 8px; background: #F4F5F1; color: #211F25; font-family: 'Songti SC', 'SimSun', serif; font-size: 16px; text-shadow: none; }
@@ -406,11 +413,16 @@ body.v2-in:not(.v2-mine) .home-section-heading > span { color: #5F5A64; font-siz
 @media (max-width: 480px) {
   body.v2-in:not(.v2-mine) .home-cover-copy { padding: 12px; }
   body.v2-in:not(.v2-mine) .home-cover h1 { font-size: 24px; }
-  body.v2-in:not(.v2-mine) .home-banner { height: 200px; }
+  body.v2-in:not(.v2-mine) .home-banner { height: 240px; }
   body.v2-in:not(.v2-mine) .home-banner .rule-copy { flex-basis: 60%; gap: 6px; padding: 12px 10px; }
   body.v2-in:not(.v2-mine) .home-banner .rule-copy strong { font-size: 18px; }
   body.v2-in:not(.v2-mine) .home-banner .rule-copy small { font-size: 11px; }
   body.v2-in:not(.v2-mine) .home-banner .rule-thumb { width: 40%; }
+  .mine-hero-heading { padding-right: 142px; }
+  .mine-hero-heading h1 { font-size: clamp(24px, 6.8vw, 28px); white-space: nowrap; }
+}
+@media (max-width: 359px) {
+  .mine-hero-heading { padding: 52px 0 17px; }
 }
 body.v2-in:not(.v2-mine) .pkg-grid { gap: 14px; }
 body.v2-in:not(.v2-mine) .card { border: 2px solid #211F25; border-radius: 0; box-shadow: none; color: #211F25; }
@@ -559,13 +571,13 @@ body.v2-in:not(.v2-mine) .v2-footer .footer-text { color: #5F5A64; }
         </div>
       </div>
       <div style="position:absolute;top:16px;right:16px;display:flex;gap:8px;z-index:30;align-items:center">
-        <button id="v2-chpwd" class="icon-btn" aria-label="修改密码" title="修改密码">
+        <button id="v2-chpwd" class="icon-btn" aria-label="修改密码" title="修改密码" data-tooltip="修改密码">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><circle cx="8" cy="15" r="4"/><path d="M10.9 12.1 20 3m-4 2 2.5 2.5M16.5 5.5 19 8"/></svg>
         </button>
-        <button id="v2-logout" class="icon-btn" aria-label="退出登录" title="退出登录">
+        <button id="v2-logout" class="icon-btn" aria-label="退出登录" title="退出登录" data-tooltip="退出登录">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
         </button>
-        <button id="v2-mine-menu-btn" class="menu-btn" aria-label="菜单" style="display:none;padding:8px 4px"><i style="background:#FFF7EA"></i><i style="background:#FFF7EA"></i><i style="background:#FFF7EA"></i></button>
+        <button id="v2-mine-menu-btn" class="menu-btn" aria-label="菜单" data-tooltip="系统说明" style="display:none;padding:8px 4px"><i style="background:#FFF7EA"></i><i style="background:#FFF7EA"></i><i style="background:#FFF7EA"></i></button>
       </div>
     </div>
 

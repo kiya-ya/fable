@@ -152,9 +152,9 @@ def _seed_home_banners(conn):
     if conn.execute('SELECT COUNT(*) FROM home_banners').fetchone()[0]:
         return
     rows = [
-        ('新人培训中心', '', '/img/banner-learn.jpg', 'none', 10),
-        ('姐妹团 · 与姐妹同行', '', '/img/pkg-sister.jpg', 'none', 20),
-        ('培训师 · 带出王牌', '', '/img/pkg-trainer.jpg', 'none', 30),
+        ('新人培训中心', '', '/img/banner-learn.jpg', 'modal', 10),
+        ('姐妹团 · 与姐妹同行', '', '/img/pkg-sister.jpg', 'modal', 20),
+        ('培训师 · 带出王牌', '', '/img/pkg-trainer.jpg', 'modal', 30),
         ('保护期流水规则', '4 周保护期 · 达标奖励 155 元\n两种礼物模式对照', '/img/rule-protection.jpg', 'modal', 40),
         ('红线行为须知', '7 类高风险行为\n认清场景 · 保护自身权益', '/img/rule-redline.jpg', 'modal', 50),
     ]
