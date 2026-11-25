@@ -497,6 +497,16 @@ r = requests.post(f'{B}/api/portal/bind', json={'trainee_uid': '90001'})
 check('新人无权绑定（401）', r.status_code == 401, f'got {r.status_code}')
 r = requests.post(f'{B}/api/admin/qualifications/manual', json={'uid': '80001', 'nickname': '测试新人80001', 'sister': True, 'trainer': False})
 check('手动开通姐妹团资质', r.ok and r.json()['role'] == 'sister' and r.json()['sister_qualified'] == 1, r.text)
+luna_base = requests.get(f'{B}/api/client-config').json()['exam_url']
+r = requests.get(f'{luna_base}/api/learn/home', params={'uid': '80001'})
+luna_packages = r.json()['data']['packages']
+trainer_package = next(p for p in luna_packages if p['key'] == 'trainer')
+check('手动姐妹团资质同步解锁培训师课包', r.ok and not trainer_package['chain_locked']
+      and trainer_package['chapters'][0]['unlocked'], r.text[:200])
+r = requests.get(f'{luna_base}/api/apply/status', params={'uid': '80001'})
+check('手动资质状态标记为已激活且不生成考试申请', r.json()['data']['sister']['status'] == 'approved'
+      and r.json()['data']['sister']['source'] == 'manual'
+      and r.json()['data']['sister']['id'] is None, r.text)
 r = requests.post(f'{B}/api/admin/qualifications/manual', json={'uid': '80001', 'nickname': '测试新人80001', 'sister': False, 'trainer': True})
 check('叠加培训师资质并保留姐妹团', r.ok and r.json()['role'] == 'trainer' and r.json()['sister_qualified'] == 1 and r.json()['trainer_qualified'] == 1, r.text)
 r = requests.post(f'{B}/api/admin/qualifications/manual', json={'uid': '80001', 'nickname': '测试新人80001', 'sister': True, 'trainer': False})
@@ -639,5 +649,12 @@ for uid in TEST_TRAINEE_UIDS:
             requests.delete(f"{B}/api/trainees/{t['id']}")
     db_exec('DELETE FROM trainee_level_monthly WHERE trainee_uid=?', (uid,))
     db_exec('DELETE FROM member_weekly WHERE uid=?', (uid,))
+luna_db = os.path.abspath(os.path.join(os.path.dirname(DB), '..', '..', 'LUNA', 'data.db'))
+if os.path.exists(luna_db):
+    conn = sqlite3.connect(luna_db)
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='qualification_grants'").fetchone():
+        conn.execute("DELETE FROM qualification_grants WHERE uid='80001'")
+        conn.commit()
+    conn.close()
 print('测试数据已清理')
 sys.exit(1 if failed else 0)

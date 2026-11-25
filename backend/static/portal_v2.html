@@ -1024,18 +1024,25 @@ async function loadMine() {
     const passed = es.status === 'passed';
     const app = apps[p.key] || null;
     const activated = app && app.status === 'approved';
+    const manual = activated && app.source === 'manual';
     let btn = '<button class="btn small" disabled>申请资质</button>';
     if (activated) btn = '<button class="btn small" disabled>已激活</button>';
     else if (app && app.status === 'pending') btn = '<button class="btn small" disabled>审核中</button>';
     else if (passed) btn = `<button class="btn small primary" onclick="v2Apply('${p.key}','${esc(p.name)}')">${app && app.status === 'rejected' ? '重新申请' : '申请资质'}</button>`;
-    const steps = [
+    const steps = manual ? [
+      { label: '平台资质已核验', done: true, active: false },
+      { label: '本系统免重复考试', done: true, active: false },
+      { label: '管理员已开通', done: true, active: false },
+      { label: '激活', done: true, active: false },
+    ] : [
       { label: `课程 ${p.completed_courses}/${p.total_courses}`, done: p.all_completed, active: !p.all_completed },
       { label: passed ? `考试 ${es.percentage}分` : '考试', done: passed, active: p.all_completed && !passed },
       { label: activated ? '已通过' : app && app.status === 'pending' ? '审核中' : '申请', done: Boolean(app && (app.status === 'pending' || activated)), active: passed && !app },
       { label: '激活', done: activated, active: false },
     ];
     let extra = '';
-    if (app && app.status === 'rejected') extra = `<div style="font-size:12px;color:#dc2626;margin-top:6px">已驳回：${esc(app.reason || '未填写原因')}（可重新申请）</div>`;
+    if (manual) extra = '<div style="font-size:12px;color:#6D50AF;margin-top:6px">平台资质已由管理员核验，无需重复参加本系统对应考试。</div>';
+    else if (app && app.status === 'rejected') extra = `<div style="font-size:12px;color:#dc2626;margin-top:6px">已驳回：${esc(app.reason || '未填写原因')}（可重新申请）</div>`;
     else if (app && app.status === 'pending') extra = `<div style="font-size:12px;color:#8E6BC8;margin-top:6px">申请已提交（${esc(app.created_at || '')}），等待管理员审核</div>`;
     return `<div style="padding:10px 0;${pi > 0 ? 'border-top:1px dashed rgba(122,62,18,.12);' : ''}">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">

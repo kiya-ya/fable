@@ -181,8 +181,11 @@ def _luna_api(path, method='GET', body=None):
     import urllib.request as _urlreq
     url = _client_config()['exam_url'] + path
     data = json.dumps(body, ensure_ascii=False).encode('utf-8') if body is not None else None
-    req = _urlreq.Request(url, data=data, method=method,
-                          headers={'Content-Type': 'application/json'})
+    headers = {'Content-Type': 'application/json'}
+    admin_key = _load_luna_admin_key()
+    if admin_key and path.startswith('/api/admin/'):
+        headers['Cookie'] = f'luna_admin={admin_key}'
+    req = _urlreq.Request(url, data=data, method=method, headers=headers)
     try:
         with _urlreq.urlopen(req, timeout=15) as r:
             return json.loads(r.read().decode('utf-8'))
@@ -225,20 +228,25 @@ def qual_approve(qid):
         return err('申请不存在', 404)
     if app_item['status'] != 'pending':
         return err('该申请已处理', 409)
-    role = 'sister' if app_item['package_key'] == 'sister' else 'trainer'
+    requested_role = 'sister' if app_item['package_key'] == 'sister' else 'trainer'
     uid = str(app_item['uid'])
     conn = get_db()
     tr = conn.execute('SELECT * FROM trainers WHERE uid=?', (uid,)).fetchone()
+    sister = requested_role == 'sister' or bool(tr and (tr['sister_qualified'] or tr['role'] == 'sister'))
+    trainer = requested_role == 'trainer' or bool(tr and (tr['trainer_qualified'] or tr['role'] == 'trainer'))
+    role = 'trainer' if trainer else 'sister'
     if tr:
-        conn.execute("UPDATE trainers SET role=?, status='active', updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                     (role, tr['id']))
+        conn.execute('''UPDATE trainers SET role=?, status='active', sister_qualified=?, trainer_qualified=?,
+                       updated_at=CURRENT_TIMESTAMP WHERE id=?''',
+                     (role, int(sister), int(trainer), tr['id']))
     else:
         nick, hall = _fetch_nickname_by_uid(uid)
         if not nick or nick in ('-', uid):
             nick = app_item.get('nickname') or uid
         conn.execute(
-            "INSERT INTO trainers (uid, nickname, hall_name, role, base_slots, note) VALUES (?,?,?,?,2,'资质审核建档')",
-            (uid, nick or app_item.get('nickname') or uid, hall or '', role))
+            '''INSERT INTO trainers (uid, nickname, hall_name, role, base_slots, note, sister_qualified, trainer_qualified)
+               VALUES (?,?,?,?,2,'资质审核建档',?,?)''',
+            (uid, nick or app_item.get('nickname') or uid, hall or '', role, int(sister), int(trainer)))
     conn.commit()
     conn.close()
     try:
@@ -334,6 +342,11 @@ def qual_manual_grant():
         tid = cur.lastrowid
     conn.commit()
     conn.close()
+    sync = _luna_api('/api/admin/qualification-grants', 'POST', {
+        'uid': uid, 'sister': sister, 'trainer': trainer,
+    })
+    if not sync.get('success'):
+        return err(f"本地资质已开通，但同步学习考试系统失败：{sync.get('error') or '请重试'}", 502)
     labels = ('姐妹团' if sister else '') + ('、培训师' if trainer else '')
     log_operation('admin', None, 'qual_manual_grant', role, uid, None, f'手动开通资质：{labels}')
     return ok({'id': tid, 'uid': uid, 'role': role, 'sister_qualified': int(sister),
