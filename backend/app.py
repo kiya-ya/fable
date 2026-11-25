@@ -11,9 +11,10 @@ import json
 import re
 import threading
 import time
+import uuid
 from datetime import datetime, timedelta
 
-from flask import redirect, Flask, jsonify, request, send_file, session
+from flask import redirect, Flask, jsonify, request, send_file, session, send_from_directory
 from werkzeug.security import generate_password_hash, check_password_hash
 
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -342,7 +343,7 @@ def qual_manual_grant():
 @app.before_request
 def _auth_guard():
     path = request.path
-    if path in PUBLIC_PATHS or path.startswith(('/portal/', '/api/portal/', '/img/')):
+    if path in PUBLIC_PATHS or path.startswith(('/portal/', '/api/portal/', '/img/', '/media/')):
         return None
     if session.get('admin'):
         return None
@@ -2137,6 +2138,132 @@ def list_operations():
         'SELECT * FROM operation_log ORDER BY id DESC LIMIT ?', (limit,)).fetchall()
     conn.close()
     return ok({'items': rows_to_dicts(rows)})
+
+
+# ────────────────────────────── 首页海报管理
+
+def _banner_items(conn, only_enabled=False):
+    where = 'WHERE enabled=1' if only_enabled else ''
+    return rows_to_dicts(conn.execute(
+        f'SELECT * FROM home_banners {where} ORDER BY sort,id').fetchall())
+
+
+@app.get('/api/portal/banners')
+def portal_banners():
+    conn = get_db()
+    items = _banner_items(conn, only_enabled=True)
+    conn.close()
+    return ok({'items': items})
+
+
+@app.get('/api/admin/banners')
+def admin_banners():
+    conn = get_db()
+    items = _banner_items(conn)
+    conn.close()
+    return ok({'items': items})
+
+
+@app.post('/api/admin/banners/upload')
+def upload_banner():
+    file = request.files.get('file')
+    if not file or not file.filename:
+        return err('请选择图片')
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ('.png', '.jpg', '.jpeg', '.webp', '.gif'):
+        return err('仅支持 PNG、JPG、WebP 或 GIF 图片')
+    content = file.read(5 * 1024 * 1024 + 1)
+    if len(content) > 5 * 1024 * 1024:
+        return err('海报图片不能超过 5MB')
+    directory = os.path.join(PROJECT_ROOT, 'data', 'banner_uploads')
+    os.makedirs(directory, exist_ok=True)
+    filename = f'{datetime.now():%Y%m%d%H%M%S}-{uuid.uuid4().hex[:8]}{ext}'
+    with open(os.path.join(directory, filename), 'wb') as f:
+        f.write(content)
+    return ok({'path': f'/media/banners/{filename}'})
+
+
+@app.get('/media/banners/<path:filename>')
+def serve_banner_upload(filename):
+    return send_from_directory(os.path.join(PROJECT_ROOT, 'data', 'banner_uploads'), filename)
+
+
+@app.post('/api/admin/banners')
+
+
+@app.post('/api/admin/banners')
+def create_banner():
+    data = request.get_json(force=True, silent=True) or {}
+    title = str(data.get('title', '') or '').strip()
+    image_path = str(data.get('image_path', '') or '').strip()
+    if not title or not image_path:
+        return err('标题和图片不能为空')
+    conn = get_db()
+    sort = conn.execute('SELECT COALESCE(MAX(sort), 0) + 10 FROM home_banners').fetchone()[0]
+    cur = conn.execute('''INSERT INTO home_banners (title, subtitle, image_path, action, sort, enabled)
+                       VALUES (?, ?, ?, ?, ?, 1)''',
+                       (title, str(data.get('subtitle', '') or ''), image_path,
+                        'modal' if data.get('action') == 'modal' else 'none', sort))
+    conn.commit()
+    conn.close()
+    log_operation('admin', None, 'banner_create', 'banner', None, None, f'新增首页海报：{title}')
+    return ok({'id': cur.lastrowid})
+
+
+@app.put('/api/admin/banners/reorder')
+def reorder_banners():
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        ids = [int(x) for x in data.get('ids', [])]
+    except (TypeError, ValueError):
+        return err('排序 ID 必须是数字')
+    if not ids:
+        return err('排序列表不能为空')
+    conn = get_db()
+    for index, banner_id in enumerate(ids, 1):
+        conn.execute('UPDATE home_banners SET sort=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+                     (index * 10, banner_id))
+    conn.commit()
+    conn.close()
+    return ok()
+
+
+@app.put('/api/admin/banners/<int:bid>')
+def update_banner(bid):
+    data = request.get_json(force=True, silent=True) or {}
+    conn = get_db()
+    existing = conn.execute('SELECT * FROM home_banners WHERE id=?', (bid,)).fetchone()
+    if not existing:
+        conn.close()
+        return err('海报不存在', 404)
+    title = str(data.get('title', existing['title']) or '').strip()
+    image_path = str(data.get('image_path', existing['image_path']) or '').strip()
+    if not title or not image_path:
+        conn.close()
+        return err('标题和图片不能为空')
+    conn.execute('''UPDATE home_banners SET title=?, subtitle=?, image_path=?, action=?,
+                   enabled=?, updated_at=CURRENT_TIMESTAMP WHERE id=?''',
+                 (title, str(data.get('subtitle', existing['subtitle']) or ''), image_path,
+                  'modal' if data.get('action', existing['action']) == 'modal' else 'none',
+                  1 if data.get('enabled', bool(existing['enabled'])) else 0, bid))
+    conn.commit()
+    conn.close()
+    return ok()
+
+
+@app.delete('/api/admin/banners/<int:bid>')
+def delete_banner(bid):
+    conn = get_db()
+    existing = conn.execute('SELECT title FROM home_banners WHERE id=?', (bid,)).fetchone()
+    if not existing:
+        conn.close()
+        return err('海报不存在', 404)
+    conn.execute('DELETE FROM home_banners WHERE id=?', (bid,))
+    conn.commit()
+    conn.close()
+    log_operation('admin', None, 'banner_delete', 'banner', None, None,
+                  f'删除首页海报：{existing["title"]}')
+    return ok()
 
 
 # ────────────────────────────────────────────── 数据看板

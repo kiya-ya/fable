@@ -112,6 +112,8 @@ def create_backup():
             for name in databases:
                 zf.write(stage / name, name)
             file_count = add_configs(zf)
+            file_count += add_tree(zf, ROOT / 'backend' / 'static' / 'img', 'trainer/static/img')
+            file_count += add_tree(zf, ROOT / 'data' / 'banner_uploads', 'trainer/data/banner_uploads')
             file_count += add_tree(zf, LUNA_HOME / 'uploads', 'luna/uploads')
             file_count += add_tree(zf, LUNA_HOME / 'secrets', 'luna/secrets')
             file_count += add_tree(zf, LUNA_HOME / 'public' / 'course-pages', 'luna/public/course-pages')

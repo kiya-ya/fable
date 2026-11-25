@@ -321,26 +321,26 @@ body.v2-guest #bottom-nav { display: none; }
 
 /* 我的：新人成长月刊的个人档案页 */
 body.v2-mine { background: #F4F5F1; color: #211F25; }
-.mine-mag-hero { margin: 14px 0 0; padding: 24px 18px 22px; position: relative; border: 2px solid #211F25; background: #D9CDEF; }
-.mine-hero-heading { margin-bottom: 20px; padding: 0 104px 17px 0; border-bottom: 1px solid rgba(33,31,37,.25); }
+.mine-mag-hero { margin: 0; padding: 22px 16px 18px; position: relative; background: transparent; }
+.mine-hero-heading { margin-bottom: 20px; padding: 0 104px 17px 0; border-bottom: 1px solid #CFCDD2; }
 .mine-hero-heading p { margin: 0 0 7px; color: #4B4653; font-size: 11px; font-weight: 800; }
 .mine-hero-heading h1 { margin: 0; color: #211F25; font-family: 'Songti SC', 'SimSun', serif; font-size: 31px; line-height: 1.25; letter-spacing: -.04em; }
 .mine-profile { display: flex; align-items: center; gap: 12px; }
-.mine-mag-hero img { border: 2px solid #211F25 !important; border-radius: 50% !important; box-shadow: none !important; }
+.mine-mag-hero img { border: 0 !important; border-radius: 50% !important; box-shadow: 0 4px 12px rgba(33,31,37,.12) !important; }
 #v2-mine-name { color: #211F25 !important; font-family: 'Songti SC', 'SimSun', serif; font-size: 25px !important; text-shadow: none !important; }
 #v2-mine-uid { color: #4B4653 !important; font-variant-numeric: tabular-nums; }
-.mine-mag-hero .icon-btn { border: 1px solid #211F25; border-radius: 0; background: transparent; color: #211F25; }
-.mine-mag-hero .icon-btn:hover { background: rgba(255,255,255,.45); }
-body.v2-mine .card { margin: 0; padding: 23px 2px 26px; border: 0; border-top: 3px solid #211F25; border-radius: 0; background: transparent; box-shadow: none; color: #211F25; }
+.mine-mag-hero .icon-btn { border: 0; border-radius: 50%; background: #fff; color: #211F25; box-shadow: 0 3px 10px rgba(33,31,37,.08); }
+.mine-mag-hero .icon-btn:hover { background: #fff; }
+body.v2-mine .card { margin: 0; padding: 23px 2px 26px; border: 0; border-top: 1px solid #CFCDD2; border-radius: 0; background: transparent; box-shadow: none; color: #211F25; }
 body.v2-mine .mine-mag-first { margin-top: 26px; }
 body.v2-mine .card h2 { margin-bottom: 16px; color: #211F25; font-family: 'Songti SC', 'SimSun', serif; font-size: 27px; }
 body.v2-mine .card h2::before { display: none; }
 body.v2-mine .v2-result-row { margin-bottom: 0; padding: 13px 2px; border: 0; border-bottom: 1px solid #CFCDD2; border-radius: 0; background: transparent; }
 body.v2-mine .v2-result-row:hover { background: #F4F5F1; }
 body.v2-mine .apply-row { border-top-color: #CFCDD2; border-top-style: solid; }
-body.v2-mine .btn { border-radius: 0; }
-body.v2-mine .btn.primary { border: 2px solid #211F25; background: #211F25; color: #fff; box-shadow: none; }
-body.v2-mine #bottom-nav { border-top: 2px solid #211F25; background: #F4F5F1; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+body.v2-mine .btn { border-radius: 10px; }
+body.v2-mine .btn.primary { border: 0; background: #6D50AF; color: #fff; box-shadow: none; }
+body.v2-mine #bottom-nav { border-top: 1px solid #CFCDD2; background: #F4F5F1; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
 body.v2-mine .bnav-item { border-radius: 0; color: #66616C; }
 body.v2-mine .bnav-item.active { background: transparent; color: #6D50AF; }
 body.v2-mine .v2-footer .footer-text { color: #5F5A64 !important; }
@@ -363,19 +363,21 @@ body.v2-mine .v2-result-row > span[style*="color:#16a34a"] { color: #1F643F !imp
 body.v2-mine #v2-apply-list div[style*="color:#8E6BC8"] { color: #5C3E96 !important; }
 
 /* 用户端首页：新人成长月刊（不影响登录页与我的页） */
-body.v2-in:not(.v2-mine) { background: #F4F5F1; color: #211F25; }
-body.v2-in:not(.v2-mine) .landing-header { border-bottom: 2px solid #211F25; background: #F4F5F1; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
-body.v2-in:not(.v2-mine) .lh-brand { color: #211F25; font-family: 'Songti SC', 'SimSun', serif; font-size: 19px; }
-body.v2-in:not(.v2-mine) .lh-brand img { border-radius: 50%; box-shadow: none; }
+body.v2-in:not(.v2-mine) { background: #F4F5F1; color: #211F25; padding-top: 0; }
+body.v2-in:not(.v2-mine) .landing-header { justify-content: flex-end; border: 0; background: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; pointer-events: none; }
+body.v2-in:not(.v2-mine) .landing-header .lh-brand { display: none; }
+body.v2-in:not(.v2-mine) .landing-header .menu-btn { pointer-events: auto; }
 body.v2-in:not(.v2-mine) .menu-btn i { background: #211F25; }
 body.v2-in:not(.v2-mine) .home-cover { display: flex; flex-direction: column; margin-bottom: 20px; }
-body.v2-in:not(.v2-mine) .home-cover-copy { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 8px 12px; margin-top: 12px; padding: 14px 16px; border: 2px solid #211F25; background: #D9CDEF; }
+body.v2-in:not(.v2-mine) .home-brand { display: flex; align-items: center; gap: 9px; margin-top: 12px; color: #211F25; font-family: 'Songti SC', 'SimSun', serif; font-size: 19px; font-weight: 800; }
+body.v2-in:not(.v2-mine) .home-brand img { width: 30px; height: 30px; border-radius: 50%; }
+body.v2-in:not(.v2-mine) .home-cover-copy { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 6px 12px; margin-top: 8px; padding: 0 2px 12px; background: transparent; }
 body.v2-in:not(.v2-mine) .home-issue { grid-column: 1 / -1; margin: 0; color: #4B4653; font-size: 11px; font-weight: 800; }
 body.v2-in:not(.v2-mine) .home-cover h1 { margin: 0; color: #211F25; font-family: 'Songti SC', 'SimSun', serif; font-size: 27px; line-height: 1.25; letter-spacing: -.04em; }
 body.v2-in:not(.v2-mine) .home-cover h1 br { display: none; }
 body.v2-in:not(.v2-mine) .home-user { margin: 0; padding: 0; color: #4B4653; font-size: 12px; text-align: right; }
-body.v2-in:not(.v2-mine) #v2-open-guide { grid-column: 1 / -1; margin-top: 2px; }
-body.v2-in:not(.v2-mine) .home-banner { width: 100%; height: 230px; min-height: 0; margin: 0; border: 2px solid #211F25; border-radius: 0; box-shadow: none; }
+body.v2-in:not(.v2-mine) #v2-open-guide { grid-column: 1 / -1; justify-self: start; margin-top: 2px; }
+body.v2-in:not(.v2-mine) .home-banner { width: 100%; height: 230px; min-height: 0; margin: 0; border: 0; border-radius: 12px; box-shadow: 0 6px 18px rgba(33,31,37,.12); }
 body.v2-in:not(.v2-mine) .home-banner .banner-track,
 body.v2-in:not(.v2-mine) .home-banner .banner-slide { height: 100%; }
 body.v2-in:not(.v2-mine) .home-banner .banner-text { left: 10px; bottom: 10px; padding: 5px 8px; background: #F4F5F1; color: #211F25; font-family: 'Songti SC', 'SimSun', serif; font-size: 16px; text-shadow: none; }
@@ -504,6 +506,7 @@ body.v2-in:not(.v2-mine) .v2-footer .footer-text { color: #5F5A64; }
         </div>
         <div class="banner-dots" id="v2-banner-dots"><i class="on"></i><i></i><i></i><i></i><i></i></div>
       </div>
+      <div class="home-brand"><img src="/logo.jpg" alt="点点开黑 LOGO"><span>点点开黑</span></div>
       <div class="home-cover-copy">
         <p class="home-issue">新人成长月刊</p>
         <h1 id="home-cover-title">今天，<br>先学这一课。</h1>
@@ -881,10 +884,30 @@ $('#v2-share-modal').addEventListener('click', (e) => {
 });
 
 // ── 首页轮播图（自动播放 + 圆点 + 滑动 + 规则大图） ──
-(function initBanner() {
+(async function initBanner() {
   const track = $('#v2-banner-track');
   const box = $('#v2-home-banner');
   if (!track || !box) return;
+  const dotsBox = $('#v2-banner-dots');
+  try {
+    const resp = await fetch('/api/portal/banners');
+    const data = await resp.json();
+    const items = data.items || [];
+    if (resp.ok && items.length) {
+      track.innerHTML = items.map((item) => {
+        const image = esc(item.image_path);
+        const title = esc(item.title);
+        if (item.action === 'modal') {
+          return `<button type="button" class="banner-slide banner-rule" data-image="${image}" data-title="${title}">
+            <span class="rule-copy"><strong>${title}</strong><small>${esc(item.subtitle || '').replace(/\n/g, '<br>')}</small><em>查看完整规则 →</em></span>
+            <img class="rule-thumb" src="${image}" alt="${title}预览">
+          </button>`;
+        }
+        return `<div class="banner-slide"><img src="${image}" alt="${title}"><div class="banner-text">${title}</div></div>`;
+      }).join('');
+      dotsBox.innerHTML = items.map((_, i) => `<i${i === 0 ? ' class="on"' : ''}></i>`).join('');
+    }
+  } catch (e) { /* 查询失败时保留内置海报 */ }
   const dots = document.querySelectorAll('#v2-banner-dots i');
   const modal = $('#v2-banner-modal');
   const modalImage = $('#v2-banner-modal-image');

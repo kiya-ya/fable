@@ -69,6 +69,7 @@ $$('#tabs .tab').forEach((btn) => {
     if (btn.dataset.tab === 'bindings') loadBindingsTab();
     if (btn.dataset.tab === 'dashboard') loadDashboard();
     if (btn.dataset.tab === 'quals') loadQuals();
+    if (btn.dataset.tab === 'banners') loadAdminBanners();
     if (btn.dataset.tab === 'courses') {
       const frame = $('#luna-admin-frame');
       if (frame && !frame.src) frame.src = '/admin-bridge';
@@ -216,6 +217,154 @@ $('#qual-grant-submit').addEventListener('click', async () => {
 });
 
 $('#quals-refresh').addEventListener('click', loadQuals);
+
+// ────────────── 首页海报管理 ──────────────
+let adminBanners = [];
+let editingBannerId = null;
+let bannerPreviewObjectUrl = null;
+
+async function loadAdminBanners() {
+  const tbody = $('#banners-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" class="empty">加载中…</td></tr>';
+  try {
+    const r = await api('/api/admin/banners');
+    adminBanners = r.items || [];
+    renderAdminBanners();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty">${esc(e.message)}</td></tr>`;
+  }
+}
+
+function renderAdminBanners() {
+  const tbody = $('#banners-tbody');
+  if (!adminBanners.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">暂无海报</td></tr>';
+    return;
+  }
+  tbody.innerHTML = adminBanners.map((b, index) => `<tr>
+    <td><img src="${esc(b.image_path)}" alt="${esc(b.title)}" style="width:100px;height:56px;object-fit:cover"></td>
+    <td><b>${esc(b.title)}</b><div class="muted" style="white-space:pre-line">${esc(b.subtitle || '')}</div></td>
+    <td>${b.action === 'modal' ? '点击查看大图' : '仅展示'}</td>
+    <td>${b.enabled ? '展示中' : '已停用'}</td>
+    <td><button class="btn small" onclick="moveBanner(${b.id}, -1)" ${index === 0 ? 'disabled' : ''}>上移</button>
+        <button class="btn small" onclick="moveBanner(${b.id}, 1)" ${index === adminBanners.length - 1 ? 'disabled' : ''}>下移</button></td>
+    <td><button class="btn small" onclick="editBanner(${b.id})">编辑</button>
+        <button class="btn small" onclick="toggleBanner(${b.id})">${b.enabled ? '停用' : '启用'}</button>
+        <button class="btn small danger" onclick="removeBanner(${b.id})">删除</button></td>
+  </tr>`).join('');
+}
+
+function resetBannerEditor() {
+  editingBannerId = null;
+  $('#banner-title').value = '';
+  $('#banner-subtitle').value = '';
+  $('#banner-action').value = 'none';
+  $('#banner-file').value = '';
+  $('#banner-preview').classList.add('hidden');
+  if (bannerPreviewObjectUrl) URL.revokeObjectURL(bannerPreviewObjectUrl);
+  bannerPreviewObjectUrl = null;
+  $('#banner-editor').classList.add('hidden');
+}
+
+function editBanner(id) {
+  const b = adminBanners.find(x => x.id === id);
+  if (!b) return;
+  resetBannerEditor();
+  editingBannerId = id;
+  $('#banner-title').value = b.title;
+  $('#banner-subtitle').value = b.subtitle || '';
+  $('#banner-action').value = b.action;
+  $('#banner-preview').src = b.image_path;
+  $('#banner-preview').classList.remove('hidden');
+  $('#banner-editor').classList.remove('hidden');
+  $('#banner-editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function uploadBannerFile(file) {
+  const form = new FormData();
+  form.append('file', file);
+  const resp = await fetch('/api/admin/banners/upload', { method: 'POST', body: form });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(data.error || data.msg || '图片上传失败');
+  return data.path;
+}
+
+async function saveBanner() {
+  const title = $('#banner-title').value.trim();
+  const file = $('#banner-file').files[0] || null;
+  if (!title) return toast('请填写海报标题', true);
+  if (!editingBannerId && !file) return toast('请选择海报图片', true);
+  const btn = $('#banner-save');
+  btn.disabled = true;
+  try {
+    const existing = adminBanners.find(x => x.id === editingBannerId);
+    const image_path = file ? await uploadBannerFile(file) : existing?.image_path;
+    const body = { title, subtitle: $('#banner-subtitle').value.trim(),
+      action: $('#banner-action').value, image_path };
+    if (editingBannerId) {
+      await api(`/api/admin/banners/${editingBannerId}`, { method: 'PUT', body });
+    } else {
+      await api('/api/admin/banners', { method: 'POST', body });
+    }
+    toast('海报已保存');
+    resetBannerEditor();
+    loadAdminBanners();
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function moveBanner(id, direction) {
+  const index = adminBanners.findIndex(x => x.id === id);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= adminBanners.length) return;
+  [adminBanners[index], adminBanners[target]] = [adminBanners[target], adminBanners[index]];
+  try {
+    await api('/api/admin/banners/reorder', { method: 'PUT', body: { ids: adminBanners.map(x => x.id) } });
+    toast('顺序已保存');
+  } catch (e) {
+    toast(e.message, true);
+  }
+  loadAdminBanners();
+}
+
+async function toggleBanner(id) {
+  const b = adminBanners.find(x => x.id === id);
+  if (!b) return;
+  try {
+    await api(`/api/admin/banners/${id}`, { method: 'PUT', body: { enabled: !b.enabled } });
+    toast(b.enabled ? '已停用' : '已启用');
+    loadAdminBanners();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function removeBanner(id) {
+  const b = adminBanners.find(x => x.id === id);
+  if (!b || !confirm(`确认删除海报「${b.title}」？此操作只删除展示配置，不删除原图片。`)) return;
+  try {
+    await api(`/api/admin/banners/${id}`, { method: 'DELETE' });
+    toast('海报已删除');
+    loadAdminBanners();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+$('#banner-new').addEventListener('click', () => { resetBannerEditor(); $('#banner-editor').classList.remove('hidden'); });
+$('#banner-cancel').addEventListener('click', resetBannerEditor);
+$('#banner-save').addEventListener('click', saveBanner);
+$('#banner-file').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (bannerPreviewObjectUrl) URL.revokeObjectURL(bannerPreviewObjectUrl);
+  bannerPreviewObjectUrl = URL.createObjectURL(file);
+  $('#banner-preview').src = bannerPreviewObjectUrl;
+  $('#banner-preview').classList.remove('hidden');
+});
 
 // ────────────── UID 速查 ──────────────
 const COMPARE_LABELS = {

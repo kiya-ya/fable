@@ -71,6 +71,18 @@ CREATE TABLE IF NOT EXISTS reward_grants (
     granted_at TIMESTAMP,
     UNIQUE(binding_id, reward_key)
 );
+
+CREATE TABLE IF NOT EXISTS home_banners (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    subtitle TEXT DEFAULT '',
+    image_path TEXT NOT NULL,
+    action TEXT NOT NULL DEFAULT 'none',
+    sort INTEGER DEFAULT 0,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 
@@ -136,10 +148,25 @@ def _migrate(conn):
                     ON bindings(trainee_id, bind_type) WHERE unbound_at IS NULL''')
 
 
+def _seed_home_banners(conn):
+    if conn.execute('SELECT COUNT(*) FROM home_banners').fetchone()[0]:
+        return
+    rows = [
+        ('新人培训中心', '', '/img/banner-learn.jpg', 'none', 10),
+        ('姐妹团 · 与姐妹同行', '', '/img/pkg-sister.jpg', 'none', 20),
+        ('培训师 · 带出王牌', '', '/img/pkg-trainer.jpg', 'none', 30),
+        ('保护期流水规则', '4 周保护期 · 达标奖励 155 元\n两种礼物模式对照', '/img/rule-protection.jpg', 'modal', 40),
+        ('红线行为须知', '7 类高风险行为\n认清场景 · 保护自身权益', '/img/rule-redline.jpg', 'modal', 50),
+    ]
+    conn.executemany('''INSERT INTO home_banners (title, subtitle, image_path, action, sort)
+                       VALUES (?, ?, ?, ?, ?)''', rows)
+
+
 def init_trainer_db():
     conn = get_db()
     conn.executescript(DDL)
     _migrate(conn)
+    _seed_home_banners(conn)
     conn.commit()
     conn.close()
     print('[OK] trainer tables initialized.')

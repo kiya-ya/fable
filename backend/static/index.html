@@ -33,6 +33,7 @@
     <button class="tab" data-tab="quals">资质审核</button>
     <button class="tab" data-tab="dashboard">数据看板</button>
     <button class="tab" data-tab="courses">课程考试</button>
+    <button class="tab" data-tab="banners">海报管理</button>
   </nav>
 </header>
 
@@ -242,6 +243,36 @@
         <p id="dash-grad-data-note" class="muted"></p>
       </div>
     </details>
+  </section>
+
+  <!-- 首页海报管理 -->
+  <section id="tab-banners" class="panel">
+    <div class="card">
+      <div class="card-head">
+        <h2>首页海报管理</h2>
+        <button id="banner-new" class="btn primary">新增海报</button>
+      </div>
+      <div class="muted">海报按顺序展示在首页顶部；支持替换图片、调整顺序、启停和点击查看大图。</div>
+      <div id="banner-editor" class="hidden" style="margin-top:16px;border-top:1px solid #ddd;padding-top:16px">
+        <div class="form-grid">
+          <label>海报标题 <input id="banner-title" type="text" placeholder="例如：保护期流水规则"></label>
+          <label>点击行为 <select id="banner-action"><option value="none">仅展示</option><option value="modal">点击查看完整大图</option></select></label>
+        </div>
+        <label>海报摘要 <textarea id="banner-subtitle" rows="3" placeholder="展示 1～2 行关键摘要"></textarea></label>
+        <label>图片（PNG/JPG/WebP/GIF，5MB 以内） <input id="banner-file" type="file" accept=".png,.jpg,.jpeg,.webp,.gif"></label>
+        <img id="banner-preview" class="hidden" alt="海报预览" style="max-width:240px;max-height:180px;object-fit:contain;background:#f3f3f3">
+        <div class="modal-actions">
+          <button id="banner-cancel" class="btn">取消</button>
+          <button id="banner-save" class="btn primary">保存海报</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <table>
+        <thead><tr><th>预览</th><th>标题 / 摘要</th><th>点击行为</th><th>状态</th><th>排序</th><th>操作</th></tr></thead>
+        <tbody id="banners-tbody"></tbody>
+      </table>
+    </div>
   </section>
 
   <!-- 课程考试（嵌入 LUNA 考试系统管理端，经 /admin-bridge 带 key 进入） -->

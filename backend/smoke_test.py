@@ -542,6 +542,20 @@ check('查询他人妹妹数据 403', r.status_code == 403, f'got {r.status_code
 r = requests.get(f'{B}/api/uid-lookup', params={'uid': '80001'})
 check('用户端登录态可用 uid-lookup（不再被守卫拦截）', r.status_code in (200, 401, 502), f'got {r.status_code}')
 
+print('== 首页海报管理 ==')
+r = requests.get(f'{B}/api/admin/banners')
+check('海报管理列表可读取', r.ok and len(r.json()['items']) >= 1, r.text[:200])
+r = requests.post(f'{B}/api/admin/banners', json={'title': '测试海报', 'subtitle': '回归测试', 'image_path': '/img/banner-learn.jpg', 'action': 'modal'})
+check('新增海报', r.ok and r.json().get('id'), r.text)
+bid = r.json().get('id')
+r = requests.put(f'{B}/api/admin/banners/{bid}', json={'title': '测试海报-已编辑', 'enabled': False})
+public_banners = requests.get(f'{B}/api/portal/banners').json()['items']
+check('编辑并停用后用户端不可见', r.ok and all(x['id'] != bid for x in public_banners), r.text)
+r = requests.put(f'{B}/api/admin/banners/reorder', json={'ids': ['invalid']})
+check('海报排序非法 ID 返回 400', r.status_code == 400, f'got {r.status_code}')
+r = requests.delete(f'{B}/api/admin/banners/{bid}')
+check('删除海报', r.ok, r.text)
+
 print('== 数据看板 ==')
 r = requests.get(f'{B}/api/operations', params={'limit': 'abc'})
 check('操作日志 limit 非数字容错', r.status_code == 200, f'got {r.status_code}')
@@ -608,6 +622,7 @@ print(f'\n结果: {passed} passed, {failed} failed')
 TEST_TRAINER_UIDS = ('90001', '90002', '90003', '90004', '90005', '90006', '90007', '91001', '91002')
 TEST_TRAINEE_UIDS = ('80001', '80002', '80003', '80004', '80005', '80006')
 # 测试绑定记录直接删除（不留历史，避免污染看板统计）
+db_exec("DELETE FROM home_banners WHERE title IN ('测试海报','测试海报-已编辑')")
 marks_tr = ','.join('?' * len(TEST_TRAINER_UIDS))
 marks_te = ','.join('?' * len(TEST_TRAINEE_UIDS))
 db_exec(f'''DELETE FROM bindings WHERE trainer_id IN (SELECT id FROM trainers WHERE uid IN ({marks_tr}))
