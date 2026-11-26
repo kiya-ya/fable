@@ -654,6 +654,10 @@ check('生态分导出含四周等级与进步字段', sum(str(h).endswith('生�
 check('生态分导出 UID 文本与最新分数', eco_row and eco_row[3].number_format == '@'
       and eco_row[eco_headers.index('最新生态分')].value == 650.5, '未找到测试妹妹行')
 eco_wb.close()
+for i in range(1, 6):
+    db_exec("INSERT OR IGNORE INTO ecology_weekly (uid,week_start,nickname,eco_grade,score) VALUES ('80001',?,'测试妹妹甲','B',?)", (f'2026-08-0{i}', 500 + i))
+r = requests.get(f'{B}/api/ecology/members/80001')
+check('生态分详情最多返回最近4周', r.ok and len(r.json()['history']) == 4, r.text[:200])
 r = requests.post(f'{B}/api/ecology/refresh', json={'uids': ['80001'], 'weeks': 1})
 check('生态分异步刷新返回任务', r.status_code == 202 and r.json()['job']['id'], r.text)
 job_id = r.json()['job']['id']

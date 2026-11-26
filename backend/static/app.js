@@ -1613,7 +1613,7 @@ let ecoPage = 1;
 let ecoJobId = null;
 let ecoPollTimer = null;
 let ecoDetailUid = null;
-const ECO_ROLE_LABEL = { trainer: '培训师', sister: '姐妹团姐姐', new: '新人', trainee: '妹妹' };
+const ECO_ROLE_LABEL = { trainer: '培训师', sister: '姐妹团姐姐', new: '新人（未获资质）', trainee: '妹妹' };
 const ECO_DIM_LABEL = {
   bonusAtmos: '活跃大厅', bonusEvent: '参加活动', bonusBoard: '板块游戏', bonusAcquire: '获客',
   bonusArpu: 'ARPU 值提升', bonusMaintain: '维护老板', bonusBack: '用户挽回', bonusHome: '发帖和相册',
@@ -1687,15 +1687,25 @@ function ecoDetailHtml(data) {
   const names = people.map(p => p.nickname).filter(Boolean);
   const roles = people.map(p => ECO_ROLE_LABEL[p.role] || p.role).filter((v, i, a) => a.indexOf(v) === i);
   const dims = latest && latest.eco_items ? Object.entries(latest.eco_items).filter(([, items]) => Array.isArray(items) && items.length) : [];
+  const scoreDelta = (index) => {
+    const current = history[index];
+    const previous = history[index + 1];
+    if (!current || !previous || current.score === null || current.score === undefined || previous.score === null || previous.score === undefined) return '--';
+    const delta = current.score - previous.score;
+    return `<span class="${delta > 0 ? 'eco-delta-up' : delta < 0 ? 'eco-delta-down' : ''}">${delta > 0 ? '+' : ''}${ecoNum(delta)}</span>`;
+  };
   return `<div class="eco-detail-summary">
     <div><b>${esc(names.join(' / ') || (latest && latest.nickname) || '未知')}</b><div class="muted">${esc(roles.join(' + ') || '平台用户')} · ${esc((latest && latest.hall_name) || (people[0] && people[0].hall_name) || '-')}</div></div>
     ${latest ? `<div>${ecoGrade(latest)}</div><div class="eco-score">${ecoNum(latest.score)}</div><div class="muted">${esc(latest.week_start)}</div>` : '<span class="muted">暂无生态分记录</span>'}
   </div>
-  ${latest && latest.hints && latest.hints.length ? `<div style="margin-bottom:12px">生态提示：<b>${esc(latest.hints.join('、'))}</b></div>` : ''}
-  ${dims.length ? `<div class="eco-dim-grid">${dims.map(([key, items]) => `<section class="eco-dim"><b>${ECO_DIM_LABEL[key] || esc(key)}</b>${ecoRenderItems(items)}</section>`).join('')}</div>` : ''}
-  <section class="eco-detail-section"><h3>最近 ${history.length} 周</h3><div style="overflow-x:auto"><table class="eco-history"><thead><tr><th>周起始</th><th>等级</th><th>生态分</th><th>活跃大厅</th><th>活动</th><th>板块</th><th>获客</th><th>ARPU</th><th>维护</th><th>挽回</th><th>发帖</th></tr></thead><tbody>
-    ${history.map(row => `<tr><td>${esc(row.week_start)}</td><td>${ecoGrade(row)}</td><td><b>${ecoNum(row.score)}</b></td><td>${ecoNum(row.active_hall)}</td><td>${ecoNum(row.event_score)}</td><td>${ecoNum(row.board_score)}</td><td>${ecoNum(row.acquire_score)}</td><td>${ecoNum(row.arpu_score)}</td><td>${ecoNum(row.maintain_score)}</td><td>${ecoNum(row.back_score)}</td><td>${ecoNum(row.home_score)}</td></tr>`).join('') || '<tr><td colspan="11" class="empty">暂无历史记录</td></tr>'}
-  </tbody></table></div></section>`;
+  ${latest ? `<div class="muted" style="margin-bottom:12px">队长牌子：${esc(latest.level || '--')} · 流水：${ecoNum(latest.flow)}${latest.hints && latest.hints.length ? ` · 生态提示：<b>${esc(latest.hints.join('、'))}</b>` : ''}</div>` : ''}
+  <section class="eco-detail-section"><h3>最近 ${history.length} 周趋势</h3><div style="overflow-x:auto"><table class="eco-history"><thead><tr><th>周起始</th><th>等级</th><th>生态分</th><th>分数周变化</th><th>活跃大厅</th><th>维护老板</th><th>生态提示</th></tr></thead><tbody>
+    ${history.map((row, index) => `<tr><td>${esc(row.week_start)}</td><td>${ecoGrade(row)}</td><td><b>${ecoNum(row.score)}</b></td><td>${scoreDelta(index)}</td><td>${ecoNum(row.active_hall)}</td><td>${ecoNum(row.maintain_score)}</td><td class="eco-hints">${row.hints && row.hints.length ? esc(row.hints.join('、')) : '—'}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">暂无历史记录</td></tr>'}
+  </tbody></table></div></section>
+  ${dims.length ? `<section class="eco-detail-section"><h3>分项加减分（点击展开）</h3><div class="eco-dim-grid">${dims.map(([key, items]) => {
+    const total = items.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
+    return `<details class="eco-dim"><summary><b>${ECO_DIM_LABEL[key] || esc(key)}</b><span>${ecoNum(total)}</span></summary><div class="eco-dim-body">${ecoRenderItems(items)}</div></details>`;
+  }).join('')}</div></section>` : ''}`;
 }
 
 async function openEcologyDetail(uid) {

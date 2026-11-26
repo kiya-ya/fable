@@ -3205,7 +3205,7 @@ def ecology_members():
 def ecology_member_detail(uid):
     people = [p for p in _ecology_people() if p['uid'] == str(uid)]
     conn = get_db()
-    rows = conn.execute('SELECT * FROM ecology_weekly WHERE uid=? ORDER BY week_start DESC LIMIT 8', (str(uid),)).fetchall()
+    rows = conn.execute('SELECT * FROM ecology_weekly WHERE uid=? ORDER BY week_start DESC LIMIT 4', (str(uid),)).fetchall()
     conn.close()
     if not people and not rows:
         return err('未找到该 UID 的档案或生态分记录', 404)
@@ -3215,7 +3215,7 @@ def ecology_member_detail(uid):
 @app.post('/api/ecology/refresh')
 def ecology_refresh():
     data = request.get_json(force=True, silent=True) or {}
-    weeks = min(max(int(data.get('weeks', 2) or 2), 1), 8)
+    weeks = min(max(int(data.get('weeks', 2) or 2), 1), 4)
     if data.get('uids'):
         uids = list(dict.fromkeys(str(uid).strip() for uid in data['uids'] if str(uid).strip()))
     else:

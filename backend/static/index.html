@@ -308,19 +308,19 @@
       <div class="toolbar">
         <input id="eco-kw" type="text" placeholder="搜索昵称 / UID / 大厅">
         <select id="eco-role">
-          <option value="">全部身份</option><option value="trainer">培训师</option><option value="sister">姐妹团姐姐</option><option value="new">新人</option><option value="trainee">妹妹</option>
+          <option value="">全部身份</option><option value="trainer">培训师</option><option value="sister">姐妹团姐姐</option><option value="new">新人（未获资质）</option><option value="trainee">妹妹</option>
         </select>
         <select id="eco-grade">
           <option value="">全部生态等级</option><option>S+</option><option>S</option><option>A</option><option>B</option><option>C</option><option>D</option>
         </select>
-        <select id="eco-weeks" title="每人保存的周数"><option value="2">最近 2 周</option><option value="8">最近 8 周</option></select>
+        <select id="eco-weeks" title="每人保存的周数"><option value="2">最近 2 周</option><option value="4">最近 4 周（10-26 起）</option></select>
         <button id="eco-search" class="btn" type="button">查询</button>
       </div>
       <div id="eco-job" class="hidden" style="margin:10px 0">
         <div id="eco-job-text" class="muted" style="margin-bottom:5px"></div>
         <div style="height:6px;border-radius:6px;background:#e5e7eb;overflow:hidden"><div id="eco-job-bar" style="height:100%;width:0;background:var(--brand-gold);transition:width .2s"></div></div>
       </div>
-      <div class="muted" style="margin-bottom:8px">数据来自队长生态管理，按周保存；点击详情查看最近 8 周趋势和具体加减分。</div>
+      <div class="muted" style="margin-bottom:8px">数据来自队长生态管理，按周保存；点击详情查看最近 4 周趋势和具体加减分。“新人”指已建档但尚未激活姐妹团或培训师资质的账号。</div>
       <div style="overflow-x:auto">
         <table style="min-width:1450px">
           <thead><tr><th>昵称 / UID</th><th>身份 / 大厅</th><th>生态等级</th><th>生态分</th><th>活跃大厅</th><th>参加活动</th><th>板块游戏</th><th>获客</th><th>ARPU提升</th><th>维护老板</th><th>用户挽回</th><th>发帖相册</th><th>生态提示</th><th>操作</th></tr></thead>

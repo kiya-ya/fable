@@ -325,3 +325,12 @@ tr:hover td { background: #f9fafb; }
 .eco-history { width: 100%; min-width: 720px; }
 .eco-detail-section { margin-top: 20px; }
 @media (max-width: 720px) { .eco-dim-grid { grid-template-columns: 1fr; } }
+
+.eco-dim summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; list-style: none; }
+.eco-dim summary::-webkit-details-marker { display: none; }
+.eco-dim summary::after { content: '+'; color: #7a3e12; font-size: 18px; font-weight: 400; }
+.eco-dim[open] summary::after { content: '−'; }
+.eco-dim summary span { font-variant-numeric: tabular-nums; font-weight: 800; }
+.eco-dim-body { margin-top: 10px; padding-top: 6px; border-top: 1px solid #e5e7eb; }
+.eco-history td { vertical-align: top; }
+.eco-history .eco-hints { max-width: 210px; white-space: normal; }
