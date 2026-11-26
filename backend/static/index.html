@@ -27,14 +27,29 @@
 <body>
 <header>
   <h1><img class="logo-img" src="/logo.jpg" alt="LOGO">培训师系统</h1>
-  <nav id="tabs">
-    <button class="tab active" data-tab="bindings">绑定关系</button>
-    <button class="tab" data-tab="uidquery">结果统计</button>
-    <button class="tab" data-tab="ecology">生态分</button>
-    <button class="tab" data-tab="quals">资质审核</button>
-    <button class="tab" data-tab="dashboard">数据看板</button>
-    <button class="tab" data-tab="courses">课程考试</button>
-    <button class="tab" data-tab="banners">海报管理</button>
+  <nav id="tabs" aria-label="工作模块">
+    <div class="nav-group">
+      <span class="nav-group-label">培训师工作区</span>
+      <div class="nav-group-buttons">
+        <button class="tab active" data-tab="bindings">绑定关系</button>
+        <button class="tab" data-tab="uidquery">结果统计</button>
+        <button class="tab" data-tab="ecology">生态分</button>
+        <button class="tab" data-tab="dashboard">数据看板</button>
+      </div>
+    </div>
+    <div class="nav-group">
+      <span class="nav-group-label">学习考试区</span>
+      <div class="nav-group-buttons">
+        <button class="tab" data-tab="quals">资质审核</button>
+        <button class="tab" data-tab="courses">课程考试</button>
+      </div>
+    </div>
+    <div class="nav-group">
+      <span class="nav-group-label">系统内容</span>
+      <div class="nav-group-buttons">
+        <button class="tab" data-tab="banners">海报管理</button>
+      </div>
+    </div>
   </nav>
 </header>
 
@@ -192,6 +207,27 @@
       </div>
     </div>
     <div class="dash-cards" id="dash-cards"></div>
+    <div class="card" id="dash-ecology">
+      <div class="card-head">
+        <h2>生态分概览</h2>
+        <span class="muted" id="dash-eco-week"></span>
+      </div>
+      <div class="dash-cards" id="dash-eco-cards"></div>
+      <div class="dash-eco-grid">
+        <section>
+          <h3>生态等级分布</h3>
+          <div id="dash-eco-grades"></div>
+        </section>
+        <section>
+          <h3>高分表现</h3>
+          <div id="dash-eco-top"></div>
+        </section>
+        <section>
+          <h3>分数下降提醒</h3>
+          <div id="dash-eco-declines"></div>
+        </section>
+      </div>
+    </div>
     <div class="dash-grid">
       <div class="card">
         <h2>近 8 周绑定 / 解散趋势</h2><div id="dash-line"></div>

@@ -1402,6 +1402,7 @@ async function loadDashboard() {
     const week = $('#dash-week').value;
     const d = await api('/api/dashboard/summary' + (week ? `?week=${week}` : ''));
     renderDashCards(d);
+    renderDashEcology(d.ecology);
     renderLineChart(d.weekly);
     renderPieChart(d.dissolve_reasons);
     renderPieChart(d.dissolve_reasons_week, '#dash-pie-week', '#dash-pie-week-legend');
@@ -1801,3 +1802,22 @@ $('#eco-token-save').addEventListener('click', async () => {
     toast(e.message, true);
   }
 });
+
+function renderDashEcology(eco) {
+  if (!eco) return;
+  $('#dash-eco-week').textContent = eco.latest_week ? `最新归档周 ${eco.latest_week}` : '暂无生态分数据';
+  const cards = [
+    { label: '已评分 / 未评分', value: `${eco.scored} / ${eco.unscored}`, color: '#3b82f6' },
+    { label: '平均生态分', value: eco.average === null ? '--' : eco.average, color: '#8E6BC8' },
+    { label: 'S / S+ 人数', value: eco.excellent, color: '#10b981' },
+    { label: '本周上升 / 下降人数', value: `${eco.improving} / ${eco.declining}`, color: '#f59e0b' },
+  ];
+  $('#dash-eco-cards').innerHTML = cards.map(card => `<div class="dash-card" style="border-top-color:${card.color}"><div class="dash-card-label">${card.label}</div><div class="dash-card-value" style="color:${card.color}">${card.value}</div></div>`).join('');
+  const gradeOrder = ['S+', 'S', 'A', 'B', 'C', 'D', '未评分'];
+  const grades = eco.grades || {};
+  const maxGrade = Math.max(1, ...Object.values(grades));
+  $('#dash-eco-grades').innerHTML = gradeOrder.filter(grade => grades[grade]).map(grade => `<div class="dash-eco-grade-row"><span>${grade}</span><div class="dash-eco-grade-track"><i style="width:${grades[grade] / maxGrade * 100}%"></i></div><b>${grades[grade]}</b></div>`).join('') || '<span class="muted">暂无等级数据</span>';
+  const personRows = (items, mode) => items.length ? items.map(person => `<button type="button" class="dash-eco-person" onclick="openEcologyDetail('${esc(person.uid)}')"><span>${esc(person.nickname || person.uid)}<small>${esc(person.hall_name || '-')} · ${esc(person.eco_grade || '未评分')}</small></span><b class="${mode === 'down' ? 'eco-delta-down' : ''}">${mode === 'down' ? ecoNum(person.delta) : ecoNum(person.score)}</b></button>`).join('') : '<span class="muted">暂无数据</span>';
+  $('#dash-eco-top').innerHTML = personRows(eco.top || [], 'top');
+  $('#dash-eco-declines').innerHTML = personRows(eco.declines || [], 'down');
+}

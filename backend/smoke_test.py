@@ -576,6 +576,8 @@ check('刷新不存在培训师 404', r.status_code == 404, f'got {r.status_code
 r = requests.get(f'{B}/api/dashboard/summary')
 d = r.json()
 check('看板结构', r.ok and len(d['weekly']) == 8 and 'dissolve_reasons' in d and 'active' in d, str(d.keys()))
+check('看板包含生态分概览与进步预警', 'ecology' in d
+      and set(('latest_week', 'average', 'grades', 'top', 'declines')) <= set(d['ecology']), str(d.get('ecology')))
 check('近8周绑定数>=1（本周有测试绑定）', sum(w['bound'] for w in d['weekly']) >= 1, str(d['weekly']))
 check('解散原因归类包含手动解绑或系统判定', all('reason' in x and x['count'] > 0 for x in d['dissolve_reasons']), str(d['dissolve_reasons']))
 check('4周留存字段', set(('cohort', 'retained', 'dissolved', 'retention_rate', 'dissolution_rate')) <= set(d['retention_4w'].keys()), str(d['retention_4w']))

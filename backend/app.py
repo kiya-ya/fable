@@ -2341,6 +2341,43 @@ def _post_graduation_metrics(conn, today):
     }
 
 
+def _dashboard_ecology(conn):
+    rows = conn.execute('SELECT * FROM ecology_weekly ORDER BY uid, week_start DESC').fetchall()
+    grouped = {}
+    for row in rows:
+        if len(grouped.setdefault(row['uid'], [])) < 2:
+            grouped[row['uid']].append(row)
+    latest = [history[0] for history in grouped.values() if history]
+    scored = [row for row in latest if row['score'] is not None]
+    compared = []
+    for uid, history in grouped.items():
+        current = history[0]
+        previous = history[1] if len(history) > 1 else None
+        delta = None
+        if current['score'] is not None and previous and previous['score'] is not None:
+            delta = round(current['score'] - previous['score'], 1)
+        compared.append({
+            'uid': uid, 'nickname': current['nickname'], 'hall_name': current['hall_name'],
+            'eco_grade': current['eco_grade'], 'score': current['score'], 'delta': delta,
+        })
+    grades = {}
+    for row in latest:
+        grade = row['eco_grade'] or '未评分'
+        grades[grade] = grades.get(grade, 0) + 1
+    top = sorted([row for row in compared if row['score'] is not None], key=lambda x: x['score'], reverse=True)[:5]
+    declines = sorted([row for row in compared if row['delta'] is not None and row['delta'] < 0],
+                      key=lambda x: x['delta'])[:5]
+    return {
+        'latest_week': max((row['week_start'] for row in latest), default=None),
+        'total': len(latest), 'scored': len(scored), 'unscored': len(latest) - len(scored),
+        'average': round(sum(row['score'] for row in scored) / len(scored), 1) if scored else None,
+        'excellent': grades.get('S', 0) + grades.get('S+', 0), 'grades': grades,
+        'improving': sum(1 for row in compared if row['delta'] is not None and row['delta'] > 0),
+        'declining': sum(1 for row in compared if row['delta'] is not None and row['delta'] < 0),
+        'top': top, 'declines': declines,
+    }
+
+
 @app.get('/api/dashboard/summary')
 def dashboard_summary():
     conn = get_db()
@@ -2460,6 +2497,7 @@ def dashboard_summary():
     dissolved_retained = len(dissolved_uids & retained_uids)
     dissolved_left = len(dissolved_uids) - dissolved_retained
     post_graduation = _post_graduation_metrics(conn, today)
+    ecology = _dashboard_ecology(conn)
     conn.close()
 
     cohort = cohort_retained + cohort_dissolved
@@ -2500,6 +2538,7 @@ def dashboard_summary():
         'rewards': {'pending': pending_rewards, 'granted': granted_rewards},
         'retention_4w_weekly': retention_weekly,
         'post_graduation': post_graduation,
+        'ecology': ecology,
     })
 
 

@@ -334,3 +334,32 @@ tr:hover td { background: #f9fafb; }
 .eco-dim-body { margin-top: 10px; padding-top: 6px; border-top: 1px solid #e5e7eb; }
 .eco-history td { vertical-align: top; }
 .eco-history .eco-hints { max-width: 210px; white-space: normal; }
+
+.dash-eco-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; margin-top: 18px; }
+.dash-eco-grid h3 { margin-bottom: 12px; color: #4b5563; font-size: 14px; }
+.dash-eco-grade-row { display: grid; grid-template-columns: 46px 1fr 34px; gap: 8px; align-items: center; margin: 9px 0; font-size: 12px; }
+.dash-eco-grade-track { height: 8px; overflow: hidden; border-radius: 8px; background: #e5e7eb; }
+.dash-eco-grade-track i { display: block; height: 100%; border-radius: inherit; background: #8e6bc8; }
+.dash-eco-person { display: flex; width: 100%; min-height: 48px; padding: 8px 0; border: 0; border-bottom: 1px dashed #e5e7eb; background: transparent; color: inherit; align-items: center; justify-content: space-between; gap: 10px; text-align: left; }
+.dash-eco-person:hover { color: #7a3e12; }
+.dash-eco-person small { display: block; margin-top: 2px; color: #6b7280; }
+.dash-eco-person b { white-space: nowrap; }
+@media (max-width: 900px) { .dash-eco-grid { grid-template-columns: 1fr; } }
+
+/* 顶部工作域分组 */
+header { height: auto; min-height: 64px; padding-top: 5px; padding-bottom: 5px; flex-wrap: wrap; }
+#tabs { min-width: 0; height: auto; flex: 1; gap: 12px; overflow-x: auto; scrollbar-width: thin; }
+.nav-group { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; padding-right: 12px; border-right: 1px solid rgba(91,42,6,.16); }
+.nav-group:last-child { padding-right: 0; border-right: 0; }
+.nav-group-label { color: rgba(91,42,6,.48); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.nav-group-buttons { display: flex; height: 54px; }
+.nav-group-buttons .tab { padding: 0 12px; white-space: nowrap; }
+@media (max-width: 1180px) {
+  .nav-group-label { display: none; }
+}
+@media (max-width: 768px) {
+  #tabs { width: 100%; gap: 8px; padding-bottom: 2px; }
+  .nav-group { gap: 0; padding-right: 8px; }
+  .nav-group-buttons { height: 46px; }
+  .nav-group-buttons .tab { flex: 0 0 auto; min-width: 76px; padding: 8px 10px; }
+}
