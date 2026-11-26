@@ -1312,7 +1312,7 @@ async function exportListXlsx(kind, btn) {
     const blob = await resp.blob();
     const cd = resp.headers.get('Content-Disposition') || '';
     const m = cd.match(/filename\*=UTF-8''([^;]+)/);
-    const fallback = { trainers: '培训师档案.xlsx', trainees: '妹妹档案.xlsx', bindings: '绑定列表.xlsx' }[kind];
+    const fallback = { trainers: '培训师档案.xlsx', trainees: '妹妹档案.xlsx', bindings: '绑定列表.xlsx', ecology: '生态分四周进步.xlsx' }[kind];
     const filename = m ? decodeURIComponent(m[1]) : fallback;
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -1333,6 +1333,7 @@ async function exportListXlsx(kind, btn) {
 $('#trainer-export').addEventListener('click', (e) => exportListXlsx('trainers', e.currentTarget));
 $('#trainee-export').addEventListener('click', (e) => exportListXlsx('trainees', e.currentTarget));
 $('#bindings-export').addEventListener('click', (e) => exportListXlsx('bindings', e.currentTarget));
+$('#eco-export').addEventListener('click', (e) => exportListXlsx('ecology', e.currentTarget));
 
 // ────────────── 周奖励导出 ──────────────
 $('#exp-date').value = new Date().toLocaleDateString('sv-SE');  // 本地 YYYY-MM-DD

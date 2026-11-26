@@ -3237,6 +3237,135 @@ def ecology_refresh_status(job_id):
     return ok(job)
 
 
+@app.get('/api/export/ecology')
+def export_ecology():
+    conn = get_db()
+    bindings = conn.execute('''SELECT b.id AS binding_id, b.bound_at,
+                                      tr.uid AS trainer_uid, tr.nickname AS trainer_nickname,
+                                      te.uid AS trainee_uid, te.nickname AS trainee_nickname,
+                                      COALESCE(NULLIF(te.hall_name,''), NULLIF(tr.hall_name,''), '') AS hall_name
+                               FROM bindings b
+                               JOIN trainers tr ON tr.id=b.trainer_id
+                               JOIN trainees te ON te.id=b.trainee_id
+                               WHERE b.bind_type='trainer' AND b.unbound_at IS NULL
+                               ORDER BY tr.nickname, te.nickname''').fetchall()
+    trainee_uids = [b['trainee_uid'] for b in bindings]
+    history_rows = []
+    if trainee_uids:
+        marks = ','.join('?' for _ in trainee_uids)
+        history_rows = conn.execute(f'''SELECT * FROM ecology_weekly WHERE uid IN ({marks})
+                                        ORDER BY uid, week_start DESC''', trainee_uids).fetchall()
+    latest_week = conn.execute('SELECT MAX(week_start) FROM ecology_weekly').fetchone()[0]
+    conn.close()
+
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.formatting.rule import CellIsRule
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    if latest_week:
+        latest_date = datetime.strptime(latest_week, '%Y-%m-%d').date()
+    else:
+        latest_date = (datetime.now() - timedelta(days=datetime.now().weekday() + 7)).date()
+    week_starts = [(latest_date - timedelta(days=7 * offset)).strftime('%Y-%m-%d') for offset in (3, 2, 1, 0)]
+    histories = {}
+    for row in history_rows:
+        if len(histories.setdefault(row['uid'], [])) < 4:
+            histories[row['uid']].append(dict(row))
+
+    base_headers = ['培训师昵称', '培训师UID', '妹妹昵称', '妹妹UID', '大厅名', '绑定开始日期']
+    weekly_headers = []
+    for week in week_starts:
+        weekly_headers += [f'{week}生态等级', f'{week}生态分']
+    summary_headers = base_headers + weekly_headers + [
+        '最新生态分', '4周分数变化', '等级轨迹', '活跃大厅变化', '维护老板变化', '最新流水', '最新生态提示', '进步情况',
+    ]
+    detail_headers = base_headers[:5] + [
+        '周起始', '生态等级', '等级变化', '生态分', '活跃大厅', '参加活动', '板块游戏', '获客',
+        'ARPU提升', '维护老板', '用户挽回', '发帖相册', '流水', '队长牌子',
+    ]
+    summary_rows, detail_rows = [], []
+    for binding in bindings:
+        history = list(reversed(histories.get(binding['trainee_uid'], [])))
+        by_week = {row['week_start']: row for row in history}
+        latest = history[-1] if history else None
+        scored = [row for row in history if row.get('score') is not None]
+        score_change = round(scored[-1]['score'] - scored[0]['score'], 1) if len(scored) >= 2 else None
+        active_change = (round(history[-1]['active_hall'] - history[0]['active_hall'], 1)
+                         if len(history) >= 2 and history[-1].get('active_hall') is not None and history[0].get('active_hall') is not None else None)
+        maintain_change = (round(history[-1]['maintain_score'] - history[0]['maintain_score'], 1)
+                           if len(history) >= 2 and history[-1].get('maintain_score') is not None and history[0].get('maintain_score') is not None else None)
+        grades = [row['eco_grade'] for row in history if row.get('eco_grade')]
+        grade_path = ' → '.join(grades) if grades else '暂无等级'
+        progress = '数据不足' if score_change is None else '上升' if score_change > 0 else '下降' if score_change < 0 else '持平'
+        try:
+            hints = json.loads(latest['hints_json']) if latest and latest.get('hints_json') else []
+        except Exception:
+            hints = []
+        base = [binding['trainer_nickname'], binding['trainer_uid'], binding['trainee_nickname'],
+                binding['trainee_uid'], binding['hall_name'], binding['bound_at']]
+        weekly = []
+        for week in week_starts:
+            row = by_week.get(week)
+            weekly += [row.get('eco_grade') if row else '', row.get('score') if row else None]
+        summary_rows.append(base + weekly + [
+            latest.get('score') if latest else None, score_change, grade_path, active_change, maintain_change,
+            latest.get('flow') if latest else None, '、'.join(hints), progress,
+        ])
+        for row in history:
+            detail_rows.append(base[:5] + [
+                row['week_start'], row.get('eco_grade'), row.get('eco_grade_change'), row.get('score'),
+                row.get('active_hall'), row.get('event_score'), row.get('board_score'), row.get('acquire_score'),
+                row.get('arpu_score'), row.get('maintain_score'), row.get('back_score'), row.get('home_score'),
+                row.get('flow'), row.get('level'),
+            ])
+
+    wb = Workbook()
+    summary = wb.active
+    summary.title = '妹妹生态进步'
+    summary.append(summary_headers)
+    for row in summary_rows:
+        summary.append(row)
+    detail = wb.create_sheet('每周生态明细')
+    detail.append(detail_headers)
+    for row in detail_rows:
+        detail.append(row)
+
+    def format_sheet(ws, widths, uid_columns, freeze):
+        for cell in ws[1]:
+            cell.fill = PatternFill('solid', fgColor='27233A')
+            cell.font = Font(color='FFFFFF', bold=True)
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        ws.row_dimensions[1].height = 34
+        ws.freeze_panes = freeze
+        ws.auto_filter.ref = f'A1:{get_column_letter(ws.max_column)}{ws.max_row}'
+        for index, width in enumerate(widths, 1):
+            ws.column_dimensions[get_column_letter(index)].width = width
+        for row in ws.iter_rows(min_row=2):
+            for cell in row:
+                cell.alignment = Alignment(vertical='center', wrap_text=True)
+        for column in uid_columns:
+            for index in range(2, ws.max_row + 1):
+                ws.cell(index, column).number_format = '@'
+
+    format_sheet(summary, [18, 15, 18, 15, 25, 19] + [12, 13] * 4 + [14, 14, 22, 15, 15, 14, 20, 12], (2, 4), 'G2')
+    format_sheet(detail, [18, 15, 18, 15, 25, 13, 11, 11, 13, 13, 12, 12, 11, 12, 12, 12, 12, 13, 12], (2, 4), 'F2')
+    change_column = len(base_headers) + len(weekly_headers) + 2
+    letter = get_column_letter(change_column)
+    if summary.max_row > 1:
+        summary.conditional_formatting.add(f'{letter}2:{letter}{summary.max_row}',
+            CellIsRule(operator='greaterThan', formula=['0'], font=Font(color='16803C', bold=True)))
+        summary.conditional_formatting.add(f'{letter}2:{letter}{summary.max_row}',
+            CellIsRule(operator='lessThan', formula=['0'], font=Font(color='C2415D', bold=True)))
+    buf = BytesIO()
+    wb.save(buf)
+    wb.close()
+    buf.seek(0)
+    return send_file(buf, as_attachment=True, download_name=f'生态分四周进步_{_export_stamp()}.xlsx',
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
 # ────────────────────────────────────────────── 每周自动刷新（周一统计用）
 
 WEEKLY_REFRESH_DAY = 0       # 周一

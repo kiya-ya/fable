@@ -638,6 +638,22 @@ check('生态分列表分页字段', r.ok and r.json()['page'] == 1 and r.json()
 r = requests.get(f'{B}/api/ecology/members/80001')
 check('生态分详情返回分项和周历史', r.ok and len(r.json()['history']) == 1
       and r.json()['history'][0]['eco_items']['bonusAtmos'][0]['value'] == 120, r.text[:300])
+r = anon.get(f'{B}/api/export/ecology')
+check('生态分导出未登录拦截 401', r.status_code == 401, f'got {r.status_code}')
+r = requests.get(f'{B}/api/export/ecology')
+from openpyxl import load_workbook as _load_ecology_xlsx
+from io import BytesIO as _EcologyBytesIO
+check('生态分四周进步导出为有效 xlsx', r.ok and r.content[:2] == b'PK', f'got {r.status_code}')
+eco_wb = _load_ecology_xlsx(_EcologyBytesIO(r.content))
+check('生态分导出包含进步与每周明细工作表', eco_wb.sheetnames == ['妹妹生态进步', '每周生态明细'], str(eco_wb.sheetnames))
+eco_ws = eco_wb['妹妹生态进步']
+eco_headers = [c.value for c in eco_ws[1]]
+eco_row = next((row for row in eco_ws.iter_rows(min_row=2) if str(row[3].value) == '80001'), None)
+check('生态分导出含四周等级与进步字段', sum(str(h).endswith('生态等级') for h in eco_headers) == 4
+      and '4周分数变化' in eco_headers and '活跃大厅变化' in eco_headers and '维护老板变化' in eco_headers, str(eco_headers))
+check('生态分导出 UID 文本与最新分数', eco_row and eco_row[3].number_format == '@'
+      and eco_row[eco_headers.index('最新生态分')].value == 650.5, '未找到测试妹妹行')
+eco_wb.close()
 r = requests.post(f'{B}/api/ecology/refresh', json={'uids': ['80001'], 'weeks': 1})
 check('生态分异步刷新返回任务', r.status_code == 202 and r.json()['job']['id'], r.text)
 job_id = r.json()['job']['id']
