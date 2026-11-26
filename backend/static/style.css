@@ -302,3 +302,26 @@ tr:hover td { background: #f9fafb; }
   .btn.small { padding: 6px 12px; }
   input, select { padding: 8px 10px; font-size: 15px; }
 }
+
+/* 生态分 */
+.eco-grade { display: inline-flex; align-items: center; justify-content: center; min-width: 38px; padding: 3px 8px; border-radius: 999px; background: #e5e7eb; color: #374151; font-weight: 800; }
+.eco-grade.splus, .eco-grade.s { background: #dcfce7; color: #166534; }
+.eco-grade.a { background: #dbeafe; color: #1d4ed8; }
+.eco-grade.b { background: #fef3c7; color: #92400e; }
+.eco-grade.c, .eco-grade.d { background: #fee2e2; color: #b91c1c; }
+.eco-score { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.eco-delta-up { color: #16803c; }
+.eco-delta-down { color: #c2415d; }
+.eco-person { min-width: 140px; }
+.eco-person small, .eco-week { display: block; margin-top: 3px; color: #6b7280; font-size: 11px; }
+.eco-hints { max-width: 150px; font-size: 12px; }
+.eco-detail-summary { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+.eco-detail-summary .eco-score { font-size: 32px; }
+.eco-dim-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; margin: 14px 0 20px; }
+.eco-dim { padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: rgba(255,255,255,.6); }
+.eco-dim b { display: block; margin-bottom: 8px; }
+.eco-dim-row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; color: #4b5563; font-size: 12px; }
+.eco-dim-row span:last-child { font-variant-numeric: tabular-nums; font-weight: 700; }
+.eco-history { width: 100%; min-width: 720px; }
+.eco-detail-section { margin-top: 20px; }
+@media (max-width: 720px) { .eco-dim-grid { grid-template-columns: 1fr; } }

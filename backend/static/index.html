@@ -30,6 +30,7 @@
   <nav id="tabs">
     <button class="tab active" data-tab="bindings">绑定关系</button>
     <button class="tab" data-tab="uidquery">结果统计</button>
+    <button class="tab" data-tab="ecology">生态分</button>
     <button class="tab" data-tab="quals">资质审核</button>
     <button class="tab" data-tab="dashboard">数据看板</button>
     <button class="tab" data-tab="courses">课程考试</button>
@@ -280,6 +281,55 @@
     <iframe id="luna-admin-frame" title="课程考试管理"></iframe>
   </section>
 
+  <!-- 生态分 -->
+  <section id="tab-ecology" class="panel">
+    <div class="dash-cards">
+      <div class="dash-card"><div class="dash-card-label">人员总数</div><div class="dash-card-value" id="eco-total">-</div></div>
+      <div class="dash-card"><div class="dash-card-label">已评分人数</div><div class="dash-card-value" id="eco-scored">-</div></div>
+      <div class="dash-card"><div class="dash-card-label">平均生态分</div><div class="dash-card-value" id="eco-average">-</div></div>
+      <div class="dash-card"><div class="dash-card-label">S / S+ 人数</div><div class="dash-card-value" id="eco-excellent">-</div></div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <h2>生态分成员</h2>
+        <div>
+          <button id="eco-token-toggle" class="btn" type="button">接口登录态</button>
+          <button id="eco-refresh" class="btn primary" type="button">刷新全部生态分</button>
+        </div>
+      </div>
+      <div id="eco-token-panel" class="hidden" style="margin-bottom:12px;padding:12px;background:rgba(255,255,255,.55);border-radius:8px">
+        <div class="toolbar" style="margin-bottom:6px">
+          <input id="eco-token" type="password" autocomplete="off" placeholder="输入新的 Admin-Token" style="min-width:280px;flex:1">
+          <button id="eco-token-save" class="btn small" type="button">保存登录态</button>
+        </div>
+        <div id="eco-token-status" class="muted"></div>
+      </div>
+      <div class="toolbar">
+        <input id="eco-kw" type="text" placeholder="搜索昵称 / UID / 大厅">
+        <select id="eco-role">
+          <option value="">全部身份</option><option value="trainer">培训师</option><option value="sister">姐妹团姐姐</option><option value="new">新人</option><option value="trainee">妹妹</option>
+        </select>
+        <select id="eco-grade">
+          <option value="">全部生态等级</option><option>S+</option><option>S</option><option>A</option><option>B</option><option>C</option><option>D</option>
+        </select>
+        <select id="eco-weeks" title="每人保存的周数"><option value="2">最近 2 周</option><option value="8">最近 8 周</option></select>
+        <button id="eco-search" class="btn" type="button">查询</button>
+      </div>
+      <div id="eco-job" class="hidden" style="margin:10px 0">
+        <div id="eco-job-text" class="muted" style="margin-bottom:5px"></div>
+        <div style="height:6px;border-radius:6px;background:#e5e7eb;overflow:hidden"><div id="eco-job-bar" style="height:100%;width:0;background:var(--brand-gold);transition:width .2s"></div></div>
+      </div>
+      <div class="muted" style="margin-bottom:8px">数据来自队长生态管理，按周保存；点击详情查看最近 8 周趋势和具体加减分。</div>
+      <div style="overflow-x:auto">
+        <table style="min-width:1450px">
+          <thead><tr><th>昵称 / UID</th><th>身份 / 大厅</th><th>生态等级</th><th>生态分</th><th>活跃大厅</th><th>参加活动</th><th>板块游戏</th><th>获客</th><th>ARPU提升</th><th>维护老板</th><th>用户挽回</th><th>发帖相册</th><th>生态提示</th><th>操作</th></tr></thead>
+          <tbody id="eco-tbody"></tbody>
+        </table>
+      </div>
+      <div class="pager" id="eco-pager"></div>
+    </div>
+  </section>
+
   <!-- 资质审核 -->
   <section id="tab-quals" class="panel">
     <div class="card">
@@ -320,6 +370,20 @@
   <div class="footer-lines"><span></span><span></span><span></span></div>
   <div class="footer-text">培训师系统 · 点点开黑</div>
 </footer>
+
+<!-- 生态分详情弹窗 -->
+<div id="eco-detail-modal" class="modal-mask hidden">
+  <div class="modal xwide">
+    <div class="card-head">
+      <h3 id="eco-detail-title">生态分详情</h3>
+      <div>
+        <button id="eco-detail-refresh" class="btn small" type="button">刷新此人</button>
+        <button class="btn small" data-close="eco-detail-modal" type="button">关闭</button>
+      </div>
+    </div>
+    <div id="eco-detail-content"></div>
+  </div>
+</div>
 
 <!-- 培训师档案弹窗 -->
 <div id="trainers-modal" class="modal-mask hidden">

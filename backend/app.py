@@ -25,6 +25,7 @@ from db import get_db  # noqa: E402
 from uid_crawler import UIDCrawler, CookieExpiredError, CAPTAIN_TYPE_LABELS  # noqa: E402
 from trainer_db import init_trainer_db  # noqa: E402
 from member_weekly_sync import get_trainer_graduates  # noqa: E402
+from ecology_crawler import config_status as ecology_config_status, save_admin_token, sync_many  # noqa: E402
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 
@@ -3071,6 +3072,169 @@ def refresh_all_trainees_api():
     """手动触发：刷新全部生效绑定学员的当周等级（名额/奖励判定用）"""
     queried, errors = refresh_all_bound_trainees()
     return ok({'queried': len(queried), 'errors': errors})
+
+
+# ────────────────────────────────────────────── 生态分（队长生态管理）
+
+ECOLOGY_JOB_LOCK = threading.Lock()
+ECOLOGY_JOB = {}
+
+
+def _ecology_people():
+    conn = get_db()
+    rows = conn.execute('''SELECT uid, nickname, hall_name, role, status FROM trainers
+                           UNION ALL
+                           SELECT uid, nickname, hall_name, 'trainee' AS role, status FROM trainees''').fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def _ecology_public_row(row, detail=False):
+    if not row:
+        return None
+    item = dict(row)
+    raw_hints = item.pop('hints_json', None)
+    raw_items = item.pop('eco_items_json', None)
+    item.pop('raw_json', None)
+    try:
+        item['hints'] = json.loads(raw_hints) if raw_hints else []
+    except Exception:
+        item['hints'] = []
+    if detail:
+        try:
+            item['eco_items'] = json.loads(raw_items) if raw_items else {}
+        except Exception:
+            item['eco_items'] = {}
+    return item
+
+
+def _start_ecology_refresh(uids, weeks):
+    global ECOLOGY_JOB
+    with ECOLOGY_JOB_LOCK:
+        if ECOLOGY_JOB.get('running'):
+            return dict(ECOLOGY_JOB), True
+        job_id = uuid.uuid4().hex[:12]
+        ECOLOGY_JOB = {
+            'id': job_id, 'running': True, 'total': len(uids), 'completed': 0,
+            'success': 0, 'failed': 0, 'saved': 0, 'errors': [],
+            'started_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'finished_at': None,
+        }
+
+        def work():
+            def progress(uid, ok, saved, error):
+                with ECOLOGY_JOB_LOCK:
+                    ECOLOGY_JOB['completed'] += 1
+                    ECOLOGY_JOB['success' if ok else 'failed'] += 1
+                    ECOLOGY_JOB['saved'] += saved
+                    if error and len(ECOLOGY_JOB['errors']) < 50:
+                        ECOLOGY_JOB['errors'].append({'uid': uid, 'msg': error})
+            try:
+                sync_many(uids, weeks=weeks, workers=4, progress=progress)
+            except Exception as e:
+                with ECOLOGY_JOB_LOCK:
+                    ECOLOGY_JOB['errors'].append({'uid': '-', 'msg': str(e)})
+            finally:
+                with ECOLOGY_JOB_LOCK:
+                    ECOLOGY_JOB['running'] = False
+                    ECOLOGY_JOB['finished_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        threading.Thread(target=work, daemon=True).start()
+        return dict(ECOLOGY_JOB), False
+
+
+@app.get('/api/ecology/config')
+def ecology_config():
+    return ok(ecology_config_status())
+
+
+@app.post('/api/ecology/config')
+def ecology_config_update():
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        status = save_admin_token(data.get('admin_token'))
+    except ValueError as e:
+        return err(str(e))
+    log_operation('admin', None, 'ecology_config', None, None, None, '更新生态分接口登录态')
+    return ok(status)
+
+
+@app.get('/api/ecology/members')
+def ecology_members():
+    kw = request.args.get('kw', '').strip().lower()
+    role = request.args.get('role', '').strip()
+    grade = request.args.get('grade', '').strip()
+    page = max(int(request.args.get('page', 1) or 1), 1)
+    page_size = min(max(int(request.args.get('page_size', 20) or 20), 1), 100)
+    conn = get_db()
+    latest_rows = conn.execute('''SELECT e.* FROM ecology_weekly e
+                                  JOIN (SELECT uid, MAX(week_start) AS week_start FROM ecology_weekly GROUP BY uid) x
+                                  ON e.uid=x.uid AND e.week_start=x.week_start''').fetchall()
+    conn.close()
+    latest = {r['uid']: _ecology_public_row(r) for r in latest_rows}
+    items = []
+    for person in _ecology_people():
+        if role and person['role'] != role:
+            continue
+        haystack = f"{person['uid']} {person['nickname'] or ''} {person['hall_name'] or ''}".lower()
+        if kw and kw not in haystack:
+            continue
+        current = latest.get(person['uid'])
+        if grade and (not current or current.get('eco_grade') != grade):
+            continue
+        item = dict(person)
+        item['latest'] = current
+        items.append(item)
+    items.sort(key=lambda x: (x['latest']['score'] if x['latest'] and x['latest'].get('score') is not None else -1), reverse=True)
+    scored = [x['latest']['score'] for x in items if x['latest'] and x['latest'].get('score') is not None]
+    grades = {}
+    for item in items:
+        key = item['latest'].get('eco_grade') or '未评分' if item['latest'] else '未评分'
+        grades[key] = grades.get(key, 0) + 1
+    total = len(items)
+    start = (page - 1) * page_size
+    return ok({
+        'items': items[start:start + page_size], 'total': total, 'page': page, 'page_size': page_size,
+        'stats': {
+            'scored': len(scored), 'average': round(sum(scored) / len(scored), 1) if scored else None,
+            'grades': grades, 'excellent': grades.get('S', 0) + grades.get('S+', 0),
+        },
+    })
+
+
+@app.get('/api/ecology/members/<uid>')
+def ecology_member_detail(uid):
+    people = [p for p in _ecology_people() if p['uid'] == str(uid)]
+    conn = get_db()
+    rows = conn.execute('SELECT * FROM ecology_weekly WHERE uid=? ORDER BY week_start DESC LIMIT 8', (str(uid),)).fetchall()
+    conn.close()
+    if not people and not rows:
+        return err('未找到该 UID 的档案或生态分记录', 404)
+    return ok({'people': people, 'history': [_ecology_public_row(r, detail=True) for r in rows]})
+
+
+@app.post('/api/ecology/refresh')
+def ecology_refresh():
+    data = request.get_json(force=True, silent=True) or {}
+    weeks = min(max(int(data.get('weeks', 2) or 2), 1), 8)
+    if data.get('uids'):
+        uids = list(dict.fromkeys(str(uid).strip() for uid in data['uids'] if str(uid).strip()))
+    else:
+        uids = list(dict.fromkeys(p['uid'] for p in _ecology_people()))
+    if not uids:
+        return err('没有需要刷新的人员')
+    if any(not uid.isdigit() for uid in uids):
+        return err('UID 格式不正确')
+    job, already_running = _start_ecology_refresh(uids, weeks)
+    return jsonify({'ok': True, 'job': job, 'already_running': already_running}), 202
+
+
+@app.get('/api/ecology/refresh/<job_id>')
+def ecology_refresh_status(job_id):
+    with ECOLOGY_JOB_LOCK:
+        job = dict(ECOLOGY_JOB)
+    if not job or job['id'] != job_id:
+        return err('刷新任务不存在或已过期', 404)
+    return ok(job)
 
 
 # ────────────────────────────────────────────── 每周自动刷新（周一统计用）

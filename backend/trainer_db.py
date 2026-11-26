@@ -83,6 +83,34 @@ CREATE TABLE IF NOT EXISTS home_banners (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS ecology_weekly (
+    uid TEXT NOT NULL,
+    week_start TEXT NOT NULL,
+    nickname TEXT,
+    hall_name TEXT,
+    captain_type TEXT,
+    level TEXT,
+    level_change INTEGER DEFAULT 0,
+    eco_grade TEXT,
+    eco_grade_change INTEGER DEFAULT 0,
+    score REAL,
+    flow REAL,
+    expense_ratio REAL,
+    active_hall REAL,
+    event_score REAL,
+    board_score REAL,
+    acquire_score REAL,
+    arpu_score REAL,
+    maintain_score REAL,
+    back_score REAL,
+    home_score REAL,
+    hints_json TEXT,
+    eco_items_json TEXT,
+    raw_json TEXT,
+    queried_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (uid, week_start)
+);
 """
 
 

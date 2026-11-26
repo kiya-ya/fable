@@ -68,6 +68,7 @@ $$('#tabs .tab').forEach((btn) => {
     document.querySelector('.app-footer').classList.toggle('hidden', btn.dataset.tab === 'courses');
     if (btn.dataset.tab === 'bindings') loadBindingsTab();
     if (btn.dataset.tab === 'dashboard') loadDashboard();
+    if (btn.dataset.tab === 'ecology') loadEcologyMembers();
     if (btn.dataset.tab === 'quals') loadQuals();
     if (btn.dataset.tab === 'banners') loadAdminBanners();
     if (btn.dataset.tab === 'courses') {
@@ -1605,3 +1606,187 @@ function renderPieChart(reasons, pieSel = '#dash-pie', legendSel = '#dash-pie-le
 $('#dash-week').value = new Date().toLocaleDateString('sv-SE');
 initUidQuery();
 loadBindingsTab();
+
+// ────────────── 生态分 ──────────────
+let ecoPage = 1;
+let ecoJobId = null;
+let ecoPollTimer = null;
+let ecoDetailUid = null;
+const ECO_ROLE_LABEL = { trainer: '培训师', sister: '姐妹团姐姐', new: '新人', trainee: '妹妹' };
+const ECO_DIM_LABEL = {
+  bonusAtmos: '活跃大厅', bonusEvent: '参加活动', bonusBoard: '板块游戏', bonusAcquire: '获客',
+  bonusArpu: 'ARPU 值提升', bonusMaintain: '维护老板', bonusBack: '用户挽回', bonusHome: '发帖和相册',
+  bonusHall: '大厅活跃明细', bonusKeep: '留存维护', bonusPost: '社区内容', bonusManual: '运营调整',
+  bonusInvite: '邀请码', bonusFleet: '新老板车队',
+};
+
+function ecoNum(value) {
+  if (value === null || value === undefined || value === '') return '--';
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toLocaleString('zh-CN', { maximumFractionDigits: 1 }) : '--';
+}
+
+function ecoChange(value) {
+  const number = Number(value || 0);
+  if (!number) return '';
+  return `<small class="${number > 0 ? 'eco-delta-up' : 'eco-delta-down'}">${number > 0 ? '↑' : '↓'}${Math.abs(number)}</small>`;
+}
+
+function ecoGrade(latest) {
+  if (!latest || !latest.eco_grade) return '<span class="muted">未评分</span>';
+  const cls = latest.eco_grade === 'S+' ? 'splus' : latest.eco_grade.toLowerCase();
+  return `<span class="eco-grade ${cls}">${esc(latest.eco_grade)}</span>${ecoChange(latest.eco_grade_change)}`;
+}
+
+async function loadEcologyMembers(page = ecoPage) {
+  ecoPage = page;
+  const tbody = $('#eco-tbody');
+  tbody.innerHTML = '<tr><td colspan="14" class="empty">加载中…</td></tr>';
+  const params = new URLSearchParams({ page, page_size: 20, kw: $('#eco-kw').value.trim(), role: $('#eco-role').value, grade: $('#eco-grade').value });
+  try {
+    const data = await api('/api/ecology/members?' + params);
+    const stats = data.stats || {};
+    $('#eco-total').textContent = data.total;
+    $('#eco-scored').textContent = stats.scored || 0;
+    $('#eco-average').textContent = stats.average === null || stats.average === undefined ? '--' : stats.average;
+    $('#eco-excellent').textContent = stats.excellent || 0;
+    if (!data.items.length) {
+      tbody.innerHTML = '<tr><td colspan="14" class="empty">没有匹配的人员或生态分记录</td></tr>';
+    } else {
+      tbody.innerHTML = data.items.map(person => {
+        const latest = person.latest;
+        const values = ['active_hall', 'event_score', 'board_score', 'acquire_score', 'arpu_score', 'maintain_score', 'back_score', 'home_score']
+          .map(key => `<td>${latest ? ecoNum(latest[key]) : '--'}</td>`).join('');
+        return `<tr>
+          <td class="eco-person"><b>${esc(person.nickname || '-')}</b><small>${esc(person.uid)}</small></td>
+          <td>${ECO_ROLE_LABEL[person.role] || esc(person.role)}<small class="eco-week">${esc((latest && latest.hall_name) || person.hall_name || '-')}</small></td>
+          <td>${ecoGrade(latest)}</td>
+          <td>${latest && latest.score !== null && latest.score !== undefined ? `<span class="eco-score">${ecoNum(latest.score)}</span><small class="eco-week">${esc(latest.week_start)}</small>` : '<span class="muted">未评分</span>'}</td>
+          ${values}
+          <td class="eco-hints">${latest && latest.hints && latest.hints.length ? esc(latest.hints.join('、')) : '—'}</td>
+          <td><button class="btn small" type="button" onclick="openEcologyDetail('${esc(person.uid)}')">详情</button></td>
+        </tr>`;
+      }).join('');
+    }
+    renderPager('#eco-pager', data.page, data.page_size, data.total, loadEcologyMembers);
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="14" class="empty">${esc(e.message)}</td></tr>`;
+  }
+}
+
+function ecoRenderItems(items, depth = 0) {
+  if (!Array.isArray(items) || !items.length) return '';
+  return items.map(item => `<div class="eco-dim-row" style="padding-left:${depth * 12}px"><span>${esc(item.label)}</span><span>${ecoNum(item.value)}</span></div>${ecoRenderItems(item.children, depth + 1)}`).join('');
+}
+
+function ecoDetailHtml(data) {
+  const people = data.people || [];
+  const history = data.history || [];
+  const latest = history[0];
+  const names = people.map(p => p.nickname).filter(Boolean);
+  const roles = people.map(p => ECO_ROLE_LABEL[p.role] || p.role).filter((v, i, a) => a.indexOf(v) === i);
+  const dims = latest && latest.eco_items ? Object.entries(latest.eco_items).filter(([, items]) => Array.isArray(items) && items.length) : [];
+  return `<div class="eco-detail-summary">
+    <div><b>${esc(names.join(' / ') || (latest && latest.nickname) || '未知')}</b><div class="muted">${esc(roles.join(' + ') || '平台用户')} · ${esc((latest && latest.hall_name) || (people[0] && people[0].hall_name) || '-')}</div></div>
+    ${latest ? `<div>${ecoGrade(latest)}</div><div class="eco-score">${ecoNum(latest.score)}</div><div class="muted">${esc(latest.week_start)}</div>` : '<span class="muted">暂无生态分记录</span>'}
+  </div>
+  ${latest && latest.hints && latest.hints.length ? `<div style="margin-bottom:12px">生态提示：<b>${esc(latest.hints.join('、'))}</b></div>` : ''}
+  ${dims.length ? `<div class="eco-dim-grid">${dims.map(([key, items]) => `<section class="eco-dim"><b>${ECO_DIM_LABEL[key] || esc(key)}</b>${ecoRenderItems(items)}</section>`).join('')}</div>` : ''}
+  <section class="eco-detail-section"><h3>最近 ${history.length} 周</h3><div style="overflow-x:auto"><table class="eco-history"><thead><tr><th>周起始</th><th>等级</th><th>生态分</th><th>活跃大厅</th><th>活动</th><th>板块</th><th>获客</th><th>ARPU</th><th>维护</th><th>挽回</th><th>发帖</th></tr></thead><tbody>
+    ${history.map(row => `<tr><td>${esc(row.week_start)}</td><td>${ecoGrade(row)}</td><td><b>${ecoNum(row.score)}</b></td><td>${ecoNum(row.active_hall)}</td><td>${ecoNum(row.event_score)}</td><td>${ecoNum(row.board_score)}</td><td>${ecoNum(row.acquire_score)}</td><td>${ecoNum(row.arpu_score)}</td><td>${ecoNum(row.maintain_score)}</td><td>${ecoNum(row.back_score)}</td><td>${ecoNum(row.home_score)}</td></tr>`).join('') || '<tr><td colspan="11" class="empty">暂无历史记录</td></tr>'}
+  </tbody></table></div></section>`;
+}
+
+async function openEcologyDetail(uid) {
+  ecoDetailUid = uid;
+  $('#eco-detail-title').textContent = `生态分详情 · UID ${uid}`;
+  $('#eco-detail-content').innerHTML = '<div class="empty">加载中…</div>';
+  $('#eco-detail-modal').classList.remove('hidden');
+  try {
+    const data = await api(`/api/ecology/members/${encodeURIComponent(uid)}`);
+    $('#eco-detail-content').innerHTML = ecoDetailHtml(data);
+  } catch (e) {
+    $('#eco-detail-content').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+  }
+}
+
+async function startEcologyRefresh(uids) {
+  try {
+    const data = await api('/api/ecology/refresh', {
+      method: 'POST',
+      body: { uids: uids || [], weeks: Number($('#eco-weeks').value) },
+    });
+    ecoJobId = data.job.id;
+    $('#eco-job').classList.remove('hidden');
+    $('#eco-refresh').disabled = true;
+    if (ecoPollTimer) clearInterval(ecoPollTimer);
+    pollEcologyJob();
+    ecoPollTimer = setInterval(pollEcologyJob, 1000);
+    if (data.already_running) toast('已加入正在进行的刷新任务');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function pollEcologyJob() {
+  if (!ecoJobId) return;
+  try {
+    const job = await api(`/api/ecology/refresh/${ecoJobId}`);
+    const completed = job.completed || 0;
+    const total = job.total || 0;
+    const pct = total ? Math.round(completed / total * 100) : 0;
+    $('#eco-job-text').textContent = job.running
+      ? `正在刷新 ${completed}/${total} 人 · 成功 ${job.success} · 失败 ${job.failed}`
+      : `刷新完成 · 成功 ${job.success} · 失败 ${job.failed} · 保存 ${job.saved} 条周记录${job.errors && job.errors.length ? ` · ${job.errors[0].msg}` : ''}`;
+    $('#eco-job-bar').style.width = `${job.running ? pct : 100}%`;
+    if (!job.running) {
+      clearInterval(ecoPollTimer);
+      ecoPollTimer = null;
+      ecoJobId = null;
+      $('#eco-refresh').disabled = false;
+      toast(`生态分刷新完成：成功 ${job.success} 人，失败 ${job.failed} 人`, job.failed > 0);
+      loadEcologyMembers();
+      if (ecoDetailUid && !$('#eco-detail-modal').classList.contains('hidden')) openEcologyDetail(ecoDetailUid);
+    }
+  } catch (e) {
+    clearInterval(ecoPollTimer);
+    ecoPollTimer = null;
+    ecoJobId = null;
+    $('#eco-refresh').disabled = false;
+    toast(e.message, true);
+  }
+}
+
+async function loadEcologyConfig() {
+  try {
+    const data = await api('/api/ecology/config');
+    $('#eco-token-status').textContent = data.configured
+      ? `已配置登录态 · ${data.updated_at || '时间未知'} · 保存新 Token 只会覆盖本机配置，不会在页面回显`
+      : '尚未配置 Admin-Token';
+  } catch (e) {
+    $('#eco-token-status').textContent = e.message;
+  }
+}
+
+$('#eco-search').addEventListener('click', () => loadEcologyMembers(1));
+$('#eco-kw').addEventListener('keydown', event => { if (event.key === 'Enter') loadEcologyMembers(1); });
+$('#eco-role').addEventListener('change', () => loadEcologyMembers(1));
+$('#eco-grade').addEventListener('change', () => loadEcologyMembers(1));
+$('#eco-refresh').addEventListener('click', () => startEcologyRefresh());
+$('#eco-detail-refresh').addEventListener('click', () => { if (ecoDetailUid) startEcologyRefresh([ecoDetailUid]); });
+$('#eco-token-toggle').addEventListener('click', () => {
+  $('#eco-token-panel').classList.toggle('hidden');
+  loadEcologyConfig();
+});
+$('#eco-token-save').addEventListener('click', async () => {
+  const token = $('#eco-token').value.trim();
+  if (!token) return toast('请输入 Admin-Token', true);
+  try {
+    await api('/api/ecology/config', { method: 'POST', body: { admin_token: token } });
+    $('#eco-token').value = '';
+    $('#eco-token-panel').classList.add('hidden');
+    toast('生态分接口登录态已更新');
+  } catch (e) {
+    toast(e.message, true);
+  }
+});

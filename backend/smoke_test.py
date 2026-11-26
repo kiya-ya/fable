@@ -620,6 +620,35 @@ check('看板支持选周', r.ok and r.json()['this_week']['label'] == '08-31 ~ 
 r = requests.get(f'{B}/api/bindings', params={'active': 0, 'kw': '测试妹妹甲'})
 check('绑定列表按昵称搜索', len(r.json()['items']) >= 1 and all('测试妹妹甲' in b['trainee_nickname'] for b in r.json()['items']), r.text[:200])
 
+print('== 生态分 ==')
+r = anon.get(f'{B}/api/ecology/members')
+check('生态分列表未登录拦截 401', r.status_code == 401, f'got {r.status_code}')
+r = requests.get(f'{B}/api/ecology/config')
+check('生态分登录态配置不回显 Token', r.ok and r.json()['configured'] and 'admin_token' not in r.text, r.text)
+db_exec('''INSERT OR REPLACE INTO ecology_weekly
+           (uid,week_start,nickname,hall_name,level,eco_grade,score,active_hall,event_score,board_score,
+            acquire_score,arpu_score,maintain_score,back_score,home_score,hints_json,eco_items_json)
+           VALUES ('80001','2026-11-16','测试妹妹甲','测试厅','金牌','A',650.5,120,20,10,5,6,80,0,0,'["迎新标兵"]',
+                   '{"bonusAtmos":[{"label":"主持期间","value":120}]}')''')
+r = requests.get(f'{B}/api/ecology/members', params={'kw': '80001'})
+check('生态分列表返回等级分数和提示', r.ok and r.json()['total'] == 1
+      and r.json()['items'][0]['latest']['score'] == 650.5
+      and r.json()['items'][0]['latest']['hints'] == ['迎新标兵'], r.text[:300])
+check('生态分列表分页字段', r.ok and r.json()['page'] == 1 and r.json()['page_size'] == 20, r.text[:200])
+r = requests.get(f'{B}/api/ecology/members/80001')
+check('生态分详情返回分项和周历史', r.ok and len(r.json()['history']) == 1
+      and r.json()['history'][0]['eco_items']['bonusAtmos'][0]['value'] == 120, r.text[:300])
+r = requests.post(f'{B}/api/ecology/refresh', json={'uids': ['80001'], 'weeks': 1})
+check('生态分异步刷新返回任务', r.status_code == 202 and r.json()['job']['id'], r.text)
+job_id = r.json()['job']['id']
+job = {}
+for _ in range(45):
+    job = requests.get(f'{B}/api/ecology/refresh/{job_id}').json()
+    if not job.get('running', False):
+        break
+    __import__('time').sleep(0.2)
+check('生态分单 UID 异步刷新完成', job.get('completed') == 1 and job.get('success') == 1, str(job))
+
 print('== UID 速查 ==')
 r = requests.get(f'{B}/api/uid-query/types')
 check('类型列表', r.ok and len(r.json()['items']) == 4, r.text)
@@ -649,6 +678,7 @@ for uid in TEST_TRAINEE_UIDS:
             requests.delete(f"{B}/api/trainees/{t['id']}")
     db_exec('DELETE FROM trainee_level_monthly WHERE trainee_uid=?', (uid,))
     db_exec('DELETE FROM member_weekly WHERE uid=?', (uid,))
+db_exec(f'DELETE FROM ecology_weekly WHERE uid IN ({marks_te})', TEST_TRAINEE_UIDS)
 luna_db = os.path.abspath(os.path.join(os.path.dirname(DB), '..', '..', 'LUNA', 'data.db'))
 if os.path.exists(luna_db):
     conn = sqlite3.connect(luna_db)
