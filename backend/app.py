@@ -2342,7 +2342,13 @@ def _post_graduation_metrics(conn, today):
 
 
 def _dashboard_ecology(conn):
-    rows = conn.execute('SELECT * FROM ecology_weekly ORDER BY uid, week_start DESC').fetchall()
+    rows = conn.execute('''SELECT e.* FROM ecology_weekly e
+                           WHERE e.uid IN (
+                               SELECT t.uid FROM bindings b
+                               JOIN trainees t ON t.id=b.trainee_id
+                               WHERE b.bind_type='trainer' AND b.unbound_at IS NULL
+                           )
+                           ORDER BY e.uid, e.week_start DESC''').fetchall()
     grouped = {}
     for row in rows:
         if len(grouped.setdefault(row['uid'], [])) < 2:
@@ -2368,6 +2374,7 @@ def _dashboard_ecology(conn):
     declines = sorted([row for row in compared if row['delta'] is not None and row['delta'] < 0],
                       key=lambda x: x['delta'])[:5]
     return {
+        'scope': 'active_trainees',
         'latest_week': max((row['week_start'] for row in latest), default=None),
         'total': len(latest), 'scored': len(scored), 'unscored': len(latest) - len(scored),
         'average': round(sum(row['score'] for row in scored) / len(scored), 1) if scored else None,

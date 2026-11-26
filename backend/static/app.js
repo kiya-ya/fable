@@ -1805,12 +1805,12 @@ $('#eco-token-save').addEventListener('click', async () => {
 
 function renderDashEcology(eco) {
   if (!eco) return;
-  $('#dash-eco-week').textContent = eco.latest_week ? `最新归档周 ${eco.latest_week}` : '暂无生态分数据';
+  $('#dash-eco-week').textContent = eco.latest_week ? `仅当前生效培训师绑定的妹妹 · 最新归档周 ${eco.latest_week}` : '暂无妹妹生态分数据';
   const cards = [
-    { label: '已评分 / 未评分', value: `${eco.scored} / ${eco.unscored}`, color: '#3b82f6' },
-    { label: '平均生态分', value: eco.average === null ? '--' : eco.average, color: '#8E6BC8' },
-    { label: 'S / S+ 人数', value: eco.excellent, color: '#10b981' },
-    { label: '本周上升 / 下降人数', value: `${eco.improving} / ${eco.declining}`, color: '#f59e0b' },
+    { label: '已评分妹妹 / 未评分妹妹', value: `${eco.scored} / ${eco.unscored}`, color: '#3b82f6' },
+    { label: '妹妹平均生态分', value: eco.average === null ? '--' : eco.average, color: '#8E6BC8' },
+    { label: 'S / S+ 妹妹人数', value: eco.excellent, color: '#10b981' },
+    { label: '本周上升 / 下降妹妹人数', value: `${eco.improving} / ${eco.declining}`, color: '#f59e0b' },
   ];
   $('#dash-eco-cards').innerHTML = cards.map(card => `<div class="dash-card" style="border-top-color:${card.color}"><div class="dash-card-label">${card.label}</div><div class="dash-card-value" style="color:${card.color}">${card.value}</div></div>`).join('');
   const gradeOrder = ['S+', 'S', 'A', 'B', 'C', 'D', '未评分'];
