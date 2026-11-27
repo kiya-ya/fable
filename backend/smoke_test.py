@@ -598,6 +598,7 @@ d = r.json()
 check('看板结构', r.ok and len(d['weekly']) == 8 and 'dissolve_reasons' in d and 'active' in d, str(d.keys()))
 check('看板包含生态分概览与进步预警', 'ecology' in d
       and set(('latest_week', 'average', 'grades', 'top', 'declines')) <= set(d['ecology']), str(d.get('ecology')))
+check('看板包含进步率稳定率维护改善与留存预警', set(('progress_rate', 'stable_rate', 'maintenance', 'warnings')) <= set(d['ecology']), str(d['ecology']))
 check('看板生态分仅统计生效培训师绑定妹妹', d['ecology'].get('scope') == 'active_trainees'
       and all(db_one("SELECT COUNT(*) FROM bindings b JOIN trainees t ON t.id=b.trainee_id WHERE t.uid=? AND b.bind_type='trainer' AND b.unbound_at IS NULL", (p['uid'],))[0] == 1
               for p in d['ecology']['top'] + d['ecology']['declines']), '存在非生效绑定妹妹或侧方人员')
@@ -697,6 +698,9 @@ check('生态分单 UID 异步刷新完成', job.get('completed') == 1 and job.g
 print('== UID 速查 ==')
 r = requests.get(f'{B}/api/uid-query/types')
 check('类型列表', r.ok and len(r.json()['items']) == 4, r.text)
+r = requests.post(f'{B}/api/uid-query', json={'uid': '80001', 'captain_type': 'game'})
+check('UID 查询同步最近四周生态分', r.ok and 'ecology' in r.json()
+      and r.json()['ecology']['history'] and 'eco_grade' in r.json()['ecology']['history'][0], r.text[:300])
 r = requests.post(f'{B}/api/trainees/999999/refresh')
 check('刷新不存在学员 404（不打网络）', r.status_code == 404, f'got {r.status_code}')
 

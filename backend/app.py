@@ -25,7 +25,7 @@ from db import get_db  # noqa: E402
 from uid_crawler import UIDCrawler, CookieExpiredError, CAPTAIN_TYPE_LABELS  # noqa: E402
 from trainer_db import init_trainer_db  # noqa: E402
 from member_weekly_sync import get_trainer_graduates  # noqa: E402
-from ecology_crawler import config_status as ecology_config_status, save_admin_token, sync_many  # noqa: E402
+from ecology_crawler import config_status as ecology_config_status, save_admin_token, sync_many, sync_uid  # noqa: E402
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 
@@ -2351,20 +2351,49 @@ def _dashboard_ecology(conn):
                            ORDER BY e.uid, e.week_start DESC''').fetchall()
     grouped = {}
     for row in rows:
-        if len(grouped.setdefault(row['uid'], [])) < 2:
+        if len(grouped.setdefault(row['uid'], [])) < 4:
             grouped[row['uid']].append(row)
     latest = [history[0] for history in grouped.values() if history]
     scored = [row for row in latest if row['score'] is not None]
     compared = []
+    negative_hints = {'主持不活跃', '承接转化差', '邀请码闲置', '队长互刷多'}
     for uid, history in grouped.items():
         current = history[0]
         previous = history[1] if len(history) > 1 else None
-        delta = None
-        if current['score'] is not None and previous and previous['score'] is not None:
-            delta = round(current['score'] - previous['score'], 1)
+        scored_history = [row for row in history if row['score'] is not None]
+        delta = (round(current['score'] - previous['score'], 1)
+                 if current['score'] is not None and previous and previous['score'] is not None else None)
+        progress_delta = (round(scored_history[0]['score'] - scored_history[-1]['score'], 1)
+                          if len(scored_history) >= 2 else None)
+        maintenance = []
+        for row in history:
+            if row['score'] is None:
+                continue
+            try:
+                raw = json.loads(row['raw_json']) if row['raw_json'] else {}
+            except Exception:
+                raw = {}
+            maintenance.append(round((row['maintain_score'] or 0) + (raw.get('bonusKeep') or 0), 1))
+        maintenance_delta = round(maintenance[0] - maintenance[-1], 1) if len(maintenance) >= 2 else None
+        active_weeks = sum(1 for row in history if row['score'] is not None and (row['active_hall'] or 0) > 0)
+        stable = len(history) >= 2 and active_weeks == len(history)
+        try:
+            hints = json.loads(current['hints_json']) if current['hints_json'] else []
+        except Exception:
+            hints = []
+        reasons = []
+        if current['score'] is None:
+            reasons.append('本周未评分')
+        if len(scored_history) >= 3 and scored_history[0]['score'] < scored_history[1]['score'] < scored_history[2]['score']:
+            reasons.append('连续两周下降')
+        if previous and (current['active_hall'] or 0) <= 0 and (previous['active_hall'] or 0) > 0:
+            reasons.append('活跃中断')
+        reasons.extend(hint for hint in hints if hint in negative_hints)
         compared.append({
             'uid': uid, 'nickname': current['nickname'], 'hall_name': current['hall_name'],
             'eco_grade': current['eco_grade'], 'score': current['score'], 'delta': delta,
+            'progress_delta': progress_delta, 'maintenance_delta': maintenance_delta,
+            'active_weeks': active_weeks, 'stable': stable, 'reasons': reasons,
         })
     grades = {}
     for row in latest:
@@ -2373,6 +2402,12 @@ def _dashboard_ecology(conn):
     top = sorted([row for row in compared if row['score'] is not None], key=lambda x: x['score'], reverse=True)[:5]
     declines = sorted([row for row in compared if row['delta'] is not None and row['delta'] < 0],
                       key=lambda x: x['delta'])[:5]
+    progress = sorted([row for row in compared if row['progress_delta'] is not None and row['progress_delta'] > 0],
+                      key=lambda x: x['progress_delta'], reverse=True)[:5]
+    maintenance = sorted([row for row in compared if row['maintenance_delta'] is not None and row['maintenance_delta'] > 0],
+                         key=lambda x: x['maintenance_delta'], reverse=True)[:5]
+    warnings = sorted([row for row in compared if row['reasons']], key=lambda x: len(x['reasons']), reverse=True)[:5]
+    comparable = [row for row in compared if row['progress_delta'] is not None]
     return {
         'scope': 'active_trainees',
         'latest_week': max((row['week_start'] for row in latest), default=None),
@@ -2381,7 +2416,14 @@ def _dashboard_ecology(conn):
         'excellent': grades.get('S', 0) + grades.get('S+', 0), 'grades': grades,
         'improving': sum(1 for row in compared if row['delta'] is not None and row['delta'] > 0),
         'declining': sum(1 for row in compared if row['delta'] is not None and row['delta'] < 0),
-        'top': top, 'declines': declines,
+        'progress_count': len(progress), 'comparable': len(comparable),
+        'progress_rate': round(sum(1 for row in compared if row['progress_delta'] is not None and row['progress_delta'] > 0)
+                               / len(comparable) * 100, 1) if comparable else None,
+        'stable': sum(1 for row in compared if row['stable']),
+        'stable_rate': round(sum(1 for row in compared if row['stable']) / len(compared) * 100, 1) if compared else None,
+        'maintenance_improved': sum(1 for row in compared if row['maintenance_delta'] is not None and row['maintenance_delta'] > 0),
+        'warning_count': sum(1 for row in compared if row['reasons']),
+        'top': top, 'declines': declines, 'progress': progress, 'maintenance': maintenance, 'warnings': warnings,
     }
 
 
@@ -3156,8 +3198,18 @@ def uid_query():
             'retained': retained,
             'msg': '留存正常' if retained else '未留存：排档大厅 / 当周等级均为空，可判定团队解散',
         }
+    ecology_error = ''
+    try:
+        sync_uid(uid, weeks=4)
+    except Exception as e:
+        ecology_error = str(e)
     conn = get_db()
     try:
+        ecology_rows = conn.execute(
+            'SELECT * FROM ecology_weekly WHERE uid=? ORDER BY week_start DESC LIMIT 4', (uid,)).fetchall()
+        payload['ecology'] = {'history': [_ecology_public_row(r, detail=True) for r in ecology_rows]}
+        if ecology_error:
+            payload['ecology_error'] = ecology_error
         tr = conn.execute('SELECT id FROM trainers WHERE uid=?', (uid,)).fetchone()
         if tr:
             if week_data.get('found'):

@@ -405,7 +405,7 @@ $('#uq-submit').addEventListener('click', async () => {
     $('#rewards-panel').classList.toggle('hidden', !r.rewards_panel);
     if (r.slots) renderSlotsPanel(r.slots);
     if (r.rewards_panel) renderRewardsPanel(r.rewards_panel);
-    renderUidResult(r.result);
+    renderUidResult(r.result, r.ecology, r.ecology_error);
     if (r.retention) {
       const banner = r.retention.retained
         ? `<div class="retention-banner ok">${esc(r.retention.msg)}</div>`
@@ -420,32 +420,34 @@ $('#uq-submit').addEventListener('click', async () => {
   }
 });
 
-function renderUidResult(res) {
+function renderUidEcology(ecology, error) {
+  const history = (ecology && ecology.history) || [];
+  if (!history.length) return error ? `<div class="retention-banner bad">生态分同步失败：${esc(error)}</div>` : '';
+  const latest = history[0];
+  return `<details class="uq-ecology" open><summary><b>生态分</b> · ${ecoGrade(latest)} <strong>${ecoNum(latest.score)}</strong><span class="muted">最近 ${history.length} 周</span></summary>
+    <div style="overflow-x:auto"><table><thead><tr><th>周起始</th><th>等级</th><th>生态分</th><th>活跃大厅</th><th>维护老板</th></tr></thead><tbody>${history.map(row => `<tr><td>${esc(row.week_start)}</td><td>${ecoGrade(row)}</td><td>${ecoNum(row.score)}</td><td>${ecoNum(row.active_hall)}</td><td>${ecoNum(row.maintain_score)}</td></tr>`).join('')}</tbody></table></div>
+    <button type="button" class="btn small" onclick="openEcologyDetail('${esc(latest.uid)}')">查看分项详情</button>
+    ${error ? `<div class="reward-preview-error">本次生态分刷新失败，当前显示已有缓存：${esc(error)}</div>` : ''}</details>`;
+}
+
+function renderUidResult(res, ecology, ecologyError) {
   const box = $('#uq-result');
-  if (!res.this_week.data.found && !res.last_week.data.found) {
-    box.innerHTML = '<div class="empty">未找到该 UID 的数据</div>';
-    return;
+  let base = '';
+  if (res.this_week.data.found || res.last_week.data.found) {
+    const LEVEL_KEYS = new Set(['week_level', 'best_4week_level']);
+    const cards = Object.entries(COMPARE_LABELS).map(([key, label]) => {
+      const c = res.compare[key];
+      if (!c) return '';
+      if (LEVEL_KEYS.has(key)) {
+        return `<div class="uq-item"><div class="k">${label}</div><div class="v">${esc(c.this)}</div></div>`;
+      }
+      return `<div class="uq-item"><div class="k">${label}</div><div class="v">本周 ${esc(c.this)} ｜ 上周 ${esc(c.last)}</div><div class="c ${c.trend || 'flat'}">${esc(c.change || '')}</div></div>`;
+    }).join('');
+    base = `<div class="uq-head">${esc(res.nickname || res.uid)}（${esc(res.type_label)}）</div><div class="muted">本周 ${esc(res.this_week.period)} ｜ 上周 ${esc(res.last_week.period)}</div><div class="uq-grid">${cards}</div>`;
+  } else {
+    base = '<div class="empty">UID 查询系统未找到该用户的数据</div>';
   }
-  const LEVEL_KEYS = new Set(['week_level', 'best_4week_level']);  // 等级类卡片只显示牌子
-  const cards = Object.entries(COMPARE_LABELS).map(([key, label]) => {
-    const c = res.compare[key];
-    if (!c) return '';
-    if (LEVEL_KEYS.has(key)) {
-      return `<div class="uq-item">
-        <div class="k">${label}</div>
-        <div class="v">${esc(c.this)}</div>
-      </div>`;
-    }
-    return `<div class="uq-item">
-      <div class="k">${label}</div>
-      <div class="v">本周 ${esc(c.this)} ｜ 上周 ${esc(c.last)}</div>
-      <div class="c ${c.trend || 'flat'}">${esc(c.change || '')}</div>
-    </div>`;
-  }).join('');
-  box.innerHTML = `
-    <div class="uq-head">${esc(res.nickname || res.uid)}（${esc(res.type_label)}）</div>
-    <div class="muted">本周 ${esc(res.this_week.period)} ｜ 上周 ${esc(res.last_week.period)}</div>
-    <div class="uq-grid">${cards}</div>`;
+  box.innerHTML = base + renderUidEcology(ecology, ecologyError);
 }
 
 // ────────────── 名额面板 ──────────────
@@ -1862,17 +1864,25 @@ function renderDashEcology(eco) {
   if (!eco) return;
   $('#dash-eco-week').textContent = eco.latest_week ? `仅当前生效培训师绑定的妹妹 · 最新归档周 ${eco.latest_week}` : '暂无妹妹生态分数据';
   const cards = [
-    { label: '已评分妹妹 / 未评分妹妹', value: `${eco.scored} / ${eco.unscored}`, color: '#3b82f6' },
-    { label: '妹妹平均生态分', value: eco.average === null ? '--' : eco.average, color: '#8E6BC8' },
-    { label: 'S / S+ 妹妹人数', value: eco.excellent, color: '#10b981' },
-    { label: '本周上升 / 下降妹妹人数', value: `${eco.improving} / ${eco.declining}`, color: '#f59e0b' },
+    { label: `妹妹进步率（可比较 ${eco.comparable} 人）`, value: eco.progress_rate === null ? '--' : `${eco.progress_rate}%`, color: '#3b82f6' },
+    { label: `活跃稳定率（${eco.stable} 人）`, value: eco.stable_rate === null ? '--' : `${eco.stable_rate}%`, color: '#8E6BC8' },
+    { label: '维护改善人数', value: `${eco.maintenance_improved} 人`, color: '#10b981' },
+    { label: '留存预警人数', value: `${eco.warning_count} 人`, color: '#ef4444' },
   ];
   $('#dash-eco-cards').innerHTML = cards.map(card => `<div class="dash-card" style="border-top-color:${card.color}"><div class="dash-card-label">${card.label}</div><div class="dash-card-value" style="color:${card.color}">${card.value}</div></div>`).join('');
-  const gradeOrder = ['S+', 'S', 'A', 'B', 'C', 'D', '未评分'];
   const grades = eco.grades || {};
+  const fixedGradeOrder = ['S+', 'S', 'A', 'B', 'C', 'D'];
+  const extraGrades = Object.keys(grades).filter(grade => !fixedGradeOrder.includes(grade) && grade !== '未评分').sort();
+  const gradeOrder = [...fixedGradeOrder, ...extraGrades, '未评分'];
   const maxGrade = Math.max(1, ...Object.values(grades));
   $('#dash-eco-grades').innerHTML = gradeOrder.filter(grade => grades[grade]).map(grade => `<div class="dash-eco-grade-row"><span>${grade}</span><div class="dash-eco-grade-track"><i style="width:${grades[grade] / maxGrade * 100}%"></i></div><b>${grades[grade]}</b></div>`).join('') || '<span class="muted">暂无等级数据</span>';
-  const personRows = (items, mode) => items.length ? items.map(person => `<button type="button" class="dash-eco-person" onclick="openEcologyDetail('${esc(person.uid)}')"><span>${esc(person.nickname || person.uid)}<small>${esc(person.hall_name || '-')} · ${esc(person.eco_grade || '未评分')}</small></span><b class="${mode === 'down' ? 'eco-delta-down' : ''}">${mode === 'down' ? ecoNum(person.delta) : ecoNum(person.score)}</b></button>`).join('') : '<span class="muted">暂无数据</span>';
-  $('#dash-eco-top').innerHTML = personRows(eco.top || [], 'top');
-  $('#dash-eco-declines').innerHTML = personRows(eco.declines || [], 'down');
+  const personRows = (items, field, warning = false) => items.length ? items.map(person => {
+    const value = person[field];
+    const valueText = warning ? (person.delta === null ? '--' : ecoNum(person.delta)) : `${value > 0 ? '+' : ''}${ecoNum(value)}`;
+    const sub = warning ? `${person.hall_name || '-'} · ${(person.reasons || []).join('、')}` : `${person.hall_name || '-'} · ${person.eco_grade || '未评分'}`;
+    return `<button type="button" class="dash-eco-person" onclick="openEcologyDetail('${esc(person.uid)}')"><span>${esc(person.nickname || person.uid)}<small>${esc(sub)}</small></span><b class="${warning ? 'eco-delta-down' : 'eco-delta-up'}">${valueText}</b></button>`;
+  }).join('') : '<span class="muted">暂无数据</span>';
+  $('#dash-eco-progress').innerHTML = personRows(eco.progress || [], 'progress_delta');
+  $('#dash-eco-maintenance').innerHTML = personRows(eco.maintenance || [], 'maintenance_delta');
+  $('#dash-eco-warnings').innerHTML = personRows(eco.warnings || [], 'delta', true);
 }
