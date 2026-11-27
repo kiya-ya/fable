@@ -2734,25 +2734,17 @@ TASK_REWARD_AMOUNT = 12.8
 LEVEL_REWARD = {'初级银牌': 12.8, '银牌': 23.3, '金牌': 52.0, '王牌': 131.4}
 
 
-@app.post('/api/export/rewards')
-@serialized_query
-def export_rewards():
-    """导出周奖励 XLSX：任务次数/礼物流水 = 所选日期的上一周，牌子 = 所选日期当周"""
-    data = request.get_json(force=True)
-    bind_type = data.get('bind_type', 'trainer')
-    if bind_type not in BIND_TYPES:
-        return err('bind_type 必须是 trainer / sister')
-    try:
-        d = datetime.strptime(str(data.get('date', '')).strip(), '%Y-%m-%d')
-    except ValueError:
-        return err('date 格式应为 YYYY-MM-DD')
+def _reward_row(binding):
+    return {
+        'binding_id': binding['id'], 'side_uid': str(binding['side_uid']),
+        'side_nickname': binding['side_nickname'], 'trainee_uid': str(binding['trainee_uid']),
+        'trainee_nickname': binding['trainee_nickname'], 'hall': binding['hall_name'] or '',
+        'tasks': 0, 'task_reward': '无', 'revenue': 0, 'level': '', 'level_reward': '无',
+        'error': '',
+    }
 
-    this_monday = d - timedelta(days=d.weekday())
-    last_monday = this_monday - timedelta(days=7)
-    fmt = '%Y-%m-%d'
-    this_range = (this_monday.strftime(fmt), (this_monday + timedelta(days=6)).strftime(fmt))
-    last_range = (last_monday.strftime(fmt), (last_monday + timedelta(days=6)).strftime(fmt))
 
+def _reward_bindings(bind_type):
     conn = get_db()
     all_bindings = conn.execute(
         '''SELECT b.id, b.bound_at, tr.uid AS side_uid, tr.nickname AS side_nickname,
@@ -2763,17 +2755,26 @@ def export_rewards():
            WHERE b.bind_type=? AND b.unbound_at IS NULL
            ORDER BY b.bound_at''', (bind_type,)).fetchall()
     conn.close()
-    # 只导「在档且正处于奖励窗口内」的绑定；窗口未开始的（如周一刚绑的）轮到下周一，已过期的剔除
-    bindings = [b for b in all_bindings
-                if reward_window_status(b['bound_at'])[2] == 'in_window']
+    return [b for b in all_bindings if reward_window_status(b['bound_at'])[2] == 'in_window']
 
+
+def collect_reward_rows(bind_type, date_text):
+    """任务次数/流水取所选日期的上一周，牌子取当周；失败人员保留在预览中。"""
+    d = datetime.strptime(date_text, '%Y-%m-%d')
+    this_monday = d - timedelta(days=d.weekday())
+    last_monday = this_monday - timedelta(days=7)
+    fmt = '%Y-%m-%d'
+    this_range = (this_monday.strftime(fmt), (this_monday + timedelta(days=6)).strftime(fmt))
+    last_range = (last_monday.strftime(fmt), (last_monday + timedelta(days=6)).strftime(fmt))
+    bindings = _reward_bindings(bind_type)
     crawler = UIDCrawler()
     healed = False
-    side_cache = {}   # 侧方留存缓存：同一培训师/姐姐只查一次
+    side_cache = {}
     rows, errors = [], []
     for i, b in enumerate(bindings):
         if i:
-            time.sleep(0.6)  # server1 会话 TTL 短，控制频率
+            time.sleep(0.6)
+        item = _reward_row(b)
         try:
             cur = crawler.query(b['trainee_uid'], 'game', *this_range)
             last = crawler.query(b['trainee_uid'], 'game', *last_range)
@@ -2781,7 +2782,11 @@ def export_rewards():
                 side_cache[b['side_uid']] = crawler.query(b['side_uid'], 'game', *this_range)
         except CookieExpiredError:
             if healed:
-                return err(f'导出到第 {i + 1} 行时 Cookie 再次过期，请稍后重试', 401)
+                error = f'导出到第 {i + 1} 行时 Cookie 再次过期'
+                item['error'] = error
+                errors.append(f"{b['trainee_nickname']}({b['trainee_uid']}): {error}")
+                rows.append(item)
+                continue
             healed = True
             try:
                 _heal_uid_cookie()
@@ -2791,12 +2796,16 @@ def export_rewards():
                 if b['side_uid'] not in side_cache:
                     side_cache[b['side_uid']] = crawler.query(b['side_uid'], 'game', *this_range)
             except Exception as e:
-                return err(f'自动重登后查询仍失败: {e}', 502)
+                item['error'] = f'自动重登后查询仍失败: {e}'
+                errors.append(f"{b['trainee_nickname']}({b['trainee_uid']}): {e}")
+                rows.append(item)
+                continue
         except Exception as e:
+            item['error'] = str(e)
             errors.append(f"{b['trainee_nickname']}({b['trainee_uid']}): {e}")
+            rows.append(item)
             continue
 
-        # 侧方（培训师/姐姐）未留存 → 不发奖
         side_ok = True
         sc = side_cache.get(b['side_uid'])
         if sc and sc.get('found'):
@@ -2804,51 +2813,135 @@ def export_rewards():
             record_trainee_query(conn, b['side_uid'], sc, side=True)
             conn.close()
             side_ok = judge_side_retained(sc) is not False
-
         level = (cur.get('week_level') or '').strip() if cur.get('found') else ''
         tasks = int(last.get('daily_task_count') or 0) if last.get('found') else 0
         revenue = float(last.get('week_revenue') or 0) if last.get('found') else 0
         hall = (cur.get('schedule_hall') or cur.get('auth_hall')
                 or last.get('schedule_hall') or last.get('auth_hall') or b['hall_name'] or '')
+        item.update({'level': level, 'tasks': tasks, 'revenue': revenue, 'hall': hall})
         if side_ok:
-            task_reward = TASK_REWARD_AMOUNT if (tasks >= TASK_REWARD_MIN and level_rank(level) >= 1) else '无'
-            level_reward = LEVEL_REWARD.get(level, '无')
-        else:
-            task_reward = level_reward = '无'
-        rows.append([
-            int(b['side_uid']) if str(b['side_uid']).isdigit() else b['side_uid'],
-            b['side_nickname'],
-            int(b['trainee_uid']) if str(b['trainee_uid']).isdigit() else b['trainee_uid'],
-            b['trainee_nickname'], hall, tasks, task_reward, revenue, level, level_reward,
-        ])
+            item['task_reward'] = TASK_REWARD_AMOUNT if tasks >= TASK_REWARD_MIN and level_rank(level) >= 1 else '无'
+            item['level_reward'] = LEVEL_REWARD.get(level, '无')
+        rows.append(item)
+    return rows, errors, d
+
+
+def _edited_reward_row(row, allowed_ids):
+    try:
+        binding_id = int(row.get('binding_id'))
+    except (TypeError, ValueError):
+        raise ValueError('预览行缺少绑定 ID')
+    if binding_id not in allowed_ids:
+        raise ValueError(f'绑定 ID {binding_id} 已不在当前奖励范围内')
+    side_uid = str(row.get('side_uid', '')).strip()
+    trainee_uid = str(row.get('trainee_uid', '')).strip()
+    if not side_uid.isdigit() or not trainee_uid.isdigit():
+        raise ValueError(f'绑定 ID {binding_id} 的 UID 必须为数字')
+    try:
+        tasks = int(row.get('tasks', 0))
+        revenue = float(row.get('revenue', 0))
+        if tasks < 0 or revenue < 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        raise ValueError(f'绑定 ID {binding_id} 的任务次数或流水格式不正确')
+    rewards = []
+    for key in ('task_reward', 'level_reward'):
+        value = row.get(key, '无')
+        if value in (None, '', '无'):
+            rewards.append('无')
+            continue
+        try:
+            amount = float(value)
+        except (TypeError, ValueError):
+            raise ValueError(f'绑定 ID {binding_id} 的奖励金额格式不正确')
+        if amount < 0:
+            raise ValueError(f'绑定 ID {binding_id} 的奖励金额不能为负数')
+        rewards.append(amount)
+    return {
+        'binding_id': binding_id, 'side_uid': side_uid,
+        'side_nickname': str(row.get('side_nickname', '')).strip()[:100],
+        'trainee_uid': trainee_uid,
+        'trainee_nickname': str(row.get('trainee_nickname', '')).strip()[:100],
+        'hall': str(row.get('hall', '')).strip()[:200], 'tasks': tasks,
+        'task_reward': rewards[0], 'revenue': revenue,
+        'level': str(row.get('level', '')).strip()[:50], 'level_reward': rewards[1], 'error': '',
+    }
+
+
+@app.post('/api/rewards/preview')
+@serialized_query
+def preview_rewards():
+    data = request.get_json(force=True)
+    bind_type = data.get('bind_type', 'trainer')
+    if bind_type not in BIND_TYPES:
+        return err('bind_type 必须是 trainer / sister')
+    date_text = str(data.get('date', '')).strip()
+    try:
+        rows, errors, d = collect_reward_rows(bind_type, date_text)
+    except ValueError:
+        return err('date 格式应为 YYYY-MM-DD')
+    return ok({'items': rows, 'errors': errors, 'date': d.strftime('%Y-%m-%d'),
+               'total': len(rows), 'failed': len(errors)})
+
+
+@app.post('/api/export/rewards')
+@serialized_query
+def export_rewards():
+    data = request.get_json(force=True)
+    bind_type = data.get('bind_type', 'trainer')
+    if bind_type not in BIND_TYPES:
+        return err('bind_type 必须是 trainer / sister')
+    date_text = str(data.get('date', '')).strip()
+    try:
+        d = datetime.strptime(date_text, '%Y-%m-%d')
+    except ValueError:
+        return err('date 格式应为 YYYY-MM-DD')
+    edited = 'rows' in data
+    if edited:
+        allowed_ids = {b['id'] for b in _reward_bindings(bind_type)}
+        try:
+            rows = [_edited_reward_row(row, allowed_ids) for row in data['rows']]
+        except (TypeError, ValueError) as e:
+            return err(str(e))
+        if len({row['binding_id'] for row in rows}) != len(rows):
+            return err('同一条绑定不能重复导出')
+        errors = []
+    else:
+        rows, errors, d = collect_reward_rows(bind_type, date_text)
+        rows = [row for row in rows if not row['error']]
 
     from io import BytesIO
     from openpyxl import Workbook
     from openpyxl.utils import get_column_letter
-
     side = '姐姐' if bind_type == 'sister' else '培训师'
     wb = Workbook()
     ws = wb.active
     ws.title = 'Sheet1'
-    ws.append([])  # 与参考文件一致：前两行留空，表头在第 3 行
+    ws.append([])
     ws.append([])
     ws.append([f'{side}UID', f'{side}昵称', '妹妹UID', '妹妹昵称', '所属大厅',
                '完成任务次数', '奖励', '礼物流水', '牌子', '奖励'])
     ws.append([])
     for row in rows:
-        ws.append(row)
+        ws.append([
+            int(row['side_uid']), row['side_nickname'], int(row['trainee_uid']), row['trainee_nickname'],
+            row['hall'], row['tasks'], row['task_reward'], row['revenue'], row['level'], row['level_reward'],
+        ])
     widths = [15.5, 21.8, 14, 17.2, 27.5, 13.3, 9, 13.3, 12, 9]
-    for idx, w in enumerate(widths, start=1):
-        ws.column_dimensions[get_column_letter(idx)].width = w
-
+    for idx, width in enumerate(widths, start=1):
+        ws.column_dimensions[get_column_letter(idx)].width = width
     buf = BytesIO()
     wb.save(buf)
+    wb.close()
     buf.seek(0)
     filename = f"{d.strftime('%Y%m%d')}{'三胎' if bind_type == 'sister' else '培训师'}奖励.xlsx"
     resp = send_file(buf, as_attachment=True, download_name=filename,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     if errors:
         resp.headers['X-Export-Errors'] = '; '.join(errors)[:500]
+    if edited:
+        log_operation('admin', None, 'reward_export_edited', bind_type, None, None,
+                      f'导出预览编辑后的奖励表：{len(rows)} 条，日期 {date_text}')
     return resp
 
 

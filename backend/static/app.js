@@ -1338,35 +1338,41 @@ $('#eco-export').addEventListener('click', (e) => exportListXlsx('ecology', e.cu
 // ────────────── 周奖励导出 ──────────────
 $('#exp-date').value = new Date().toLocaleDateString('sv-SE');  // 本地 YYYY-MM-DD
 
+let rewardPreviewRows = [];
+let rewardPreviewType = 'trainer';
+let rewardPreviewDate = '';
+
+function renderRewardPreview() {
+  const side = rewardPreviewType === 'sister' ? '姐姐' : '培训师';
+  $('#reward-preview-title').textContent = `${side}奖励预览 · ${rewardPreviewDate}`;
+  $('#reward-preview-table thead').innerHTML = `<tr><th>${side}UID</th><th>${side}昵称</th><th>妹妹UID</th><th>妹妹昵称</th><th>所属大厅</th><th>完成任务次数</th><th>任务奖励</th><th>礼物流水</th><th>牌子</th><th>等级奖励</th><th>操作</th></tr>`;
+  const fields = ['side_uid', 'side_nickname', 'trainee_uid', 'trainee_nickname', 'hall', 'tasks', 'task_reward', 'revenue', 'level', 'level_reward'];
+  $('#reward-preview-tbody').innerHTML = rewardPreviewRows.map((row, index) => `<tr class="${row.error ? 'reward-preview-error-row' : ''}">${fields.map(field => `<td><input class="reward-preview-input" data-index="${index}" data-field="${field}" value="${esc(row[field])}">${field === 'level' && row.error ? `<div class="reward-preview-error">${esc(row.error)}</div>` : ''}</td>`).join('')}<td><button type="button" class="btn small danger" data-remove="${index}">移出</button></td></tr>`).join('') || '<tr><td colspan="11" class="empty">本次没有可导出的记录</td></tr>';
+  const failed = rewardPreviewRows.filter(row => row.error).length;
+  $('#reward-preview-status').textContent = `共 ${rewardPreviewRows.length} 条${failed ? `，${failed} 条查询失败，请核对后再导出` : '，请核对后导出'}`;
+  $('#reward-preview-export').disabled = !rewardPreviewRows.length;
+}
+
 async function exportRewards(bindType, btn) {
   const date = $('#exp-date').value;
   if (!date) return toast('请选择开始时间', true);
   btn.disabled = true;
   const oldText = btn.textContent;
-  btn.textContent = '生成中…';
+  btn.textContent = '生成预览中…';
   $('#exp-status').textContent = '正在逐人实时查询（每人约 2 次请求），请稍候…';
   try {
-    const resp = await fetch('/api/export/rewards', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const resp = await fetch('/api/rewards/preview', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ bind_type: bindType, date }),
     });
-    if (!resp.ok) {
-      const data = await resp.json().catch(() => ({}));
-      throw new Error(data.msg || `导出失败 (${resp.status})`);
-    }
-    const blob = await resp.blob();
-    const cd = resp.headers.get('Content-Disposition') || '';
-    const m = cd.match(/filename\*=UTF-8''([^;]+)/);
-    const filename = m ? decodeURIComponent(m[1]) : `${date.replaceAll('-', '')}奖励.xlsx`;
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(a.href);
-    const warn = resp.headers.get('X-Export-Errors');
-    $('#exp-status').textContent = warn ? `已生成，但部分学员查询失败：${warn}` : `已生成：${filename}`;
-    toast('导出成功');
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.msg || `预览失败 (${resp.status})`);
+    rewardPreviewRows = data.items || [];
+    rewardPreviewType = bindType;
+    rewardPreviewDate = data.date || date;
+    renderRewardPreview();
+    $('#reward-preview-modal').classList.remove('hidden');
+    $('#exp-status').textContent = `预览已生成：${data.total} 条${data.failed ? `，${data.failed} 条查询失败` : ''}`;
   } catch (e) {
     $('#exp-status').textContent = '';
     toast(e.message, true);
@@ -1375,6 +1381,55 @@ async function exportRewards(bindType, btn) {
     btn.textContent = oldText;
   }
 }
+
+async function exportRewardPreview() {
+  const btn = $('#reward-preview-export');
+  btn.disabled = true;
+  const oldText = btn.textContent;
+  btn.textContent = '导出中…';
+  try {
+    const resp = await fetch('/api/export/rewards', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bind_type: rewardPreviewType, date: rewardPreviewDate, rows: rewardPreviewRows }),
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      throw new Error(data.msg || `导出失败 (${resp.status})`);
+    }
+    const blob = await resp.blob();
+    const cd = resp.headers.get('Content-Disposition') || '';
+    const match = cd.match(/filename\*=UTF-8''([^;]+)/);
+    const filename = match ? decodeURIComponent(match[1]) : `${rewardPreviewDate.replaceAll('-', '')}奖励.xlsx`;
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(link.href);
+    $('#reward-preview-modal').classList.add('hidden');
+    $('#exp-status').textContent = `已按修改后的预览导出：${filename}`;
+    toast('导出成功');
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = oldText;
+  }
+}
+
+$('#reward-preview-tbody').addEventListener('input', event => {
+  const input = event.target.closest('input[data-field]');
+  if (!input) return;
+  rewardPreviewRows[Number(input.dataset.index)][input.dataset.field] = input.value;
+});
+$('#reward-preview-tbody').addEventListener('click', event => {
+  const btn = event.target.closest('button[data-remove]');
+  if (!btn) return;
+  rewardPreviewRows.splice(Number(btn.dataset.remove), 1);
+  renderRewardPreview();
+});
+$('#reward-preview-export').addEventListener('click', exportRewardPreview);
 
 $('#exp-trainer').addEventListener('click', (e) => exportRewards('trainer', e.target));
 $('#exp-sister').addEventListener('click', (e) => exportRewards('sister', e.target));

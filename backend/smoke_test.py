@@ -413,6 +413,8 @@ r = requests.get(f'{B}/api/export/bindings', params={'bind_type': 'bad'})
 check('绑定导出非法类型 400', r.status_code == 400, f'got {r.status_code}')
 
 print('== 奖励导出 ==')
+r = requests.post(f'{B}/api/rewards/preview', json={'bind_type': 'trainer', 'date': 'bad'})
+check('奖励预览非法日期 400', r.status_code == 400, f'got {r.status_code}')
 # 先解绑测试绑定（只动本测试创建的数据！）：导出测试不打网络
 db_exec(f"UPDATE bindings SET unbound_at=CURRENT_TIMESTAMP WHERE unbound_at IS NULL AND trainee_id IN ({te_a},{te_b},{te_c})")
 r = requests.post(f'{B}/api/export/rewards', json={'bind_type': 'x', 'date': '2026-10-05'})
@@ -456,6 +458,24 @@ if wb:
     check('窗口未开始的绑定也不导出（80001 不在其中）', all(str(row[2]) != '80001' for row in ws_rows), str(ws_rows))
 else:
     check('导出排除校验（外部系统不可用，跳过）', True)
+
+# 编辑后的预览必须原样导出，且不再请求外部系统
+edited_bound = (datetime.utcnow() - timedelta(days=14)).strftime('%Y-%m-%d %H:%M:%S')
+db_exec("INSERT INTO bindings (trainer_id,trainee_id,bind_type,bound_at,note) VALUES (?,?,'trainer',?,'奖励预览编辑测试')", (tr_a, te_a, edited_bound))
+edited_bid = db_one("SELECT id FROM bindings WHERE trainee_id=? AND bind_type='trainer' AND unbound_at IS NULL", (te_a,))[0]
+edited_row = {'binding_id': edited_bid, 'side_uid': '90001', 'side_nickname': '修改后培训师',
+              'trainee_uid': '80001', 'trainee_nickname': '修改后妹妹', 'hall': '修改后大厅',
+              'tasks': 9, 'task_reward': 99.9, 'revenue': 1234.5, 'level': '金牌', 'level_reward': 88.8}
+r = requests.post(f'{B}/api/export/rewards', json={'bind_type': 'trainer', 'date': '2026-10-05', 'rows': [edited_row]})
+check('编辑后的奖励预览可导出', r.ok and r.content[:2] == b'PK', r.text[:200])
+if r.ok:
+    edited_wb = load_workbook(io.BytesIO(r.content))
+    values = [edited_wb.active.cell(5, column).value for column in range(1, 11)]
+    check('导出保留修改后的昵称金额任务和流水', values == [90001, '修改后培训师', 80001, '修改后妹妹', '修改后大厅', 9, 99.9, 1234.5, '金牌', 88.8], str(values))
+    edited_wb.close()
+r = requests.post(f'{B}/api/export/rewards', json={'bind_type': 'trainer', 'date': '2026-10-05', 'rows': [edited_row, edited_row]})
+check('奖励预览同一绑定重复导出 400', r.status_code == 400, f'got {r.status_code}')
+db_exec('UPDATE bindings SET unbound_at=CURRENT_TIMESTAMP WHERE id=?', (edited_bid,))
 
 print('== 用户端登录与自助绑定 ==')
 r = requests.post(f'{B}/api/trainers/{tr_a}/set-password', json={'password': 'test123'})

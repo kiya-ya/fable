@@ -363,3 +363,7 @@ header { height: auto; min-height: 64px; padding-top: 5px; padding-bottom: 5px; 
   .nav-group-buttons { height: 46px; }
   .nav-group-buttons .tab { flex: 0 0 auto; min-width: 76px; padding: 8px 10px; }
 }
+
+.reward-preview-input { width: 100%; min-width: 90px; }
+.reward-preview-error-row { background: #fff5f5; }
+.reward-preview-error { max-width: 150px; margin-top: 4px; color: #b91c1c; font-size: 11px; white-space: normal; }
